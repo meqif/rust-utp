@@ -6,18 +6,20 @@ fn connection_handler(stream: TcpStream) {
     println!("New client {}", sock.peer_name().unwrap());
 
     // Read request
-    let mut buf = [0,..512];
+    let mut buf = [0, ..512];
+    let mut count: uint = 0;
 
     match sock.read(buf) {
         Err(e) => { println!("Error detected! {}", e) }
-        Ok(count) => {
-            println!("Received {} bytes:", count);
-            println!("{}", std::str::from_utf8(buf));
+        Ok(c) => {
+            count = c;
+            println!("Received {} bytes:", c);
+            println!("{}", std::str::from_utf8(buf).unwrap());
         }
     }
 
     // Answer request
-    match sock.write(buf) {
+    match sock.write(buf.slice(0, count)) {
         _ => {}
     }
 
