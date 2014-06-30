@@ -12,7 +12,7 @@ enum UtpPacketType {
 
 #[allow(dead_code)]
 struct UtpPacketHeader {
-    ver_type: u8, // ver: u4, type: u4
+    type_ver: u8, // type: u4, ver: u4
     extension: u8,
     connection_id: u16,
     timestamp_microseconds: u32,
@@ -46,7 +46,7 @@ impl UtpPacket {
     fn new() -> UtpPacket {
         UtpPacket {
             header: UtpPacketHeader {
-                ver_type: 0 | 0 << 4,
+                type_ver: ST_DATA as u8 << 4 | 1,
                 extension: 0,
                 connection_id: 0,
                 timestamp_microseconds: 0,
