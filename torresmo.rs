@@ -1,6 +1,15 @@
 use std::io::net::udp::UdpSocket;
 use std::io::net::ip::{Ipv4Addr, SocketAddr};
 
+#[allow(dead_code,non_camel_case_types)]
+enum UtpPacketType {
+    ST_DATA  = 0,
+    ST_FIN   = 1,
+    ST_STATE = 2,
+    ST_RESET = 3,
+    ST_SYN   = 4,
+}
+
 #[allow(dead_code)]
 struct UtpPacketHeader {
     ver_type: u8, // ver: u4, type: u4
