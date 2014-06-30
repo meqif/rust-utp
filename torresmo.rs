@@ -15,6 +15,12 @@ struct UtpPacketHeader {
 }
 
 impl UtpPacketHeader {
+    fn bytes(&self) -> &[u8] {
+        unsafe {
+            let buf: &[u8, ..20] = std::mem::transmute(self);
+            return buf.as_slice();
+        }
+    }
 }
 
 fn connection_handler(stream: TcpStream) {
@@ -60,10 +66,7 @@ fn main() {
     let mut sock = UdpSocket::bind(SocketAddr { ip: Ipv4Addr(127,0,0,1), port: 8080 }).unwrap();
     match sock.recvfrom(buf) {
         Ok((_, src)) => {
-            unsafe {
-                let buf: &[u8, ..20] = std::mem::transmute(&header);
-                let _ = sock.sendto(*buf, src);
-            }
+            let _ = sock.sendto(header.bytes(), src);
         }
         Err(_) => {}
     }
