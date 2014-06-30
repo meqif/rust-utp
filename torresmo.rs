@@ -3,6 +3,7 @@ use std::io::{Acceptor, Listener};
 use std::io::net::udp::UdpSocket;
 use std::io::net::ip::{Ipv4Addr, SocketAddr};
 
+#[allow(dead_code)]
 struct UtpPacketHeader {
     ver_type: u8, // ver: u4, type: u4
     extension: u8,
