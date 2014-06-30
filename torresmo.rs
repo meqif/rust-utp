@@ -1,3 +1,5 @@
+extern crate time;
+
 use std::io::net::udp::UdpSocket;
 use std::io::net::ip::{Ipv4Addr, SocketAddr};
 
@@ -80,6 +82,8 @@ fn main() {
         Ok((_, src)) => {
             let mut packet = UtpPacket::new();
             packet.payload = String::from_str("Hello\n").into_bytes();
+            let t = time::get_time();
+            packet.header.timestamp_microseconds = std::mem::to_be32((t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32);
 
             let _ = sock.sendto(packet.bytes().as_slice(), src);
         }
