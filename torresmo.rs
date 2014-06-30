@@ -31,7 +31,8 @@ impl UtpPacketHeader {
     }
 
     fn len(&self) -> uint {
-        return 24;
+        let header_size = 20;
+        return header_size;
     }
 }
 
