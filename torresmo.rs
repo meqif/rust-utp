@@ -1,5 +1,3 @@
-use std::io::{TcpListener, TcpStream};
-use std::io::{Acceptor, Listener};
 use std::io::net::udp::UdpSocket;
 use std::io::net::ip::{Ipv4Addr, SocketAddr};
 
@@ -47,33 +45,6 @@ impl UtpPacket {
     }
 }
 
-fn connection_handler(stream: TcpStream) {
-    let mut sock = stream;
-    println!("New client {}", sock.peer_name().unwrap());
-
-    // Read request
-    let mut buf = [0, ..512];
-    let mut count: uint = 0;
-
-    match sock.read(buf) {
-        Err(e) => { println!("Error detected! {}", e) }
-        Ok(c) => {
-            count = c;
-            println!("Received {} bytes:", c);
-            println!("{}", std::str::from_utf8(buf).unwrap());
-        }
-    }
-
-    // Answer request
-    match sock.write(buf.slice(0, count)) {
-        _ => {}
-    }
-
-    println!("Gone!");
-    drop(sock);
-
-}
-
 fn main() {
     let packet = UtpPacket {
         header: UtpPacketHeader {
@@ -98,20 +69,4 @@ fn main() {
         Err(_) => {}
     }
     drop(sock);
-    return;
-    // Create socket
-    let socket = TcpListener::bind("127.0.0.1", 8080);
-
-    // Listen for new connections
-    let mut acceptor = socket.listen();
-
-    // Spawn a new process for handling each incoming connection
-    for stream in acceptor.incoming() {
-        match stream {
-            Err(e) => { println!("{}", e) }
-            Ok(stream) => spawn(proc() { connection_handler(stream) })
-        }
-    }
-
-    drop(acceptor);
 }
