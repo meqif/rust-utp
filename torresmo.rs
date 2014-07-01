@@ -74,27 +74,51 @@ impl UtpPacket {
     }
 }
 
+struct UtpSocket {
+    skt: UdpSocket,
+    seq_nr: u16,
+}
+
+impl UtpSocket {
+    fn bind(addr: SocketAddr) -> std::io::IoResult<UtpSocket> {
+        let skt = UdpSocket::bind(addr);
+        match skt {
+            Ok(x)  => Ok(UtpSocket { skt: x, seq_nr: 1 }),
+            Err(e) => Err(e)
+        }
+    }
+
+    fn sendto(&mut self, buf: &[u8], dst: SocketAddr) -> std::io::IoResult<()> {
+        let mut packet = UtpPacket::new();
+        packet.payload = Vec::from_slice(buf);
+        // Those should be hidden inside an abstraction
+        packet.header.seq_nr = std::mem::to_be16(self.seq_nr);
+        packet.header.connection_id = std::mem::to_be16(std::rand::random());
+        let t = time::get_time();
+        packet.header.timestamp_microseconds = std::mem::to_be32((t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32);
+
+        // Send packet
+        let r = self.skt.sendto(packet.bytes().as_slice(), dst);
+
+        self.seq_nr += 1;
+        r
+    }
+
+    fn recvfrom(&mut self, buf: &mut[u8]) -> std::io::IoResult<(uint,SocketAddr)> {
+        self.skt.recvfrom(buf)
+    }
+}
+
 fn main() {
     let mut buf = [0, ..512];
-    let mut sock = UdpSocket::bind(SocketAddr { ip: Ipv4Addr(127,0,0,1), port: 8080 }).unwrap();
-
-    let mut seq_nr = 1;
+    let mut sock = UtpSocket::bind(SocketAddr { ip: Ipv4Addr(127,0,0,1), port: 8080 }).unwrap();
 
     match sock.recvfrom(buf) {
         Ok((_, src)) => {
-            let mut packet = UtpPacket::new();
-            packet.payload = String::from_str("Hello\n").into_bytes();
-            // Those should be hidden inside an abstraction
-            packet.header.seq_nr = std::mem::to_be16(seq_nr);
-            packet.header.connection_id = std::mem::to_be16(std::rand::random());
-            let t = time::get_time();
-            packet.header.timestamp_microseconds = std::mem::to_be32((t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32);
+            let payload = String::from_str("Hello\n").into_bytes();
 
             // Send uTP packet
-            let _ = sock.sendto(packet.bytes().as_slice(), src);
-
-            seq_nr += 1;
-            std::io::timer::sleep(1000);
+            let _ = sock.sendto(payload.as_slice(), src);
         }
         Err(_) => {}
     }
