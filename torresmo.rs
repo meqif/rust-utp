@@ -78,14 +78,23 @@ fn main() {
     let mut buf = [0, ..512];
     let mut sock = UdpSocket::bind(SocketAddr { ip: Ipv4Addr(127,0,0,1), port: 8080 }).unwrap();
 
+    let mut seq_nr = 1;
+
     match sock.recvfrom(buf) {
         Ok((_, src)) => {
             let mut packet = UtpPacket::new();
             packet.payload = String::from_str("Hello\n").into_bytes();
+            // Those should be hidden inside an abstraction
+            packet.header.seq_nr = std::mem::to_be16(seq_nr);
+            packet.header.connection_id = std::mem::to_be16(std::rand::random());
             let t = time::get_time();
             packet.header.timestamp_microseconds = std::mem::to_be32((t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32);
 
+            // Send uTP packet
             let _ = sock.sendto(packet.bytes().as_slice(), src);
+
+            seq_nr += 1;
+            std::io::timer::sleep(1000);
         }
         Err(_) => {}
     }
