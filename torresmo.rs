@@ -97,17 +97,16 @@ mod libtorresmo {
         pub fn sendto(&mut self, buf: &[u8], dst: SocketAddr) -> IoResult<()> {
             let mut packet = UtpPacket::new();
             packet.payload = Vec::from_slice(buf);
-            // Those should be hidden inside an abstraction
             packet.header.seq_nr = to_be16(self.seq_nr);
             packet.header.connection_id = to_be16(random());
             let t = time::get_time();
             packet.header.timestamp_microseconds = to_be32((t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32);
 
             // Send packet
-            let r = self.skt.sendto(packet.bytes().as_slice(), dst);
+            let result = self.skt.sendto(packet.bytes().as_slice(), dst);
 
             self.seq_nr += 1;
-            r
+            result
         }
 
         pub fn recvfrom(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
