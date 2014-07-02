@@ -8,6 +8,7 @@ mod libtorresmo {
     use std::io::IoResult;
     use std::mem::{to_be32, to_be16, transmute};
     use std::rand::random;
+    use std::fmt;
 
     #[allow(dead_code,non_camel_case_types)]
     enum UtpPacketType {
@@ -42,6 +43,20 @@ mod libtorresmo {
         fn len(&self) -> uint {
             static HEADER_SIZE: uint = 20;
             return HEADER_SIZE;
+        }
+    }
+
+    impl fmt::Show for UtpPacketHeader {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            let t: UtpPacketType = unsafe { transmute(self.type_ver >> 4) };
+            let ptype = match t {
+                ST_DATA  => "ST_DATA",
+                ST_FIN   => "ST_FIN",
+                ST_STATE => "ST_STATE",
+                ST_RESET => "ST_RESET",
+                ST_SYN   => "ST_SYN",
+            };
+            write!(f, "(type: {}, version: {}, extension: {}, connection_id: {}, timestamp_microseconds: {}, timestamp_difference_microseconds: {}, wnd_size: {}, seq_nr: {}, ack_nr: {})", ptype, self.type_ver & 0x0F, self.extension, self.connection_id, self.timestamp_microseconds, self.timestamp_difference_microseconds, self.wnd_size, self.seq_nr, self.ack_nr)
         }
     }
 
