@@ -80,51 +80,8 @@ mod libtorresmo {
         }
     }
 
-    pub struct UtpSocket {
-        socket: UdpSocket,
-        seq_nr: u16,
-    }
-
-    impl UtpSocket {
-        pub fn bind(addr: SocketAddr) -> IoResult<UtpSocket> {
-            let skt = UdpSocket::bind(addr);
-            match skt {
-                Ok(x)  => Ok(UtpSocket { socket: x, seq_nr: 1 }),
-                Err(e) => Err(e)
-            }
-        }
-
-        pub fn sendto(&mut self, buf: &[u8], dst: SocketAddr) -> IoResult<()> {
-            let mut packet = UtpPacket::new();
-            packet.payload = Vec::from_slice(buf);
-            packet.header.seq_nr = to_be16(self.seq_nr);
-            packet.header.connection_id = to_be16(random());
-            let t = time::get_time();
-            packet.header.timestamp_microseconds = to_be32((t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32);
-
-            // Send packet
-            let result = self.socket.sendto(packet.bytes().as_slice(), dst);
-
-            self.seq_nr += 1;
-            result
-        }
-
-        pub fn recvfrom(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
-            self.socket.recvfrom(buf)
-        }
-    }
-
-    impl Clone for UtpSocket {
-        fn clone(&self) -> UtpSocket {
-            UtpSocket {
-                socket: self.socket.clone(),
-                seq_nr: self.seq_nr,
-            }
-        }
-    }
-
     #[allow(dead_code)]
-    struct UtpStream {
+    pub struct UtpStream {
         socket: UdpSocket,
         connected_to: SocketAddr,
         seq_nr: u16,
@@ -133,7 +90,7 @@ mod libtorresmo {
 
     #[allow(dead_code)]
     impl UtpStream {
-        fn new(socket: UdpSocket, conn: SocketAddr) -> UtpStream {
+        pub fn new(socket: UdpSocket, conn: SocketAddr) -> UtpStream {
             UtpStream {
                 socket: socket,
                 connected_to: conn,
@@ -142,7 +99,7 @@ mod libtorresmo {
             }
         }
 
-        fn disconnect(self) -> UdpSocket {
+        pub fn disconnect(self) -> UdpSocket {
             self.socket
         }
     }
@@ -158,7 +115,18 @@ mod libtorresmo {
     }
     impl Writer for UtpStream {
         fn write(&mut self, buf: &[u8]) -> IoResult<()> {
-            self.socket.sendto(buf, self.connected_to)
+            let mut packet = UtpPacket::new();
+            packet.payload = Vec::from_slice(buf);
+            packet.header.seq_nr = to_be16(self.seq_nr);
+            packet.header.connection_id = to_be16(random());
+            let t = time::get_time();
+            packet.header.timestamp_microseconds = to_be32((t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32);
+
+            // Send packet
+            let result = self.socket.sendto(packet.bytes().as_slice(), self.connected_to);
+
+            self.seq_nr += 1;
+            result
         }
     }
 }
@@ -168,7 +136,8 @@ fn usage() {
 }
 
 fn main() {
-    use libtorresmo::{UtpSocket};
+    use std::io::net::udp::UdpSocket;
+    use libtorresmo::UtpStream;
     use std::from_str::FromStr;
 
     // Defaults
@@ -185,7 +154,7 @@ fn main() {
     match args.get(1).as_slice() {
         "-s" => {
             let mut buf = [0, ..512];
-            let sock = UtpSocket::bind(addr).unwrap();
+            let sock = UdpSocket::bind(addr).unwrap();
             println!("Serving on {}", addr);
 
             loop {
@@ -193,11 +162,11 @@ fn main() {
                 match sock.recvfrom(buf) {
                     Ok((_, src)) => {
                         spawn(proc() {
-                            let mut sock = sock;
+                            let mut stream = UtpStream::new(sock, src);
                             let payload = String::from_str("Hello\n").into_bytes();
 
                             // Send uTP packet
-                            let _ = sock.sendto(payload.as_slice(), src);
+                            let _ = stream.write(payload.as_slice());
                         })
                     }
                     Err(_) => {}
@@ -205,9 +174,10 @@ fn main() {
             }
         }
         "-c" => {
-            let mut sock = UtpSocket::bind(SocketAddr { ip: Ipv4Addr(127,0,0,1), port: std::rand::random() }).unwrap();
-            let _ = sock.sendto([0], addr);
-            drop(sock);
+            let sock = UdpSocket::bind(SocketAddr { ip: Ipv4Addr(127,0,0,1), port: std::rand::random() }).unwrap();
+            let mut stream = UtpStream::new(sock, addr);
+            let _ = stream.write([0]);
+            drop(stream);
         }
         _ => usage(),
     }
