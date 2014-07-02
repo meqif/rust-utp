@@ -119,14 +119,16 @@ fn main() {
     let mut buf = [0, ..512];
     let mut sock = libtorresmo::UtpSocket::bind(SocketAddr { ip: Ipv4Addr(127,0,0,1), port: 8080 }).unwrap();
 
-    match sock.recvfrom(buf) {
-        Ok((_, src)) => {
-            let payload = String::from_str("Hello\n").into_bytes();
+    loop {
+        match sock.recvfrom(buf) {
+            Ok((_, src)) => {
+                let payload = String::from_str("Hello\n").into_bytes();
 
-            // Send uTP packet
-            let _ = sock.sendto(payload.as_slice(), src);
+                // Send uTP packet
+                let _ = sock.sendto(payload.as_slice(), src);
+            }
+            Err(_) => {}
         }
-        Err(_) => {}
     }
     drop(sock);
 }
