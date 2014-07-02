@@ -19,6 +19,7 @@ mod libtorresmo {
     }
 
     #[allow(dead_code)]
+    #[packed]
     struct UtpPacketHeader {
         type_ver: u8, // type: u4, ver: u4
         extension: u8,
