@@ -113,19 +113,34 @@ mod libtorresmo {
             self.socket.recvfrom(buf)
         }
     }
+
+    impl Clone for UtpSocket {
+        fn clone(&self) -> UtpSocket {
+            UtpSocket {
+                socket: self.socket.clone(),
+                seq_nr: self.seq_nr,
+            }
+        }
+    }
 }
 
 fn main() {
+    use libtorresmo::{UtpSocket};
+
     let mut buf = [0, ..512];
-    let mut sock = libtorresmo::UtpSocket::bind(SocketAddr { ip: Ipv4Addr(127,0,0,1), port: 8080 }).unwrap();
+    let sock = UtpSocket::bind(SocketAddr { ip: Ipv4Addr(127,0,0,1), port: 8080 }).unwrap();
 
     loop {
+        let mut sock = sock.clone();
         match sock.recvfrom(buf) {
             Ok((_, src)) => {
-                let payload = String::from_str("Hello\n").into_bytes();
+                spawn(proc() {
+                    let mut sock = sock;
+                    let payload = String::from_str("Hello\n").into_bytes();
 
-                // Send uTP packet
-                let _ = sock.sendto(payload.as_slice(), src);
+                    // Send uTP packet
+                    let _ = sock.sendto(payload.as_slice(), src);
+                })
             }
             Err(_) => {}
         }
