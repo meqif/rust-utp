@@ -183,6 +183,22 @@ mod libtorresmo {
             self
         }
 
+        pub fn terminate(mut self) -> UtpStream {
+            let mut packet = UtpPacket::new();
+            packet.set_type(ST_FIN);
+            packet.header.connection_id = self.connection_id;
+            packet.header.seq_nr = to_be16(self.seq_nr);
+            let t = time::get_time();
+            packet.header.timestamp_microseconds = to_be32((t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32);
+
+            // Send packet
+            let _result = self.socket.sendto(packet.bytes().as_slice(), self.connected_to);
+
+            self.seq_nr += 1;
+
+            self
+        }
+
         pub fn disconnect(self) -> UdpSocket {
             self.socket
         }
@@ -260,6 +276,7 @@ fn main() {
             let sock = UtpSocket::bind(SocketAddr { ip: Ipv4Addr(127,0,0,1), port: std::rand::random() }).unwrap();
             let mut stream = sock.connect(addr);
             let _ = stream.write([0]);
+            let stream = stream.terminate();
             drop(stream);
         }
         _ => usage(),
