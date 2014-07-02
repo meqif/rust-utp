@@ -39,8 +39,8 @@ mod libtorresmo {
         }
 
         fn len(&self) -> uint {
-            let header_size = 20;
-            return header_size;
+            static HEADER_SIZE: uint = 20;
+            return HEADER_SIZE;
         }
     }
 
