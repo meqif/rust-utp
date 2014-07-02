@@ -99,6 +99,20 @@ mod libtorresmo {
         fn len(&self) -> uint {
             self.header.len() + self.payload.len()
         }
+
+        fn decode(buf: &[u8]) -> UtpPacket {
+            let header: UtpPacketHeader = UtpPacketHeader {
+                type_ver: buf[0],
+                extension: buf[1],
+                connection_id: buf[2] as u16 << 8 | buf[3] as u16,
+                timestamp_microseconds: buf[4] as u32 << 24 | buf[5] as u32 << 16 | buf[6] as u32 << 8 | buf[7] as u32,
+                timestamp_difference_microseconds: buf[8] as u32 << 24 | buf[9] as u32 << 16 | buf[10] as u32 << 8 | buf[11] as u32,
+                wnd_size: buf[12] as u32 << 24 | buf[13] as u32 << 16 | buf[14] as u32 << 8 | buf[15] as u32,
+                seq_nr: buf[16] as u16 << 8 | buf[17] as u16,
+                ack_nr: buf[18] as u16 << 8 | buf[19] as u16,
+            };
+            UtpPacket { header: header, payload: Vec::from_slice(buf.slice(20, buf.len())) }
+        }
     }
 
     pub struct UtpSocket {
