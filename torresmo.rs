@@ -80,6 +80,36 @@ mod libtorresmo {
         }
     }
 
+    pub struct UtpSocket {
+        socket: UdpSocket,
+    }
+
+    impl UtpSocket {
+        pub fn bind(addr: SocketAddr) -> IoResult<UtpSocket> {
+            let skt = UdpSocket::bind(addr);
+            match skt {
+                Ok(x)  => Ok(UtpSocket { socket: x }),
+                Err(e) => Err(e)
+            }
+        }
+
+        pub fn connect(self, other: SocketAddr) -> UtpStream {
+            UtpStream::new(self.socket, other)
+        }
+
+        pub fn recvfrom(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
+            self.socket.recvfrom(buf)
+        }
+    }
+
+    impl Clone for UtpSocket {
+        fn clone(&self) -> UtpSocket {
+            UtpSocket {
+                socket: self.socket.clone(),
+            }
+        }
+    }
+
     #[allow(dead_code)]
     pub struct UtpStream {
         socket: UdpSocket,
@@ -136,8 +166,7 @@ fn usage() {
 }
 
 fn main() {
-    use std::io::net::udp::UdpSocket;
-    use libtorresmo::UtpStream;
+    use libtorresmo::{UtpSocket, UtpStream};
     use std::from_str::FromStr;
 
     // Defaults
@@ -154,7 +183,7 @@ fn main() {
     match args.get(1).as_slice() {
         "-s" => {
             let mut buf = [0, ..512];
-            let sock = UdpSocket::bind(addr).unwrap();
+            let sock = UtpSocket::bind(addr).unwrap();
             println!("Serving on {}", addr);
 
             loop {
@@ -162,7 +191,7 @@ fn main() {
                 match sock.recvfrom(buf) {
                     Ok((_, src)) => {
                         spawn(proc() {
-                            let mut stream = UtpStream::new(sock, src);
+                            let mut stream = sock.connect(src);
                             let payload = String::from_str("Hello\n").into_bytes();
 
                             // Send uTP packet
@@ -174,8 +203,8 @@ fn main() {
             }
         }
         "-c" => {
-            let sock = UdpSocket::bind(SocketAddr { ip: Ipv4Addr(127,0,0,1), port: std::rand::random() }).unwrap();
-            let mut stream = UtpStream::new(sock, addr);
+            let sock = UtpSocket::bind(SocketAddr { ip: Ipv4Addr(127,0,0,1), port: std::rand::random() }).unwrap();
+            let mut stream = sock.connect(addr);
             let _ = stream.write([0]);
             drop(stream);
         }
