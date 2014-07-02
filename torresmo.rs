@@ -81,7 +81,7 @@ mod libtorresmo {
     }
 
     pub struct UtpSocket {
-        skt: UdpSocket,
+        socket: UdpSocket,
         seq_nr: u16,
     }
 
@@ -89,7 +89,7 @@ mod libtorresmo {
         pub fn bind(addr: SocketAddr) -> IoResult<UtpSocket> {
             let skt = UdpSocket::bind(addr);
             match skt {
-                Ok(x)  => Ok(UtpSocket { skt: x, seq_nr: 1 }),
+                Ok(x)  => Ok(UtpSocket { socket: x, seq_nr: 1 }),
                 Err(e) => Err(e)
             }
         }
@@ -103,14 +103,14 @@ mod libtorresmo {
             packet.header.timestamp_microseconds = to_be32((t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32);
 
             // Send packet
-            let result = self.skt.sendto(packet.bytes().as_slice(), dst);
+            let result = self.socket.sendto(packet.bytes().as_slice(), dst);
 
             self.seq_nr += 1;
             result
         }
 
         pub fn recvfrom(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
-            self.skt.recvfrom(buf)
+            self.socket.recvfrom(buf)
         }
     }
 }
