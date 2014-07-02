@@ -122,6 +122,45 @@ mod libtorresmo {
             }
         }
     }
+
+    #[allow(dead_code)]
+    struct UtpStream {
+        socket: UdpSocket,
+        connected_to: SocketAddr,
+        seq_nr: u16,
+        ack_nr: u16,
+    }
+
+    #[allow(dead_code)]
+    impl UtpStream {
+        fn new(socket: UdpSocket, conn: SocketAddr) -> UtpStream {
+            UtpStream {
+                socket: socket,
+                connected_to: conn,
+                seq_nr: 0,
+                ack_nr: 0,
+            }
+        }
+
+        fn disconnect(self) -> UdpSocket {
+            self.socket
+        }
+    }
+
+    impl Reader for UtpStream {
+        fn read(&mut self, buf: &mut [u8]) -> IoResult<uint> {
+            match self.socket.recvfrom(buf) {
+                Ok((_nread, src)) if src != self.connected_to => Ok(0),
+                Ok((nread, _src)) => Ok(nread),
+                Err(e) => Err(e),
+            }
+        }
+    }
+    impl Writer for UtpStream {
+        fn write(&mut self, buf: &[u8]) -> IoResult<()> {
+            self.socket.sendto(buf, self.connected_to)
+        }
+    }
 }
 
 fn usage() {
