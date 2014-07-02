@@ -120,6 +120,7 @@ mod libtorresmo {
     pub struct UtpStream {
         socket: UdpSocket,
         connected_to: SocketAddr,
+        connection_id: u16,
         seq_nr: u16,
         ack_nr: u16,
     }
@@ -130,7 +131,8 @@ mod libtorresmo {
             UtpStream {
                 socket: socket,
                 connected_to: conn,
-                seq_nr: 0,
+                connection_id: to_be16(random()),
+                seq_nr: 1,
                 ack_nr: 0,
             }
         }
@@ -153,8 +155,8 @@ mod libtorresmo {
         fn write(&mut self, buf: &[u8]) -> IoResult<()> {
             let mut packet = UtpPacket::new();
             packet.payload = Vec::from_slice(buf);
+            packet.header.connection_id = self.connection_id;
             packet.header.seq_nr = to_be16(self.seq_nr);
-            packet.header.connection_id = to_be16(random());
             let t = time::get_time();
             packet.header.timestamp_microseconds = to_be32((t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32);
 
