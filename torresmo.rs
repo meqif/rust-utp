@@ -68,6 +68,11 @@ mod libtorresmo {
             }
         }
 
+        fn set_type(&mut self, t: UtpPacketType) {
+            let version = 0x0F & self.header.type_ver;
+            self.header.type_ver = t as u8 << 4 | version;
+        }
+
         fn bytes(&self) -> Vec<u8> {
             let mut buf: Vec<u8> = Vec::with_capacity(self.len());
             buf.push_all(self.header.bytes());
