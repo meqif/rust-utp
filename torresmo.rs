@@ -6,7 +6,7 @@ mod libtorresmo {
     use std::io::net::udp::UdpSocket;
     use std::io::net::ip::SocketAddr;
     use std::io::IoResult;
-    use std::mem::{to_be32, to_be16, transmute};
+    use std::mem::transmute;
     use std::rand::random;
     use std::fmt;
 
@@ -158,10 +158,11 @@ mod libtorresmo {
     #[allow(dead_code)]
     impl UtpStream {
         pub fn new(socket: UdpSocket, conn: SocketAddr) -> UtpStream {
+            let r: u16 = random();
             UtpStream {
                 socket: socket,
                 connected_to: conn,
-                connection_id: to_be16(random()),
+                connection_id: r.to_be(),
                 seq_nr: 1,
                 ack_nr: 0,
             }
@@ -171,9 +172,9 @@ mod libtorresmo {
             let mut packet = UtpPacket::new();
             packet.set_type(ST_SYN);
             packet.header.connection_id = self.connection_id;
-            packet.header.seq_nr = to_be16(self.seq_nr);
+            packet.header.seq_nr = self.seq_nr.to_be();
             let t = time::get_time();
-            packet.header.timestamp_microseconds = to_be32((t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32);
+            packet.header.timestamp_microseconds = ((t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32).to_be();
 
             // Send packet
             let _result = self.socket.sendto(packet.bytes().as_slice(), self.connected_to);
@@ -187,9 +188,9 @@ mod libtorresmo {
             let mut packet = UtpPacket::new();
             packet.set_type(ST_FIN);
             packet.header.connection_id = self.connection_id;
-            packet.header.seq_nr = to_be16(self.seq_nr);
+            packet.header.seq_nr = self.seq_nr.to_be();
             let t = time::get_time();
-            packet.header.timestamp_microseconds = to_be32((t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32);
+            packet.header.timestamp_microseconds = ((t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32).to_be();
 
             // Send packet
             let _result = self.socket.sendto(packet.bytes().as_slice(), self.connected_to);
@@ -218,9 +219,9 @@ mod libtorresmo {
             let mut packet = UtpPacket::new();
             packet.payload = Vec::from_slice(buf);
             packet.header.connection_id = self.connection_id;
-            packet.header.seq_nr = to_be16(self.seq_nr);
+            packet.header.seq_nr = self.seq_nr.to_be();
             let t = time::get_time();
-            packet.header.timestamp_microseconds = to_be32((t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32);
+            packet.header.timestamp_microseconds = ((t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32).to_be();
 
             // Send packet
             let result = self.socket.sendto(packet.bytes().as_slice(), self.connected_to);
