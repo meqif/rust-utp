@@ -124,6 +124,10 @@ mod libtorresmo {
     }
 }
 
+fn usage() {
+    println!("Usage: torresmo [-s|-c] <address> <port>");
+}
+
 fn main() {
     use libtorresmo::{UtpSocket};
     use std::from_str::FromStr;
@@ -133,30 +137,39 @@ fn main() {
 
     let args = std::os::args();
 
-    if args.len() > 1 {
-        let ip = FromStr::from_str(args.get(1).as_slice()).unwrap();
-        let port = FromStr::from_str(args.get(2).as_slice()).unwrap();
+    if args.len() == 4 {
+        let ip = FromStr::from_str(args.get(2).as_slice()).unwrap();
+        let port = FromStr::from_str(args.get(3).as_slice()).unwrap();
         addr = SocketAddr { ip: ip, port: port };
     }
 
-    let mut buf = [0, ..512];
-    let sock = UtpSocket::bind(addr).unwrap();
-    println!("Serving on {}", addr);
+    match args.get(1).as_slice() {
+        "-s" => {
+            let mut buf = [0, ..512];
+            let sock = UtpSocket::bind(addr).unwrap();
+            println!("Serving on {}", addr);
 
-    loop {
-        let mut sock = sock.clone();
-        match sock.recvfrom(buf) {
-            Ok((_, src)) => {
-                spawn(proc() {
-                    let mut sock = sock;
-                    let payload = String::from_str("Hello\n").into_bytes();
+            loop {
+                let mut sock = sock.clone();
+                match sock.recvfrom(buf) {
+                    Ok((_, src)) => {
+                        spawn(proc() {
+                            let mut sock = sock;
+                            let payload = String::from_str("Hello\n").into_bytes();
 
-                    // Send uTP packet
-                    let _ = sock.sendto(payload.as_slice(), src);
-                })
+                            // Send uTP packet
+                            let _ = sock.sendto(payload.as_slice(), src);
+                        })
+                    }
+                    Err(_) => {}
+                }
             }
-            Err(_) => {}
         }
+        "-c" => {
+            let mut sock = UtpSocket::bind(SocketAddr { ip: Ipv4Addr(127,0,0,1), port: std::rand::random() }).unwrap();
+            let _ = sock.sendto([0], addr);
+            drop(sock);
+        }
+        _ => usage(),
     }
-    drop(sock);
 }
