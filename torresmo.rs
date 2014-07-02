@@ -126,9 +126,22 @@ mod libtorresmo {
 
 fn main() {
     use libtorresmo::{UtpSocket};
+    use std::from_str::FromStr;
+
+    // Defaults
+    let mut addr = SocketAddr { ip: Ipv4Addr(127,0,0,1), port: 8080 };
+
+    let args = std::os::args();
+
+    if args.len() > 1 {
+        let ip = FromStr::from_str(args.get(1).as_slice()).unwrap();
+        let port = FromStr::from_str(args.get(2).as_slice()).unwrap();
+        addr = SocketAddr { ip: ip, port: port };
+    }
 
     let mut buf = [0, ..512];
-    let sock = UtpSocket::bind(SocketAddr { ip: Ipv4Addr(127,0,0,1), port: 8080 }).unwrap();
+    let sock = UtpSocket::bind(addr).unwrap();
+    println!("Serving on {}", addr);
 
     loop {
         let mut sock = sock.clone();
