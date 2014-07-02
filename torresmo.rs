@@ -100,7 +100,8 @@ mod libtorresmo {
         }
 
         pub fn connect(self, other: SocketAddr) -> UtpStream {
-            UtpStream::new(self.socket, other)
+            let stream = UtpStream::new(self.socket, other);
+            stream.connect()
         }
 
         pub fn recvfrom(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
@@ -135,6 +136,22 @@ mod libtorresmo {
                 seq_nr: 1,
                 ack_nr: 0,
             }
+        }
+
+        pub fn connect(mut self) -> UtpStream {
+            let mut packet = UtpPacket::new();
+            packet.set_type(ST_SYN);
+            packet.header.connection_id = self.connection_id;
+            packet.header.seq_nr = to_be16(self.seq_nr);
+            let t = time::get_time();
+            packet.header.timestamp_microseconds = to_be32((t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32);
+
+            // Send packet
+            let _result = self.socket.sendto(packet.bytes().as_slice(), self.connected_to);
+
+            self.seq_nr += 1;
+
+            self
         }
 
         pub fn disconnect(self) -> UdpSocket {
