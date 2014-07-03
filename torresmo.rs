@@ -226,7 +226,7 @@ mod libtorresmo {
                     let mut resp = UtpPacket::new();
                     resp.set_type(ST_STATE);
                     let t = time::get_time();
-                    let self_t_micro: u32 = ((t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32);
+                    let self_t_micro: u32 = (t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32;
                     let other_t_micro: u32 = x.timestamp_microseconds;
                     resp.header.timestamp_microseconds = self_t_micro.to_be();
                     resp.header.timestamp_difference_microseconds = (self_t_micro.to_le() - other_t_micro.to_le()).to_be();
@@ -388,13 +388,15 @@ fn main() {
             loop {
                 let mut sock = sock.clone();
                 match sock.recvfrom(buf) {
-                    Ok((_, src)) => {
+                    Ok((_nread, _src)) => {
                         spawn(proc() {
+                            /*
                             let mut stream = sock.connect(src);
                             let payload = String::from_str("Hello\n").into_bytes();
 
                             // Send uTP packet
-                            //let _ = stream.write(payload.as_slice());
+                            let _ = stream.write(payload.as_slice());
+                            */
                         })
                     }
                     Err(_) => {}
@@ -403,7 +405,7 @@ fn main() {
         }
         "-c" => {
             let sock = UtpSocket::bind(SocketAddr { ip: Ipv4Addr(127,0,0,1), port: std::rand::random() }).unwrap();
-            let mut stream = sock.connect(addr);
+            let stream = sock.connect(addr);
             //let _ = stream.write([0]);
             //let mut buf = [0, ..512];
             //stream.read(buf);
