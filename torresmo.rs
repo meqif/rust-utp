@@ -46,6 +46,16 @@ mod libtorresmo {
     }
 
     impl UtpPacketHeader {
+        fn set_type(&mut self, t: UtpPacketType) {
+            let version = 0x0F & self.type_ver;
+            self.type_ver = t as u8 << 4 | version;
+        }
+
+        fn get_type(self) -> UtpPacketType {
+            let t: UtpPacketType = unsafe { transmute(self.type_ver >> 4) };
+            t
+        }
+
         fn bytes(&self) -> &[u8] {
             unsafe {
                 let buf: &[u8, ..20] = transmute(self);
@@ -61,15 +71,8 @@ mod libtorresmo {
 
     impl fmt::Show for UtpPacketHeader {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            let t: UtpPacketType = unsafe { transmute(self.type_ver >> 4) };
-            let ptype = match t {
-                ST_DATA  => "ST_DATA",
-                ST_FIN   => "ST_FIN",
-                ST_STATE => "ST_STATE",
-                ST_RESET => "ST_RESET",
-                ST_SYN   => "ST_SYN",
-            };
-            write!(f, "(type: {}, version: {}, extension: {}, connection_id: {}, timestamp_microseconds: {}, timestamp_difference_microseconds: {}, wnd_size: {}, seq_nr: {}, ack_nr: {})", ptype, self.type_ver & 0x0F, self.extension, self.connection_id, self.timestamp_microseconds, self.timestamp_difference_microseconds, self.wnd_size, self.seq_nr, self.ack_nr)
+            let t: UtpPacketType = self.get_type();
+            write!(f, "(type: {}, version: {}, extension: {}, connection_id: {}, timestamp_microseconds: {}, timestamp_difference_microseconds: {}, wnd_size: {}, seq_nr: {}, ack_nr: {})", t, self.type_ver & 0x0F, self.extension, self.connection_id, self.timestamp_microseconds, self.timestamp_difference_microseconds, self.wnd_size, self.seq_nr, self.ack_nr)
         }
     }
 
@@ -98,8 +101,11 @@ mod libtorresmo {
         }
 
         fn set_type(&mut self, t: UtpPacketType) {
-            let version = 0x0F & self.header.type_ver;
-            self.header.type_ver = t as u8 << 4 | version;
+            self.header.set_type(t);
+        }
+
+        fn get_type(self) -> UtpPacketType {
+            self.header.get_type()
         }
 
         fn bytes(&self) -> Vec<u8> {
