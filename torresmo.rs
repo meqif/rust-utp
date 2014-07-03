@@ -256,7 +256,7 @@ fn usage() {
 }
 
 fn main() {
-    use libtorresmo::{UtpSocket, UtpStream};
+    use libtorresmo::UtpSocket;
     use std::from_str::FromStr;
 
     // Defaults
