@@ -187,7 +187,7 @@ mod libtorresmo {
 
             // Send packet
             let dst = self.connected_to;
-            let _result = self.sendto(packet.bytes().as_slice(), dst);
+            let _result = self.socket.sendto(packet.bytes().as_slice(), dst);
 
             self.state = CS_SYN_SENT;
 
