@@ -139,12 +139,20 @@ mod libtorresmo {
         }
     }
 
+    #[allow(non_camel_case_types)]
+    enum UtpSocketState {
+        CS_NEW,
+        CS_CONNECTED,
+        CS_SYN_SENT,
+    }
+
     pub struct UtpSocket {
         socket: UdpSocket,
         connected_to: SocketAddr,
         connection_id: u16,
         seq_nr: u16,
         ack_nr: u16,
+        state: UtpSocketState,
     }
 
     impl UtpSocket {
@@ -158,6 +166,7 @@ mod libtorresmo {
                     connection_id: r.to_be(),
                     seq_nr: 1,
                     ack_nr: 0,
+                    state: CS_NEW,
                 }),
                 Err(e) => Err(e)
             }
@@ -180,6 +189,8 @@ mod libtorresmo {
             let dst = self.connected_to;
             let _result = self.sendto(packet.bytes().as_slice(), dst);
 
+            self.state = CS_SYN_SENT;
+
             let mut buf = [0, ..512];
             let (len, addr) = self.socket.recvfrom(buf).unwrap();
             println!("{} {}", addr, self.connected_to);
@@ -189,6 +200,9 @@ mod libtorresmo {
             println!("{}", packet.header);
 
             self.seq_nr += 1;
+
+            self.state = CS_CONNECTED;
+
             self
         }
 
@@ -222,6 +236,8 @@ mod libtorresmo {
                     self.socket.sendto(resp.bytes().as_slice(), _src);
 
                     self.seq_nr += 1;
+
+                    self.state = CS_CONNECTED;
                 }
                 _ => {}
             };
@@ -249,6 +265,7 @@ mod libtorresmo {
                 connection_id: r.to_be(),
                 seq_nr: 1,
                 ack_nr: 0,
+                state: CS_NEW,
             }
         }
     }
