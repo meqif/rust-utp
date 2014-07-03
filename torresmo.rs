@@ -140,6 +140,7 @@ mod libtorresmo {
     }
 
     #[allow(non_camel_case_types)]
+    #[deriving(PartialEq,Eq)]
     enum UtpSocketState {
         CS_NEW,
         CS_CONNECTED,
