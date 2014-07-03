@@ -19,6 +19,19 @@ mod libtorresmo {
         ST_SYN   = 4,
     }
 
+    impl fmt::Show for UtpPacketType {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            let s = match *self {
+                ST_DATA  => "ST_DATA",
+                ST_FIN   => "ST_FIN",
+                ST_STATE => "ST_STATE",
+                ST_RESET => "ST_RESET",
+                ST_SYN   => "ST_SYN",
+            };
+            write!(f, "{}", s)
+        }
+    }
+
     #[allow(dead_code)]
     #[packed]
     struct UtpPacketHeader {
