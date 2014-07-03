@@ -207,7 +207,8 @@ mod libtorresmo {
             let x = packet.header;
             println!("{}", packet.header);
             match packet.get_type() {
-                ST_SYN => {
+                ST_SYN => { // Respond with an ACK
+                    self.seq_nr = random();
                     let mut resp = UtpPacket::new();
                     resp.set_type(ST_STATE);
                     let t = time::get_time();
@@ -216,7 +217,11 @@ mod libtorresmo {
                     resp.header.timestamp_microseconds = self_t_micro.to_be();
                     resp.header.timestamp_difference_microseconds = (self_t_micro.to_le() - other_t_micro.to_le()).to_be();
                     resp.header.connection_id = self.connection_id;
+                    resp.header.seq_nr = self.seq_nr;
+                    resp.header.ack_nr = x.seq_nr.to_le().to_be();
                     self.socket.sendto(resp.bytes().as_slice(), _src);
+
+                    self.seq_nr += 1;
                 }
                 _ => {}
             };
