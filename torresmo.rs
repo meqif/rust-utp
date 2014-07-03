@@ -11,6 +11,7 @@ mod libtorresmo {
     use std::fmt;
 
     #[allow(dead_code,non_camel_case_types)]
+    #[deriving(PartialEq,Eq)]
     enum UtpPacketType {
         ST_DATA  = 0,
         ST_FIN   = 1,
