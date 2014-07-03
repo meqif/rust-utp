@@ -418,11 +418,10 @@ fn main() {
     match args.get(1).as_slice() {
         "-s" => {
             let mut buf = [0, ..512];
-            let sock = UtpSocket::bind(addr).unwrap();
+            let mut sock = UtpSocket::bind(addr).unwrap();
             println!("Serving on {}", addr);
 
             loop {
-                let mut sock = sock.clone();
                 match sock.recvfrom(buf) {
                     Ok((_nread, _src)) => {
                         spawn(proc() {
