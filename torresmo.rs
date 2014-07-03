@@ -149,7 +149,8 @@ mod libtorresmo {
     pub struct UtpSocket {
         socket: UdpSocket,
         connected_to: SocketAddr,
-        connection_id: u16,
+        sender_connection_id: u16,
+        receiver_connection_id: u16,
         seq_nr: u16,
         ack_nr: u16,
         state: UtpSocketState,
@@ -163,7 +164,8 @@ mod libtorresmo {
                 Ok(x)  => Ok(UtpSocket {
                     socket: x,
                     connected_to: addr,
-                    connection_id: r.to_be(),
+                    receiver_connection_id: r.to_be(),
+                    sender_connection_id: (r + 1).to_be(),
                     seq_nr: 1,
                     ack_nr: 0,
                     state: CS_NEW,
@@ -180,7 +182,7 @@ mod libtorresmo {
             */
             let mut packet = UtpPacket::new();
             packet.set_type(ST_SYN);
-            packet.header.connection_id = self.connection_id;
+            packet.header.connection_id = self.sender_connection_id;
             packet.header.seq_nr = self.seq_nr.to_be();
             let t = time::get_time();
             packet.header.timestamp_microseconds = ((t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32).to_be();
@@ -219,10 +221,13 @@ mod libtorresmo {
 
             let packet = UtpPacket::decode(b);
             let x = packet.header;
-            println!("{}", packet.header);
+            println!("received {}", packet.header);
             match packet.get_type() {
                 ST_SYN => { // Respond with an ACK and populate own fields
                     self.seq_nr = random();
+                    self.receiver_connection_id = (x.connection_id.to_le() + 1).to_be();
+                    self.sender_connection_id = x.connection_id.to_le().to_be();
+
                     let mut resp = UtpPacket::new();
                     resp.set_type(ST_STATE);
                     let t = time::get_time();
@@ -230,11 +235,13 @@ mod libtorresmo {
                     let other_t_micro: u32 = x.timestamp_microseconds;
                     resp.header.timestamp_microseconds = self_t_micro.to_be();
                     resp.header.timestamp_difference_microseconds = (self_t_micro.to_le() - other_t_micro.to_le()).to_be();
-                    resp.header.connection_id = self.connection_id;
+                    resp.header.connection_id = self.sender_connection_id;
                     resp.header.seq_nr = self.seq_nr;
                     resp.header.ack_nr = x.seq_nr.to_le().to_be();
                     self.socket.sendto(resp.bytes().as_slice(), _src);
+                    println!("sent {}", resp.header);
 
+                    // Packets with no payload don't increase seq_nr
                     self.seq_nr += 1;
 
                     self.state = CS_CONNECTED;
@@ -247,11 +254,15 @@ mod libtorresmo {
                     let other_t_micro: u32 = x.timestamp_microseconds;
                     resp.header.timestamp_microseconds = self_t_micro.to_be();
                     resp.header.timestamp_difference_microseconds = (self_t_micro.to_le() - other_t_micro.to_le()).to_be();
-                    resp.header.connection_id = self.connection_id;
+                    resp.header.connection_id = self.sender_connection_id;
+                    println!("{} {}", self.sender_connection_id, self.sender_connection_id.to_be());
+                    println!("{} {}", self.receiver_connection_id, self.receiver_connection_id.to_be());
                     resp.header.seq_nr = self.seq_nr;
                     resp.header.ack_nr = x.seq_nr.to_le().to_be();
                     self.socket.sendto(resp.bytes().as_slice(), _src);
+                    println!("sent {}", resp.header);
 
+                    // Packets with no payload don't increase seq_nr
                     self.seq_nr += 1;
                 }
                 _ => {}
@@ -272,7 +283,7 @@ mod libtorresmo {
             let t = time::get_time();
             packet.header.timestamp_microseconds = ((t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32).to_be();
             packet.header.seq_nr = self.seq_nr.to_be();
-            packet.header.connection_id = self.connection_id;
+            packet.header.connection_id = self.sender_connection_id;
 
             self.seq_nr += 1;
             self.socket.sendto(packet.bytes().as_slice(), dst)
@@ -285,7 +296,8 @@ mod libtorresmo {
             UtpSocket {
                 socket: self.socket.clone(),
                 connected_to: self.connected_to,
-                connection_id: r.to_be(),
+                receiver_connection_id: r.to_be(),
+                sender_connection_id: (r + 1).to_be(),
                 seq_nr: 1,
                 ack_nr: 0,
                 state: CS_NEW,
