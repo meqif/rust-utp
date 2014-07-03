@@ -252,7 +252,15 @@ mod libtorresmo {
         }
 
         pub fn sendto(&mut self, buf: &[u8], dst: SocketAddr) -> IoResult<()> {
-            self.socket.sendto(buf, dst)
+            let mut packet = UtpPacket::new();
+            packet.payload = Vec::from_slice(buf);
+            let t = time::get_time();
+            packet.header.timestamp_microseconds = ((t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32).to_be();
+            packet.header.seq_nr = self.seq_nr.to_be();
+            packet.header.connection_id = self.connection_id;
+
+            self.seq_nr += 1;
+            self.socket.sendto(packet.bytes().as_slice(), dst)
         }
     }
 
