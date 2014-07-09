@@ -270,6 +270,8 @@ mod libtorresmo {
                 _ => {}
             };
 
+            assert!(self.state != CS_NEW);
+
             for i in range(0u, ::std::cmp::min(buf.len(), read-20)) {
                 buf[i] = b[i+20];
             }
