@@ -191,6 +191,7 @@ mod libtorresmo {
             // Send packet
             let dst = self.connected_to;
             let _result = self.socket.sendto(packet.bytes().as_slice(), dst);
+            println!("sent {}", packet.header);
 
             self.state = CS_SYN_SENT;
 
@@ -200,7 +201,7 @@ mod libtorresmo {
             assert!(addr == self.connected_to);
             let packet = UtpPacket::decode(buf.slice(0, len));
             //assert!(packet.get_type() == ST_STATE);
-            println!("{}", packet.header);
+            println!("received {}", packet.header);
 
             self.seq_nr += 1;
 
