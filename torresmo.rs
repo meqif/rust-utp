@@ -57,6 +57,10 @@ mod libtorresmo {
             t
         }
 
+        fn get_version(self) -> u8 {
+            self.type_ver & 0x0F
+        }
+
         fn bytes(&self) -> &[u8] {
             unsafe {
                 let buf: &[u8, ..20] = transmute(self);
@@ -85,8 +89,7 @@ mod libtorresmo {
 
     impl fmt::Show for UtpPacketHeader {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            let t: UtpPacketType = self.get_type();
-            write!(f, "(type: {}, version: {}, extension: {}, connection_id: {}, timestamp_microseconds: {}, timestamp_difference_microseconds: {}, wnd_size: {}, seq_nr: {}, ack_nr: {})", t, self.type_ver & 0x0F, self.extension, self.connection_id, self.timestamp_microseconds, self.timestamp_difference_microseconds, self.wnd_size, self.seq_nr, self.ack_nr)
+            write!(f, "(type: {}, version: {}, extension: {}, connection_id: {}, timestamp_microseconds: {}, timestamp_difference_microseconds: {}, wnd_size: {}, seq_nr: {}, ack_nr: {})", self.get_type(), self.get_version(), self.extension, self.connection_id, self.timestamp_microseconds, self.timestamp_difference_microseconds, self.wnd_size, self.seq_nr, self.ack_nr)
         }
     }
 
