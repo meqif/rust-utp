@@ -196,16 +196,9 @@ mod libtorresmo {
             self.state = CS_SYN_SENT;
 
             let mut buf = [0, ..512];
-            let (len, addr) = self.socket.recvfrom(buf).unwrap();
-            println!("{} {}", addr, self.connected_to);
+            let (_len, addr) = self.recvfrom(buf).unwrap();
+            println!("Connected to: {} {}", addr, self.connected_to);
             assert!(addr == self.connected_to);
-            let packet = UtpPacket::decode(buf.slice(0, len));
-            //assert!(packet.get_type() == ST_STATE);
-            println!("received {}", packet.header);
-
-            self.seq_nr += 1;
-
-            self.state = CS_CONNECTED;
 
             self
         }
