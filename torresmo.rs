@@ -295,7 +295,7 @@ mod libtorresmo {
 
             // Expect ACK
             let mut buf = [0, ..512];
-            self.socket.recvfrom(buf);
+            try!(self.socket.recvfrom(buf));
             let resp = UtpPacket::decode(buf);
             println!("received {}", resp.header);
             let x = resp.header;
