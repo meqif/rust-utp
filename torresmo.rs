@@ -237,7 +237,7 @@ mod libtorresmo {
                     println!("sent {}", resp.header);
 
                     // Packets with no payload don't increase seq_nr
-                    self.seq_nr += 1;
+                    //self.seq_nr += 1;
 
                     self.state = CS_CONNECTED;
                 }
@@ -248,7 +248,7 @@ mod libtorresmo {
                     println!("sent {}", resp.header);
 
                     // Packets with no payload don't increase seq_nr
-                    self.seq_nr += 1;
+                    //self.seq_nr += 1;
                 }
                 _ => {}
             };
