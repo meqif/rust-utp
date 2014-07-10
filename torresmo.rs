@@ -412,9 +412,10 @@ fn main() {
     let args = std::os::args();
 
     if args.len() == 4 {
-        let ip = FromStr::from_str(args.get(2).as_slice()).unwrap();
-        let port = FromStr::from_str(args.get(3).as_slice()).unwrap();
-        addr = SocketAddr { ip: ip, port: port };
+        addr = SocketAddr {
+            ip: FromStr::from_str(args.get(2).as_slice()).unwrap(),
+            port: FromStr::from_str(args.get(3).as_slice()).unwrap(),
+        };
     }
 
     match args.get(1).as_slice() {
