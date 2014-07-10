@@ -47,6 +47,7 @@ mod libtorresmo {
     }
 
     impl UtpPacketHeader {
+        /// Set type of packet to the specified type.
         fn set_type(&mut self, t: UtpPacketType) {
             let version = 0x0F & self.type_ver;
             self.type_ver = t as u8 << 4 | version;
@@ -73,6 +74,8 @@ mod libtorresmo {
             return HEADER_SIZE;
         }
 
+        /// Read byte buffer and return corresponding packet header.
+        /// It assumes the fields are in network (big-endian) byte order.
         fn decode(buf: &[u8]) -> UtpPacketHeader {
             UtpPacketHeader {
                 type_ver: buf[0],
@@ -100,7 +103,7 @@ mod libtorresmo {
     }
 
     impl UtpPacket {
-        /// Constructs a new, empty UtpPacket.
+        /// Construct a new, empty packet.
         fn new() -> UtpPacket {
             UtpPacket {
                 header: UtpPacketHeader {
