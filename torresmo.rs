@@ -431,7 +431,7 @@ fn main() {
 
     if args.len() == 4 {
         addr = SocketAddr {
-            ip: FromStr::from_str(args.get(2).as_slice()).unwrap(),
+            ip:   FromStr::from_str(args.get(2).as_slice()).unwrap(),
             port: FromStr::from_str(args.get(3).as_slice()).unwrap(),
         };
     }
