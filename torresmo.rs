@@ -240,7 +240,7 @@ mod libtorresmo {
                     resp.header.connection_id = self.sender_connection_id;
                     resp.header.seq_nr = self.seq_nr;
                     resp.header.ack_nr = self.ack_nr.to_be();
-                    self.socket.sendto(resp.bytes().as_slice(), _src);
+                    try!(self.socket.sendto(resp.bytes().as_slice(), _src));
                     println!("sent {}", resp.header);
 
                     // Packets with no payload don't increase seq_nr
@@ -262,7 +262,7 @@ mod libtorresmo {
                     println!("{} {}", self.receiver_connection_id, self.receiver_connection_id.to_be());
                     resp.header.seq_nr = self.seq_nr;
                     resp.header.ack_nr = x.seq_nr.to_le().to_be();
-                    self.socket.sendto(resp.bytes().as_slice(), _src);
+                    try!(self.socket.sendto(resp.bytes().as_slice(), _src));
                     println!("sent {}", resp.header);
 
                     // Packets with no payload don't increase seq_nr
