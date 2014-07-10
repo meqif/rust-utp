@@ -191,7 +191,7 @@ mod libtorresmo {
             */
             let mut packet = UtpPacket::new();
             packet.set_type(ST_SYN);
-            packet.header.connection_id = self.sender_connection_id;
+            packet.header.connection_id = (self.sender_connection_id - 1).to_be();
             packet.header.seq_nr = self.seq_nr.to_be();
             let t = time::get_time();
             packet.header.timestamp_microseconds = ((t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32).to_be();
@@ -207,6 +207,8 @@ mod libtorresmo {
             let (_len, addr) = self.recvfrom(buf).unwrap();
             println!("Connected to: {} {}", addr, self.connected_to);
             assert!(addr == self.connected_to);
+
+            self.seq_nr += 1;
 
             self
         }
@@ -225,10 +227,11 @@ mod libtorresmo {
             let packet = UtpPacket::decode(b);
             let x = packet.header;
             println!("received {}", packet.header);
+            self.ack_nr = Int::from_be(x.seq_nr);
+
             match packet.get_type() {
                 ST_SYN => { // Respond with an ACK and populate own fields
                     self.seq_nr = random();
-                    self.ack_nr = Int::from_be(x.seq_nr);
                     self.receiver_connection_id = Int::from_be(x.connection_id) + 1;
                     self.sender_connection_id = Int::from_be(x.connection_id);
 
@@ -242,7 +245,6 @@ mod libtorresmo {
                     self.state = CS_CONNECTED;
                 }
                 ST_DATA => { // Respond with ACK
-                    self.ack_nr = Int::from_be(x.seq_nr);
                     let resp = self.prepare_reply(&x, ST_STATE);
                     try!(self.socket.sendto(resp.bytes().as_slice(), _src));
                     println!("sent {}", resp.header);
@@ -281,14 +283,17 @@ mod libtorresmo {
 
         pub fn sendto(&mut self, buf: &[u8], dst: SocketAddr) -> IoResult<()> {
             let mut packet = UtpPacket::new();
+            packet.set_type(ST_DATA);
             packet.payload = Vec::from_slice(buf);
             let t = time::get_time();
             packet.header.timestamp_microseconds = ((t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32).to_be();
             packet.header.seq_nr = self.seq_nr.to_be();
-            packet.header.ack_nr = (self.ack_nr.to_le() - 1).to_be();
-            packet.header.connection_id = self.sender_connection_id;
+            packet.header.ack_nr = self.ack_nr.to_be();
+            packet.header.connection_id = self.sender_connection_id.to_be();
 
-            self.seq_nr += 1;
+            if buf.len() > 0 {
+                self.seq_nr += 1;
+            }
             self.socket.sendto(packet.bytes().as_slice(), dst)
         }
     }
