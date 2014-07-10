@@ -10,6 +10,8 @@ mod libtorresmo {
     use std::rand::random;
     use std::fmt;
 
+    static HEADER_SIZE: uint = 20;
+
     #[allow(dead_code,non_camel_case_types)]
     #[deriving(PartialEq,Eq)]
     enum UtpPacketType {
@@ -64,13 +66,12 @@ mod libtorresmo {
 
         fn bytes(&self) -> &[u8] {
             unsafe {
-                let buf: &[u8, ..20] = transmute(self);
+                let buf: &[u8, ..HEADER_SIZE] = transmute(self);
                 return buf.as_slice();
             }
         }
 
         fn len(&self) -> uint {
-            static HEADER_SIZE: uint = 20;
             return HEADER_SIZE;
         }
 
@@ -142,7 +143,7 @@ mod libtorresmo {
 
         fn decode(buf: &[u8]) -> UtpPacket {
             let header = UtpPacketHeader::decode(buf);
-            UtpPacket { header: header, payload: Vec::from_slice(buf.slice(20, buf.len())) }
+            UtpPacket { header: header, payload: Vec::from_slice(buf.slice(HEADER_SIZE, buf.len())) }
         }
     }
 
@@ -254,11 +255,11 @@ mod libtorresmo {
 
             assert!(self.state != CS_NEW);
 
-            for i in range(0u, ::std::cmp::min(buf.len(), read-20)) {
-                buf[i] = b[i+20];
+            for i in range(0u, ::std::cmp::min(buf.len(), read-HEADER_SIZE)) {
+                buf[i] = b[i+HEADER_SIZE];
             }
 
-            println!("{}", Vec::from_slice(buf.slice(0,read-20)));
+            println!("{}", Vec::from_slice(buf.slice(0,read-HEADER_SIZE)));
 
             response
         }
