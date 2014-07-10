@@ -75,24 +75,25 @@ mod libtorresmo {
         }
 
         /// Read byte buffer and return corresponding packet header.
-        /// It assumes the fields are in network (big-endian) byte order.
+        /// It assumes the fields are in network (big-endian) byte order,
+        /// preseving it.
         fn decode(buf: &[u8]) -> UtpPacketHeader {
             UtpPacketHeader {
                 type_ver: buf[0],
                 extension: buf[1],
-                connection_id: buf[2] as u16 << 8 | buf[3] as u16,
-                timestamp_microseconds: buf[4] as u32 << 24 | buf[5] as u32 << 16 | buf[6] as u32 << 8 | buf[7] as u32,
-                timestamp_difference_microseconds: buf[8] as u32 << 24 | buf[9] as u32 << 16 | buf[10] as u32 << 8 | buf[11] as u32,
-                wnd_size: buf[12] as u32 << 24 | buf[13] as u32 << 16 | buf[14] as u32 << 8 | buf[15] as u32,
-                seq_nr: buf[16] as u16 << 8 | buf[17] as u16,
-                ack_nr: buf[18] as u16 << 8 | buf[19] as u16,
+                connection_id: buf[3] as u16 << 8 | buf[2] as u16,
+                timestamp_microseconds: buf[7] as u32 << 24 | buf[6] as u32 << 16 | buf[5] as u32 << 8 | buf[4] as u32,
+                timestamp_difference_microseconds: buf[11] as u32 << 24 | buf[10] as u32 << 16 | buf[9] as u32 << 8 | buf[8] as u32,
+                wnd_size: buf[15] as u32 << 24 | buf[14] as u32 << 16 | buf[13] as u32 << 8 | buf[12] as u32,
+                seq_nr: buf[17] as u16 << 8 | buf[16] as u16,
+                ack_nr: buf[19] as u16 << 8 | buf[18] as u16,
             }
         }
     }
 
     impl fmt::Show for UtpPacketHeader {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "(type: {}, version: {}, extension: {}, connection_id: {}, timestamp_microseconds: {}, timestamp_difference_microseconds: {}, wnd_size: {}, seq_nr: {}, ack_nr: {})", self.get_type(), self.get_version(), self.extension, self.connection_id, self.timestamp_microseconds, self.timestamp_difference_microseconds, self.wnd_size, self.seq_nr, self.ack_nr)
+            write!(f, "(type: {}, version: {}, extension: {}, connection_id: {}, timestamp_microseconds: {}, timestamp_difference_microseconds: {}, wnd_size: {}, seq_nr: {}, ack_nr: {})", self.get_type(), Int::from_be(self.get_version()), Int::from_be(self.extension), Int::from_be(self.connection_id), Int::from_be(self.timestamp_microseconds), Int::from_be(self.timestamp_difference_microseconds), Int::from_be(self.wnd_size), Int::from_be(self.seq_nr), Int::from_be(self.ack_nr))
         }
     }
 
