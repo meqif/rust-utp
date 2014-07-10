@@ -291,10 +291,23 @@ mod libtorresmo {
             packet.header.ack_nr = self.ack_nr.to_be();
             packet.header.connection_id = self.sender_connection_id.to_be();
 
+            let r = self.socket.sendto(packet.bytes().as_slice(), dst);
+
+            // Expect ACK
+            let mut buf = [0, ..512];
+            self.socket.recvfrom(buf);
+            let resp = UtpPacket::decode(buf);
+            println!("received {}", resp.header);
+            let x = resp.header;
+            assert_eq!(resp.get_type(), ST_STATE);
+            assert_eq!(Int::from_be(x.ack_nr), self.seq_nr);
+
+            // Success, increment sequence number
             if buf.len() > 0 {
                 self.seq_nr += 1;
             }
-            self.socket.sendto(packet.bytes().as_slice(), dst)
+
+            r
         }
     }
 
