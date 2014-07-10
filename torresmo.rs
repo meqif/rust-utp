@@ -256,13 +256,11 @@ mod libtorresmo {
                     self.state = CS_CONNECTED;
                 }
                 ST_DATA => { // Respond with ACK
-                    self.ack_nr = x.seq_nr;
+                    self.ack_nr = Int::from_be(x.seq_nr);
                     let mut resp = prepare_reply(&x, ST_STATE);
-                    resp.header.connection_id = self.sender_connection_id;
-                    println!("{} {}", self.sender_connection_id, self.sender_connection_id.to_be());
-                    println!("{} {}", self.receiver_connection_id, self.receiver_connection_id.to_be());
-                    resp.header.seq_nr = self.seq_nr;
-                    resp.header.ack_nr = x.seq_nr.to_le().to_be();
+                    resp.header.connection_id = self.sender_connection_id.to_be();
+                    resp.header.seq_nr = self.seq_nr.to_be();
+                    resp.header.ack_nr = self.ack_nr.to_be();
                     try!(self.socket.sendto(resp.bytes().as_slice(), _src));
                     println!("sent {}", resp.header);
 
