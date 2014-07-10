@@ -221,18 +221,6 @@ mod libtorresmo {
                 Err(e) => return Err(e),
             };
 
-            fn prepare_reply(original: &UtpPacketHeader, t: UtpPacketType) -> UtpPacket {
-                let mut resp = UtpPacket::new();
-                resp.set_type(t);
-                let t = time::get_time();
-                let self_t_micro: u32 = (t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32;
-                let other_t_micro: u32 = Int::from_be(original.timestamp_microseconds);
-                resp.header.timestamp_microseconds = self_t_micro.to_be();
-                resp.header.timestamp_difference_microseconds = (self_t_micro.to_le() - other_t_micro.to_le()).to_be();
-
-                resp
-            }
-
             let packet = UtpPacket::decode(b);
             let x = packet.header;
             println!("received {}", packet.header);
@@ -243,10 +231,7 @@ mod libtorresmo {
                     self.receiver_connection_id = Int::from_be(x.connection_id) + 1;
                     self.sender_connection_id = Int::from_be(x.connection_id);
 
-                    let mut resp = prepare_reply(&x, ST_STATE);
-                    resp.header.connection_id = self.sender_connection_id.to_be();
-                    resp.header.seq_nr = self.seq_nr.to_be();
-                    resp.header.ack_nr = self.ack_nr.to_be();
+                    let resp = self.prepare_reply(&x, ST_STATE);
                     try!(self.socket.sendto(resp.bytes().as_slice(), _src));
                     println!("sent {}", resp.header);
 
@@ -257,10 +242,7 @@ mod libtorresmo {
                 }
                 ST_DATA => { // Respond with ACK
                     self.ack_nr = Int::from_be(x.seq_nr);
-                    let mut resp = prepare_reply(&x, ST_STATE);
-                    resp.header.connection_id = self.sender_connection_id.to_be();
-                    resp.header.seq_nr = self.seq_nr.to_be();
-                    resp.header.ack_nr = self.ack_nr.to_be();
+                    let resp = self.prepare_reply(&x, ST_STATE);
                     try!(self.socket.sendto(resp.bytes().as_slice(), _src));
                     println!("sent {}", resp.header);
 
@@ -279,6 +261,21 @@ mod libtorresmo {
             println!("{}", Vec::from_slice(buf.slice(0,read-20)));
 
             response
+        }
+
+        fn prepare_reply(&self, original: &UtpPacketHeader, t: UtpPacketType) -> UtpPacket {
+            let mut resp = UtpPacket::new();
+            resp.set_type(t);
+            let t = time::get_time();
+            let self_t_micro: u32 = (t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32;
+            let other_t_micro: u32 = Int::from_be(original.timestamp_microseconds);
+            resp.header.timestamp_microseconds = self_t_micro.to_be();
+            resp.header.timestamp_difference_microseconds = (self_t_micro.to_le() - other_t_micro.to_le()).to_be();
+            resp.header.connection_id = self.sender_connection_id.to_be();
+            resp.header.seq_nr = self.seq_nr.to_be();
+            resp.header.ack_nr = self.ack_nr.to_be();
+
+            resp
         }
 
         pub fn sendto(&mut self, buf: &[u8], dst: SocketAddr) -> IoResult<()> {
