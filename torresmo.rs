@@ -244,9 +244,9 @@ mod libtorresmo {
                     self.sender_connection_id = Int::from_be(x.connection_id);
 
                     let mut resp = prepare_reply(&x, ST_STATE);
-                    resp.header.connection_id = self.sender_connection_id;
-                    resp.header.seq_nr = self.seq_nr;
-                    resp.header.ack_nr = self.ack_nr;
+                    resp.header.connection_id = self.sender_connection_id.to_be();
+                    resp.header.seq_nr = self.seq_nr.to_be();
+                    resp.header.ack_nr = self.ack_nr.to_be();
                     try!(self.socket.sendto(resp.bytes().as_slice(), _src));
                     println!("sent {}", resp.header);
 
