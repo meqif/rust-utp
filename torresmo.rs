@@ -65,10 +65,8 @@ mod libtorresmo {
         }
 
         fn bytes(&self) -> &[u8] {
-            unsafe {
-                let buf: &[u8, ..HEADER_SIZE] = transmute(self);
-                return buf.as_slice();
-            }
+            let buf: &[u8, ..HEADER_SIZE] = unsafe { transmute(self) };
+            return buf.as_slice();
         }
 
         fn len(&self) -> uint {
