@@ -64,6 +64,7 @@ mod libtorresmo {
             self.type_ver & 0x0F
         }
 
+        /// Return packet header as a slice of bytes.
         fn bytes(&self) -> &[u8] {
             let buf: &[u8, ..HEADER_SIZE] = unsafe { transmute(self) };
             return buf.as_slice();
