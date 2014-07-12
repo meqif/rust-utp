@@ -140,8 +140,10 @@ mod libtorresmo {
         }
 
         fn decode(buf: &[u8]) -> UtpPacket {
-            let header = UtpPacketHeader::decode(buf);
-            UtpPacket { header: header, payload: Vec::from_slice(buf.slice(HEADER_SIZE, buf.len())) }
+            UtpPacket {
+                header:  UtpPacketHeader::decode(buf),
+                payload: Vec::from_slice(buf.slice(HEADER_SIZE, buf.len()))
+            }
         }
     }
 
