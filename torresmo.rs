@@ -12,6 +12,24 @@ mod libtorresmo {
 
     static HEADER_SIZE: uint = 20;
 
+    #[test]
+    fn test_packet_decode() {
+        let buf = [0x21, 0x00, 0x41, 0xa8, 0x99, 0x2f, 0xd0, 0x2a, 0x9f, 0x4a,
+                   0x26, 0x21, 0x00, 0x10, 0x00, 0x00, 0x3a, 0xf2, 0x6c, 0x79];
+        let pkt = UtpPacket::decode(buf);
+        assert_eq!(pkt.header.get_version(), 1);
+        assert_eq!(pkt.header.get_type(), ST_STATE);
+        assert_eq!(pkt.header.extension, 0);
+        assert_eq!(Int::from_be(pkt.header.connection_id), 16808);
+        assert_eq!(Int::from_be(pkt.header.timestamp_microseconds), 2570047530);
+        assert_eq!(Int::from_be(pkt.header.timestamp_difference_microseconds), 2672436769);
+        assert_eq!(Int::from_be(pkt.header.wnd_size), ::std::num::pow(2u32, 20));
+        assert_eq!(Int::from_be(pkt.header.seq_nr), 15090);
+        assert_eq!(Int::from_be(pkt.header.ack_nr), 27769);
+        assert_eq!(pkt.payload.len(), 0);
+        assert_eq!(pkt.len(), buf.len());
+    }
+
     #[allow(dead_code,non_camel_case_types)]
     #[deriving(PartialEq,Eq)]
     enum UtpPacketType {
