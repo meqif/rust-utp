@@ -429,7 +429,7 @@ fn main() {
             let sock = UtpSocket::bind(SocketAddr { ip: Ipv4Addr(127,0,0,1), port: std::rand::random() }).unwrap();
             let mut stream = sock.connect(addr);
             let buf = [0xF, ..512];
-            stream.sendto(buf, addr);
+            let _ = stream.sendto(buf, addr);
             //let _ = stream.write([0]);
             //let mut buf = [0, ..512];
             //stream.read(buf);
