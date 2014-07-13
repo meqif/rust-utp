@@ -26,8 +26,8 @@ mod libtorresmo {
         assert_eq!(Int::from_be(pkt.header.wnd_size), ::std::num::pow(2u32, 20));
         assert_eq!(Int::from_be(pkt.header.seq_nr), 15090);
         assert_eq!(Int::from_be(pkt.header.ack_nr), 27769);
-        assert_eq!(pkt.payload.len(), 0);
         assert_eq!(pkt.len(), buf.len());
+        assert!(pkt.payload.is_empty());
     }
 
     #[allow(dead_code,non_camel_case_types)]
