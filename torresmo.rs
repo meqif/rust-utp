@@ -30,6 +30,42 @@ mod libtorresmo {
         assert!(pkt.payload.is_empty());
     }
 
+    #[test]
+    fn test_packet_encode() {
+        let payload = Vec::from_slice("Hello\n".as_bytes());
+        let (timestamp, timestamp_diff): (u32, u32) = (15270793, 1707040186);
+        let (connection_id, seq_nr, ack_nr): (u16, u16, u16) = (16808, 15090, 17096);
+        let window_size: u32 = 1048576;
+        let mut pkt = UtpPacket::new();
+        pkt.set_type(ST_DATA);
+        pkt.header.timestamp_microseconds = timestamp.to_be();
+        pkt.header.timestamp_difference_microseconds = timestamp_diff.to_be();
+        pkt.header.connection_id = connection_id.to_be();
+        pkt.header.seq_nr = seq_nr.to_be();
+        pkt.header.ack_nr = ack_nr.to_be();
+        pkt.header.wnd_size = window_size.to_be();
+        pkt.payload = payload.clone();
+        let header = pkt.header;
+        let buf: &[u8] = [0x01, 0x00, 0x41, 0xa8, 0x00, 0xe9, 0x03, 0x89,
+                   0x65, 0xbf, 0x5d, 0xba, 0x00, 0x10, 0x00, 0x00,
+                   0x3a, 0xf2, 0x42, 0xc8, 0x48, 0x65, 0x6c, 0x6c,
+                   0x6f, 0x0a];
+
+        assert_eq!(pkt.len(), buf.len());
+        assert_eq!(pkt.len(), HEADER_SIZE + payload.len());
+        assert_eq!(pkt.payload, payload);
+        assert_eq!(header.get_version(), 1);
+        assert_eq!(header.get_type(), ST_DATA);
+        assert_eq!(header.extension, 0);
+        assert_eq!(Int::from_be(header.connection_id), connection_id);
+        assert_eq!(Int::from_be(header.seq_nr), seq_nr);
+        assert_eq!(Int::from_be(header.ack_nr), ack_nr);
+        assert_eq!(Int::from_be(header.wnd_size), window_size);
+        assert_eq!(Int::from_be(header.timestamp_microseconds), timestamp);
+        assert_eq!(Int::from_be(header.timestamp_difference_microseconds), timestamp_diff);
+        assert_eq!(pkt.bytes(), Vec::from_slice(buf));
+    }
+
     #[allow(dead_code,non_camel_case_types)]
     #[deriving(PartialEq,Eq)]
     enum UtpPacketType {
