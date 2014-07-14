@@ -316,7 +316,7 @@ mod libtorresmo {
 
             println!("{}", Vec::from_slice(buf.slice(0,read-HEADER_SIZE)));
 
-            response
+            Ok((read-HEADER_SIZE, _src))
         }
 
         fn prepare_reply(&self, original: &UtpPacketHeader, t: UtpPacketType) -> UtpPacket {
