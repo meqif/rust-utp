@@ -405,8 +405,15 @@ fn main() {
 
             loop {
                 match sock.recvfrom(buf) {
-                    Ok((_nread, _src)) => {
+                    Ok((read, _src)) => {
                         spawn(proc() {
+                            let buf = buf.slice(0, read);
+                            let path = Path::new("output.txt");
+                            let mut file = match std::io::File::open_mode(&path, std::io::Open, std::io::ReadWrite) {
+                                Ok(f) => f,
+                                Err(e) => fail!("file error: {}", e),
+                            };
+                            file.write(buf);
                             /*
                             let mut stream = sock.connect(src);
                             let payload = String::from_str("Hello\n").into_bytes();
