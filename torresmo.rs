@@ -299,13 +299,10 @@ mod libtorresmo {
 
                     self.state = CS_CONNECTED;
                 }
-                ST_DATA => { // Respond with ACK
+                ST_DATA | ST_FIN => { // Respond with ACK
                     let resp = self.prepare_reply(&x, ST_STATE);
                     try!(self.socket.sendto(resp.bytes().as_slice(), _src));
                     println!("sent {}", resp.header);
-
-                    // Packets with no payload don't increase seq_nr
-                    //self.seq_nr += 1;
                 }
                 _ => {}
             };
