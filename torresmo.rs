@@ -310,8 +310,6 @@ mod libtorresmo {
                 _ => {}
             };
 
-            assert!(self.state != CS_NEW);
-
             for i in range(0u, ::std::cmp::min(buf.len(), read-HEADER_SIZE)) {
                 buf[i] = b[i+HEADER_SIZE];
             }
