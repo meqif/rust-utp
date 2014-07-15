@@ -1,3 +1,5 @@
+#![feature(macro_rules)]
+
 use std::io::net::ip::{Ipv4Addr, SocketAddr};
 
 mod libtorresmo {
@@ -208,6 +210,7 @@ mod libtorresmo {
         CS_NEW,
         CS_CONNECTED,
         CS_SYN_SENT,
+        CS_FIN_RECEIVED,
     }
 
     pub struct UtpSocket {
@@ -219,6 +222,14 @@ mod libtorresmo {
         ack_nr: u16,
         state: UtpSocketState,
     }
+
+    macro_rules! reply_with_ack(
+        ($header:expr, $src:expr) => ({
+            let resp = self.prepare_reply($header, ST_STATE);
+            try!(self.socket.sendto(resp.bytes().as_slice(), $src));
+            println!("sent {}", resp.header);
+        })
+    )
 
     impl UtpSocket {
         pub fn bind(addr: SocketAddr) -> IoResult<UtpSocket> {
@@ -286,23 +297,22 @@ mod libtorresmo {
 
             match packet.get_type() {
                 ST_SYN => { // Respond with an ACK and populate own fields
+                    // Update socket information for new connections
                     self.seq_nr = random();
                     self.receiver_connection_id = Int::from_be(x.connection_id) + 1;
                     self.sender_connection_id = Int::from_be(x.connection_id);
 
-                    let resp = self.prepare_reply(&x, ST_STATE);
-                    try!(self.socket.sendto(resp.bytes().as_slice(), _src));
-                    println!("sent {}", resp.header);
+                    reply_with_ack!(&x, _src);
 
                     // Packets with no payload don't increase seq_nr
                     //self.seq_nr += 1;
 
                     self.state = CS_CONNECTED;
                 }
-                ST_DATA | ST_FIN => { // Respond with ACK
-                    let resp = self.prepare_reply(&x, ST_STATE);
-                    try!(self.socket.sendto(resp.bytes().as_slice(), _src));
-                    println!("sent {}", resp.header);
+                ST_DATA => reply_with_ack!(&x, _src),
+                ST_FIN => {
+                    self.state = CS_FIN_RECEIVED;
+                    reply_with_ack!(&x, _src);
                 }
                 _ => {}
             };
