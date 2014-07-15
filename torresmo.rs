@@ -413,7 +413,10 @@ fn main() {
                                 Ok(f) => f,
                                 Err(e) => fail!("file error: {}", e),
                             };
-                            file.write(buf);
+                            match file.write(buf) {
+                                Ok(_) => {}
+                                Err(e) => fail!("error writing to file: {}", e),
+                            };
                             /*
                             let mut stream = sock.connect(src);
                             let payload = String::from_str("Hello\n").into_bytes();
