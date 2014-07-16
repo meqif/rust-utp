@@ -1,5 +1,10 @@
 #![feature(macro_rules)]
 
+//! Implementation of a Micro Transport Protocol library,
+//! with both client and server modes.
+//!
+//! http://www.bittorrent.org/beps/bep_0029.html
+
 use std::io::net::ip::{Ipv4Addr, SocketAddr};
 
 mod libtorresmo {
