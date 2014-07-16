@@ -68,6 +68,12 @@ mod libtorresmo {
         assert_eq!(pkt.bytes(), Vec::from_slice(buf));
     }
 
+    /// Return current time in microseconds since the UNIX epoch.
+    fn now_microseconds() -> u32 {
+        let t = time::get_time();
+        (t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32
+    }
+
     #[allow(dead_code,non_camel_case_types)]
     #[deriving(PartialEq,Eq)]
     enum UtpPacketType {
@@ -259,8 +265,7 @@ mod libtorresmo {
             packet.set_type(ST_SYN);
             packet.header.connection_id = (self.sender_connection_id - 1).to_be();
             packet.header.seq_nr = self.seq_nr.to_be();
-            let t = time::get_time();
-            packet.header.timestamp_microseconds = ((t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32).to_be();
+            packet.header.timestamp_microseconds = now_microseconds().to_be();
 
             // Send packet
             let dst = self.connected_to;
@@ -329,8 +334,7 @@ mod libtorresmo {
         fn prepare_reply(&self, original: &UtpPacketHeader, t: UtpPacketType) -> UtpPacket {
             let mut resp = UtpPacket::new();
             resp.set_type(t);
-            let t = time::get_time();
-            let self_t_micro: u32 = (t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32;
+            let self_t_micro: u32 = now_microseconds();
             let other_t_micro: u32 = Int::from_be(original.timestamp_microseconds);
             resp.header.timestamp_microseconds = self_t_micro.to_be();
             resp.header.timestamp_difference_microseconds = (self_t_micro.to_le() - other_t_micro.to_le()).to_be();
@@ -345,8 +349,7 @@ mod libtorresmo {
             let mut packet = UtpPacket::new();
             packet.set_type(ST_DATA);
             packet.payload = Vec::from_slice(buf);
-            let t = time::get_time();
-            packet.header.timestamp_microseconds = ((t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32).to_be();
+            packet.header.timestamp_microseconds = now_microseconds().to_be();
             packet.header.seq_nr = self.seq_nr.to_be();
             packet.header.ack_nr = self.ack_nr.to_be();
             packet.header.connection_id = self.sender_connection_id.to_be();
