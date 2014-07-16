@@ -160,7 +160,20 @@ mod libtorresmo {
 
     impl fmt::Show for UtpPacketHeader {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "(type: {}, version: {}, extension: {}, connection_id: {}, timestamp_microseconds: {}, timestamp_difference_microseconds: {}, wnd_size: {}, seq_nr: {}, ack_nr: {})", self.get_type(), Int::from_be(self.get_version()), Int::from_be(self.extension), Int::from_be(self.connection_id), Int::from_be(self.timestamp_microseconds), Int::from_be(self.timestamp_difference_microseconds), Int::from_be(self.wnd_size), Int::from_be(self.seq_nr), Int::from_be(self.ack_nr))
+            write!(f, "(type: {}, version: {}, extension: {}, \
+                   connection_id: {}, timestamp_microseconds: {}, \
+                   timestamp_difference_microseconds: {}, wnd_size: {}, \
+                   seq_nr: {}, ack_nr: {})",
+                   self.get_type(),
+                   Int::from_be(self.get_version()),
+                   Int::from_be(self.extension),
+                   Int::from_be(self.connection_id),
+                   Int::from_be(self.timestamp_microseconds),
+                   Int::from_be(self.timestamp_difference_microseconds),
+                   Int::from_be(self.wnd_size),
+                   Int::from_be(self.seq_nr),
+                   Int::from_be(self.ack_nr),
+            )
         }
     }
 
