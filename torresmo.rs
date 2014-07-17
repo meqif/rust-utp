@@ -375,12 +375,27 @@ pub mod libtorresmo {
             self
         }
 
-        /// TODO: return error on recv after connection closed (RST or FIN + all
-        /// packets received)
+        /// Receive data from socket.
+        ///
+        /// On success, returns the number of bytes read and the sender's address.
         pub fn recvfrom(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
+            use std::io::IoError;
+            use std::io::{ConnectionReset, EndOfFile};
             match self.state {
-                CS_RST_RECEIVED => fail!("socket closed with CS_RST_RECEIVED"),
-                CS_FIN_RECEIVED => fail!("socket closed with CS_FIN_RECEIVED"),
+                CS_RST_RECEIVED => {
+                    return Err(IoError {
+                        kind: ConnectionReset,
+                        desc: "socket closed with CS_RST_RECEIVED",
+                        detail: None,
+                    });
+                },
+                CS_FIN_RECEIVED => {
+                    return Err(IoError {
+                        kind: EndOfFile,
+                        desc: "socket closed with CS_FIN_RECEIVED",
+                        detail: None,
+                    });
+                },
                 _ => { /* Pattern here just to shush the compiler */ },
             }
 
