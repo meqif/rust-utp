@@ -218,8 +218,9 @@ mod libtorresmo {
             self.header.get_type()
         }
 
+        /// TODO: return slice
         fn bytes(&self) -> Vec<u8> {
-            let mut buf: Vec<u8> = Vec::with_capacity(self.len());
+            let mut buf = Vec::with_capacity(self.len());
             buf.push_all(self.header.bytes());
             buf.push_all(self.payload.as_slice());
             return buf;
