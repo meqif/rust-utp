@@ -21,6 +21,7 @@ use std::io::net::ip::{Ipv4Addr, SocketAddr};
 /// - setters and getters that hide header field endianness conversion
 /// - SACK extension
 /// - packet loss
+/// - test UtpSocket
 pub mod libtorresmo {
     extern crate time;
 
@@ -95,6 +96,37 @@ pub mod libtorresmo {
                    0x3a, 0xf2, 0x42, 0xc8, 0x48, 0x65, 0x6c, 0x6c,
                    0x6f, 0x0a];
         assert_eq!(UtpPacket::decode(buf).bytes().as_slice(), buf);
+    }
+
+    #[test]
+    fn test_socket_ipv4() {
+        use std::rand::random;
+        //use std::comm::channel;
+        use std::io::net::ip::Ipv4Addr;
+
+        let ip = Ipv4Addr(127,0,0,1);
+        let (serverPort, clientPort) = (9600 + random(), 9600 + random());
+        let serverAddr = SocketAddr { ip: ip, port: serverPort };
+
+        let client = UtpSocket::bind(SocketAddr { ip: ip, port: clientPort }).unwrap();
+        let mut server = UtpSocket::bind(serverAddr).unwrap();
+
+        assert!(server.state == CS_NEW);
+        assert!(client.state == CS_NEW);
+
+        spawn(proc() {
+            let client = client.connect(serverAddr);
+            assert!(client.state == CS_CONNECTED);
+            drop(client);
+        });
+
+        let mut buf = [0u8, ..BUF_SIZE];
+        match server.recvfrom(buf) {
+            e => println!("{}", e),
+        }
+
+        assert!(server.state == CS_CONNECTED);
+        drop(server);
     }
 
     /// Return current time in microseconds since the UNIX epoch.
