@@ -312,6 +312,8 @@ mod libtorresmo {
             self
         }
 
+        /// TODO: return error on recv after connection closed (RST or FIN + all
+        /// packets received)
         pub fn recvfrom(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
             let mut b = [0, ..512];
             let response = self.socket.recvfrom(b);
