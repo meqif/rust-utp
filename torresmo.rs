@@ -218,6 +218,22 @@ mod libtorresmo {
             self.header.get_type()
         }
 
+        fn wnd_size(self, new_wnd_size: u32) -> UtpPacket {
+            UtpPacket {
+                header: UtpPacketHeader {
+                    type_ver: self.header.type_ver,
+                    extension: self.header.extension,
+                    connection_id: self.header.connection_id,
+                    timestamp_microseconds: self.header.timestamp_microseconds,
+                    timestamp_difference_microseconds: self.header.timestamp_difference_microseconds,
+                    wnd_size: new_wnd_size,
+                    seq_nr: self.header.seq_nr,
+                    ack_nr: self.header.ack_nr,
+                },
+                payload: self.payload,
+            }
+        }
+
         /// TODO: return slice
         fn bytes(&self) -> Vec<u8> {
             let mut buf = Vec::with_capacity(self.len());
