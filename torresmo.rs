@@ -1,12 +1,26 @@
 #![feature(macro_rules)]
 
 //! Implementation of a Micro Transport Protocol library,
-//! with both client and server modes.
+//! as well as a small client and server.
 //!
 //! http://www.bittorrent.org/beps/bep_0029.html
 
 use std::io::net::ip::{Ipv4Addr, SocketAddr};
 
+/// Implementation of a Micro Transport Protocol library.
+///
+/// http://www.bittorrent.org/beps/bep_0029.html
+///
+/// TODO
+/// ----
+///
+/// - congestion control
+/// - proper connection closing (handling both RST and FIN, and sending FIN on
+/// close)
+/// - sending RST on mismatch
+/// - setters and getters that hide header field endianness conversion
+/// - SACK extension
+/// - packet loss
 pub mod libtorresmo {
     extern crate time;
 
@@ -265,6 +279,7 @@ pub mod libtorresmo {
         CS_RST_RECEIVED,
     }
 
+    /// A uTP (Micro Transport Protocol) socket.
     pub struct UtpSocket {
         socket: UdpSocket,
         connected_to: SocketAddr,
@@ -301,6 +316,7 @@ pub mod libtorresmo {
             }
         }
 
+        /// Open a uTP connection to a remote host by hostname or IP address.
         pub fn connect(mut self, other: SocketAddr) -> UtpSocket {
             self.connected_to = other;
             /*
@@ -400,6 +416,8 @@ pub mod libtorresmo {
             resp
         }
 
+        /// TODO: return error on send after connection closed (RST or FIN + all
+        /// packets received)
         pub fn sendto(&mut self, buf: &[u8], dst: SocketAddr) -> IoResult<()> {
             match self.state {
                 CS_RST_RECEIVED => fail!("socket closed with CS_RST_RECEIVED"),
