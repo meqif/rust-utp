@@ -1,3 +1,5 @@
+all: torresmo doc
+
 torresmo: torresmo.rs
 	rustc $< -o $@
 
