@@ -226,7 +226,7 @@ mod libtorresmo {
                     connection_id: self.header.connection_id,
                     timestamp_microseconds: self.header.timestamp_microseconds,
                     timestamp_difference_microseconds: self.header.timestamp_difference_microseconds,
-                    wnd_size: new_wnd_size,
+                    wnd_size: new_wnd_size.to_be(),
                     seq_nr: self.header.seq_nr,
                     ack_nr: self.header.ack_nr,
                 },
