@@ -7,7 +7,7 @@
 
 use std::io::net::ip::{Ipv4Addr, SocketAddr};
 
-mod libtorresmo {
+pub mod libtorresmo {
     extern crate time;
 
     use std::io::net::udp::UdpSocket;
