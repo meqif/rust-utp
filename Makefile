@@ -7,5 +7,9 @@ test-torresmo: torresmo.rs
 test: test-torresmo
 	./test-torresmo
 
+doc: torresmo.rs
+	rustdoc $<
+
 clean:
 	rm test-torresmo torresmo
+	rm -r doc
