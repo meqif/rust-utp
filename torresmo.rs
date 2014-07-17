@@ -73,6 +73,15 @@ mod libtorresmo {
         assert_eq!(pkt.bytes(), Vec::from_slice(buf));
     }
 
+    #[test]
+    fn test_reversible() {
+        let buf: &[u8] = [0x01, 0x00, 0x41, 0xa8, 0x00, 0xe9, 0x03, 0x89,
+                   0x65, 0xbf, 0x5d, 0xba, 0x00, 0x10, 0x00, 0x00,
+                   0x3a, 0xf2, 0x42, 0xc8, 0x48, 0x65, 0x6c, 0x6c,
+                   0x6f, 0x0a];
+        assert_eq!(UtpPacket::decode(buf).bytes().as_slice(), buf);
+    }
+
     /// Return current time in microseconds since the UNIX epoch.
     fn now_microseconds() -> u32 {
         let t = time::get_time();
