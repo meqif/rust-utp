@@ -275,7 +275,7 @@ mod libtorresmo {
 
     macro_rules! reply_with_ack(
         ($header:expr, $src:expr) => ({
-            let resp = self.prepare_reply($header, ST_STATE);
+            let resp = self.prepare_reply($header, ST_STATE).wnd_size(512);
             try!(self.socket.sendto(resp.bytes().as_slice(), $src));
             println!("sent {}", resp.header);
         })
