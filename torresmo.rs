@@ -18,6 +18,7 @@ mod libtorresmo {
     use std::fmt;
 
     static HEADER_SIZE: uint = 20;
+    static BUF_SIZE: uint = 4096;
 
     #[test]
     fn test_packet_decode() {
@@ -275,7 +276,7 @@ mod libtorresmo {
 
     macro_rules! reply_with_ack(
         ($header:expr, $src:expr) => ({
-            let resp = self.prepare_reply($header, ST_STATE).wnd_size(512);
+            let resp = self.prepare_reply($header, ST_STATE).wnd_size(BUF_SIZE as u32);
             try!(self.socket.sendto(resp.bytes().as_slice(), $src));
             println!("sent {}", resp.header);
         })
@@ -318,7 +319,7 @@ mod libtorresmo {
 
             self.state = CS_SYN_SENT;
 
-            let mut buf = [0, ..512];
+            let mut buf = [0, ..BUF_SIZE];
             let (_len, addr) = self.recvfrom(buf).unwrap();
             println!("Connected to: {} {}", addr, self.connected_to);
             assert!(addr == self.connected_to);
@@ -331,7 +332,7 @@ mod libtorresmo {
         /// TODO: return error on recv after connection closed (RST or FIN + all
         /// packets received)
         pub fn recvfrom(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
-            let mut b = [0, ..512];
+            let mut b = [0, ..BUF_SIZE];
             let response = self.socket.recvfrom(b);
 
             let _src: SocketAddr;
@@ -403,7 +404,7 @@ mod libtorresmo {
             let r = self.socket.sendto(packet.bytes().as_slice(), dst);
 
             // Expect ACK
-            let mut buf = [0, ..512];
+            let mut buf = [0, ..BUF_SIZE];
             try!(self.socket.recvfrom(buf));
             let resp = UtpPacket::decode(buf);
             println!("received {}", resp.header);
@@ -445,6 +446,7 @@ fn main() {
     use std::from_str::FromStr;
 
     // Defaults
+    static BUF_SIZE: uint = 4096;
     let mut addr = SocketAddr { ip: Ipv4Addr(127,0,0,1), port: 8080 };
 
     let args = std::os::args();
@@ -458,7 +460,7 @@ fn main() {
 
     match args.get(1).as_slice() {
         "-s" => {
-            let mut buf = [0, ..512];
+            let mut buf = [0, ..BUF_SIZE];
             let mut sock = UtpSocket::bind(addr).unwrap();
             println!("Serving on {}", addr);
 
@@ -492,10 +494,10 @@ fn main() {
         "-c" => {
             let sock = UtpSocket::bind(SocketAddr { ip: Ipv4Addr(127,0,0,1), port: std::rand::random() }).unwrap();
             let mut stream = sock.connect(addr);
-            let buf = [0xF, ..512];
+            let buf = [0xF, ..BUF_SIZE];
             let _ = stream.sendto(buf, addr);
             //let _ = stream.write([0]);
-            //let mut buf = [0, ..512];
+            //let mut buf = [0, ..BUF_SIZE];
             //stream.read(buf);
             //let stream = stream.terminate();
             drop(stream);
