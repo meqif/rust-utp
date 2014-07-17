@@ -262,6 +262,7 @@ pub mod libtorresmo {
         CS_CONNECTED,
         CS_SYN_SENT,
         CS_FIN_RECEIVED,
+        CS_RST_RECEIVED,
     }
 
     pub struct UtpSocket {
@@ -324,6 +325,7 @@ pub mod libtorresmo {
             println!("Connected to: {} {}", addr, self.connected_to);
             assert!(addr == self.connected_to);
 
+            self.state = CS_CONNECTED;
             self.seq_nr += 1;
 
             self
@@ -332,6 +334,12 @@ pub mod libtorresmo {
         /// TODO: return error on recv after connection closed (RST or FIN + all
         /// packets received)
         pub fn recvfrom(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
+            match self.state {
+                CS_RST_RECEIVED => fail!("socket closed with CS_RST_RECEIVED"),
+                CS_FIN_RECEIVED => fail!("socket closed with CS_FIN_RECEIVED"),
+                _ => { /* Pattern here just to shush the compiler */ },
+            }
+
             let mut b = [0, ..BUF_SIZE];
             let response = self.socket.recvfrom(b);
 
@@ -393,6 +401,12 @@ pub mod libtorresmo {
         }
 
         pub fn sendto(&mut self, buf: &[u8], dst: SocketAddr) -> IoResult<()> {
+            match self.state {
+                CS_RST_RECEIVED => fail!("socket closed with CS_RST_RECEIVED"),
+                CS_FIN_RECEIVED => fail!("socket closed with CS_FIN_RECEIVED"),
+                _ => { /* Pattern here just to shush the compiler */ },
+            }
+
             let mut packet = UtpPacket::new();
             packet.set_type(ST_DATA);
             packet.payload = Vec::from_slice(buf);
