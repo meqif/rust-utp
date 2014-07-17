@@ -469,7 +469,7 @@ fn main() {
                             */
                         })
                     }
-                    Err(_) => {}
+                    Err(e) => { println!("{}", e); break; }
                 }
             }
         }
