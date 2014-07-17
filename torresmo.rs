@@ -100,15 +100,11 @@ pub mod libtorresmo {
 
     #[test]
     fn test_socket_ipv4() {
-        use std::rand::random;
-        //use std::comm::channel;
-        use std::io::net::ip::Ipv4Addr;
+        use std::io::test::next_test_ip4;
 
-        let ip = Ipv4Addr(127,0,0,1);
-        let (serverPort, clientPort) = (9600 + random(), 9600 + random());
-        let serverAddr = SocketAddr { ip: ip, port: serverPort };
+        let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
 
-        let client = UtpSocket::bind(SocketAddr { ip: ip, port: clientPort }).unwrap();
+        let client = UtpSocket::bind(clientAddr).unwrap();
         let mut server = UtpSocket::bind(serverAddr).unwrap();
 
         assert!(server.state == CS_NEW);
