@@ -357,7 +357,7 @@ pub mod libtorresmo {
         ($header:expr, $src:expr) => ({
             let resp = self.prepare_reply($header, ST_STATE).wnd_size(BUF_SIZE as u32);
             try!(self.socket.sendto(resp.bytes().as_slice(), $src));
-            println!("sent {}", resp.header);
+            if cfg!(not(test)) { println!("sent {}", resp.header) };
         })
     )
 
@@ -395,13 +395,13 @@ pub mod libtorresmo {
             // Send packet
             let dst = self.connected_to;
             let _result = self.socket.sendto(packet.bytes().as_slice(), dst);
-            println!("sent {}", packet.header);
+            if cfg!(not(test)) { println!("sent {}", packet.header) };
 
             self.state = CS_SYN_SENT;
 
             let mut buf = [0, ..BUF_SIZE];
             let (_len, addr) = self.recvfrom(buf).unwrap();
-            println!("Connected to: {} {}", addr, self.connected_to);
+            if cfg!(not(test)) { println!("connected to: {} {}", addr, self.connected_to) };
             assert!(addr == self.connected_to);
 
             self.state = CS_CONNECTED;
@@ -468,7 +468,7 @@ pub mod libtorresmo {
 
             let packet = UtpPacket::decode(b);
             let x = packet.header;
-            println!("received {}", packet.header);
+            if cfg!(not(test)) { println!("received {}", packet.header) };
             self.ack_nr = Int::from_be(x.seq_nr);
 
             match packet.get_type() {
@@ -497,7 +497,9 @@ pub mod libtorresmo {
                 buf[i] = b[i+HEADER_SIZE];
             }
 
-            println!("{}", Vec::from_slice(buf.slice(0,read-HEADER_SIZE)));
+            if cfg!(debug) && cfg!(not(test)) {
+                println!("payload: {}", Vec::from_slice(buf.slice(0,read-HEADER_SIZE)));
+            }
 
             Ok((read-HEADER_SIZE, _src))
         }
