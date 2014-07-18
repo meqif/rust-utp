@@ -651,13 +651,6 @@ fn main() {
                                 Ok(_) => {}
                                 Err(e) => fail!("error writing to file: {}", e),
                             };
-                            /*
-                            let mut stream = sock.connect(src);
-                            let payload = String::from_str("Hello\n").into_bytes();
-
-                            // Send uTP packet
-                            let _ = stream.write(payload.as_slice());
-                            */
                         })
                     }
                     Err(e) => { println!("{}", e); break; }
