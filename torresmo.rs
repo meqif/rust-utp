@@ -414,7 +414,7 @@ pub mod libtorresmo {
         ///
         /// This method allows both peers to receive all packets still in
         /// flight.
-        pub fn close(&mut self) {
+        pub fn close(&mut self) -> IoResult<()> {
             let mut packet = UtpPacket::new();
             packet.header.connection_id = (self.sender_connection_id - 1).to_be();
             packet.header.seq_nr = self.seq_nr.to_be();
@@ -423,13 +423,15 @@ pub mod libtorresmo {
 
             // Send FIN
             let dst = self.connected_to;
-            self.socket.sendto(packet.bytes().as_slice(), dst);
+            try!(self.socket.sendto(packet.bytes().as_slice(), dst));
 
             // Receive JAKE
             let mut buf = [0u8, ..BUF_SIZE];
-            self.socket.recvfrom(buf);
+            try!(self.socket.recvfrom(buf));
             let resp = UtpPacket::decode(buf);
             assert!(resp.get_type() == ST_STATE);
+
+            Ok(())
         }
 
         /// Receive data from socket.
