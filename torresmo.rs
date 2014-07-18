@@ -562,15 +562,14 @@ pub mod libtorresmo {
 
     impl Clone for UtpSocket {
         fn clone(&self) -> UtpSocket {
-            let r: u16 = random();
             UtpSocket {
                 socket: self.socket.clone(),
                 connected_to: self.connected_to,
-                receiver_connection_id: r.to_be(),
-                sender_connection_id: (r + 1).to_be(),
-                seq_nr: 1,
-                ack_nr: 0,
-                state: CS_NEW,
+                receiver_connection_id: self.receiver_connection_id,
+                sender_connection_id: self.sender_connection_id,
+                seq_nr: self.seq_nr,
+                ack_nr: self.ack_nr,
+                state: self.state,
             }
         }
     }
