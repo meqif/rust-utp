@@ -573,6 +573,42 @@ pub mod libtorresmo {
             }
         }
     }
+
+    /// Stream interface for UtpSocket.
+    pub struct UtpStream {
+        socket: UtpSocket,
+    }
+
+    impl UtpStream {
+        pub fn connect(dst: SocketAddr) -> UtpStream {
+            use std::io::net::ip::{Ipv4Addr};
+            use std::rand::random;
+
+            let my_addr = SocketAddr { ip: Ipv4Addr(127,0,0,1), port: random() };
+            let socket = UtpSocket::bind(my_addr).unwrap().connect(dst);
+            UtpStream { socket: socket }
+        }
+
+        pub fn close(&mut self) -> IoResult<()> {
+            self.socket.close()
+        }
+    }
+
+    impl Reader for UtpStream {
+        fn read(&mut self, buf: &mut [u8]) -> IoResult<uint> {
+            match self.socket.recvfrom(buf) {
+                Ok((read, _src)) => Ok(read),
+                Err(e) => Err(e),
+            }
+        }
+    }
+
+    impl Writer for UtpStream {
+        fn write(&mut self, buf: &[u8]) -> IoResult<()> {
+            let dst = self.socket.connected_to;
+            self.socket.sendto(buf, dst)
+        }
+    }
 }
 
 fn usage() {
@@ -580,7 +616,7 @@ fn usage() {
 }
 
 fn main() {
-    use libtorresmo::UtpSocket;
+    use libtorresmo::{UtpStream, UtpSocket};
     use std::from_str::FromStr;
 
     // Defaults
@@ -630,14 +666,24 @@ fn main() {
             }
         }
         "-c" => {
-            let sock = UtpSocket::bind(SocketAddr { ip: Ipv4Addr(127,0,0,1), port: std::rand::random() }).unwrap();
-            let mut stream = sock.connect(addr);
+            let mut stream = UtpStream::connect(addr);
+
             let buf = [0xF, ..BUF_SIZE];
-            let _ = stream.sendto(buf, addr);
-            //let _ = stream.write([0]);
-            //let mut buf = [0, ..BUF_SIZE];
-            //stream.read(buf);
-            //let stream = stream.terminate();
+            match stream.write(buf) {
+                Ok(_) => {},
+                Err(e) => fail!("{}", e),
+            }
+
+            let mut buf = [0u8, ..BUF_SIZE];
+            match stream.read(buf) {
+                Ok(n) => println!("{}", Vec::from_slice(buf.slice(0, n))),
+                Err(e) => println!("{}", e),
+            }
+
+            match stream.close() {
+                Ok(_) => {},
+                Err(e) => fail!("{}", e),
+            }
             drop(stream);
         }
         _ => usage(),
