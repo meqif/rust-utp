@@ -15,8 +15,10 @@ use std::io::net::ip::{Ipv4Addr, SocketAddr};
 /// ----
 ///
 /// - congestion control
-/// - proper connection closing (handling both RST and FIN, and sending FIN on
-/// close)
+/// - proper connection closing
+///     - handle both RST and FIN
+///     - send FIN on close
+///     - automatically send FIN (or should it be RST?) on drop if not already closed
 /// - sending RST on mismatch
 /// - setters and getters that hide header field endianness conversion
 /// - SACK extension
