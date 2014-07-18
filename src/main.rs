@@ -37,20 +37,7 @@ fn main() {
 
             loop {
                 match sock.recvfrom(buf) {
-                    Ok((read, _src)) => {
-                        spawn(proc() {
-                            let buf = buf.slice(0, read);
-                            let path = Path::new("output.txt");
-                            let mut file = match std::io::File::open_mode(&path, std::io::Open, std::io::ReadWrite) {
-                                Ok(f) => f,
-                                Err(e) => fail!("file error: {}", e),
-                            };
-                            match file.write(buf) {
-                                Ok(_) => {}
-                                Err(e) => fail!("error writing to file: {}", e),
-                            };
-                        })
-                    }
+                    Ok((_read, _src)) => {}
                     Err(e) => fail!("{}", e),
                 }
             }
