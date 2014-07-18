@@ -125,6 +125,41 @@ pub mod libtorresmo {
         drop(server);
     }
 
+    #[test]
+    fn test_recvfrom_on_closed_socket() {
+        use std::io::test::next_test_ip4;
+        use std::io::EndOfFile;
+
+        let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
+
+        let client = UtpSocket::bind(clientAddr).unwrap();
+        let mut server = UtpSocket::bind(serverAddr).unwrap();
+
+        assert!(server.state == CS_NEW);
+        assert!(client.state == CS_NEW);
+
+        spawn(proc() {
+            let mut client = client.connect(serverAddr);
+            assert!(client.state == CS_CONNECTED);
+            client.close();
+            drop(client);
+        });
+
+        let mut buf = [0u8, ..BUF_SIZE];
+        let resp = server.recvfrom(buf);
+        println!("{}", resp);
+        assert!(server.state == CS_CONNECTED);
+
+        server.recvfrom(buf);
+        assert!(server.state == CS_FIN_RECEIVED);
+
+        match server.recvfrom(buf) {
+            Err(e) => assert_eq!(e.kind, EndOfFile),
+            _ => fail!("should fail with error"),
+        }
+        drop(server);
+    }
+
     /// Return current time in microseconds since the UNIX epoch.
     fn now_microseconds() -> u32 {
         let t = time::get_time();
@@ -373,6 +408,28 @@ pub mod libtorresmo {
             self.seq_nr += 1;
 
             self
+        }
+
+        /// Gracefully close connection to peer.
+        ///
+        /// This method allows both peers to receive all packets still in
+        /// flight.
+        pub fn close(&mut self) {
+            let mut packet = UtpPacket::new();
+            packet.header.connection_id = (self.sender_connection_id - 1).to_be();
+            packet.header.seq_nr = self.seq_nr.to_be();
+            packet.header.timestamp_microseconds = now_microseconds().to_be();
+            packet.set_type(ST_FIN);
+
+            // Send FIN
+            let dst = self.connected_to;
+            self.socket.sendto(packet.bytes().as_slice(), dst);
+
+            // Receive JAKE
+            let mut buf = [0u8, ..BUF_SIZE];
+            self.socket.recvfrom(buf);
+            let resp = UtpPacket::decode(buf);
+            assert!(resp.get_type() == ST_STATE);
         }
 
         /// Receive data from socket.
