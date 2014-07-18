@@ -387,10 +387,7 @@ pub mod libtorresmo {
         /// Open a uTP connection to a remote host by hostname or IP address.
         pub fn connect(mut self, other: SocketAddr) -> UtpSocket {
             self.connected_to = other;
-            /*
-            let stream = UtpStream::new(s, other);
-            stream.connect()
-            */
+
             let mut packet = UtpPacket::new();
             packet.set_type(ST_SYN);
             packet.header.connection_id = (self.sender_connection_id - 1).to_be();
