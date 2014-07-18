@@ -141,7 +141,7 @@ pub mod libtorresmo {
         spawn(proc() {
             let mut client = client.connect(serverAddr);
             assert!(client.state == CS_CONNECTED);
-            client.close();
+            assert_eq!(client.close(), Ok(()));
             drop(client);
         });
 
@@ -150,7 +150,10 @@ pub mod libtorresmo {
         println!("{}", resp);
         assert!(server.state == CS_CONNECTED);
 
-        server.recvfrom(buf);
+        match server.recvfrom(buf) {
+            Err(e) => fail!("{}", e),
+            _ => {},
+        }
         assert!(server.state == CS_FIN_RECEIVED);
 
         match server.recvfrom(buf) {
