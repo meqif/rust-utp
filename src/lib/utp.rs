@@ -467,30 +467,16 @@ impl UtpSocket {
         };
 
         let packet = UtpPacket::decode(b);
-        let x = packet.header;
         if cfg!(not(test)) { println!("received {}", packet.header) };
-        self.ack_nr = Int::from_be(x.seq_nr);
+        self.ack_nr = Int::from_be(packet.header.seq_nr);
 
-        match packet.get_type() {
-            ST_SYN => { // Respond with an ACK and populate own fields
-                // Update socket information for new connections
-                self.seq_nr = random();
-                self.receiver_connection_id = Int::from_be(x.connection_id) + 1;
-                self.sender_connection_id = Int::from_be(x.connection_id);
-
-                reply_with_ack!(&x, _src);
-
-                // Packets with no payload don't increase seq_nr
-                //self.seq_nr += 1;
-
-                self.state = CS_CONNECTED;
-            }
-            ST_DATA => reply_with_ack!(&x, _src),
-            ST_FIN => {
-                self.state = CS_FIN_RECEIVED;
-                reply_with_ack!(&x, _src);
-            }
-            _ => {}
+        match self.handle_packet(packet) {
+            Some(pkt) => {
+                let pkt = pkt.wnd_size(BUF_SIZE as u32);
+                try!(self.socket.sendto(pkt.bytes().as_slice(), _src));
+                println!("sent {}", pkt.header);
+            },
+            None => {}
         };
 
         for i in range(0u, ::std::cmp::min(buf.len(), read-HEADER_SIZE)) {
@@ -554,6 +540,27 @@ impl UtpSocket {
         }
 
         r
+    }
+
+    fn handle_packet(&mut self, packet: UtpPacket) -> Option<UtpPacket> {
+        match packet.header.get_type() {
+            ST_SYN => { // Respond with an ACK and populate own fields
+                // Update socket information for new connections
+                self.seq_nr = random();
+                self.receiver_connection_id = Int::from_be(packet.header.connection_id) + 1;
+                self.sender_connection_id = Int::from_be(packet.header.connection_id);
+                self.state = CS_CONNECTED;
+
+                Some(self.prepare_reply(&packet.header, ST_STATE))
+            }
+            ST_DATA => Some(self.prepare_reply(&packet.header, ST_STATE)),
+            ST_FIN => {
+                self.state = CS_FIN_RECEIVED;
+                Some(self.prepare_reply(&packet.header, ST_STATE))
+            }
+            ST_STATE => None,
+            ST_RESET => /* TODO */ None,
+        }
     }
 }
 
