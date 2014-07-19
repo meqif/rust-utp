@@ -268,12 +268,12 @@ impl UtpPacketHeader {
         self.type_ver = t as u8 << 4 | version;
     }
 
-    fn get_type(self) -> UtpPacketType {
+    fn get_type(&self) -> UtpPacketType {
         let t: UtpPacketType = unsafe { transmute(self.type_ver >> 4) };
         t
     }
 
-    fn get_version(self) -> u8 {
+    fn get_version(&self) -> u8 {
         self.type_ver & 0x0F
     }
 
@@ -356,7 +356,7 @@ impl UtpPacket {
         self.header.get_type()
     }
 
-    fn wnd_size(self, new_wnd_size: u32) -> UtpPacket {
+    fn wnd_size(&self, new_wnd_size: u32) -> UtpPacket {
         UtpPacket {
             header: UtpPacketHeader {
                 type_ver: self.header.type_ver,
@@ -368,7 +368,7 @@ impl UtpPacket {
                 seq_nr: self.header.seq_nr,
                 ack_nr: self.header.ack_nr,
             },
-            payload: self.payload,
+            payload: self.payload.clone(),
         }
     }
 
