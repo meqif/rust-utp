@@ -392,6 +392,15 @@ impl UtpPacket {
     }
 }
 
+impl Clone for UtpPacket {
+    fn clone(&self) -> UtpPacket {
+        UtpPacket {
+            header:  self.header,
+            payload: self.payload.clone(),
+        }
+    }
+}
+
 #[allow(non_camel_case_types)]
 #[deriving(PartialEq,Eq)]
 enum UtpSocketState {
