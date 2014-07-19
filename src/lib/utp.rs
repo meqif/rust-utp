@@ -175,7 +175,7 @@ fn test_handle_packet() {
     let sent = packet.header;
 
     // Do we have a response?
-    let response = socket.handle_packet(packet);
+    let response = socket.handle_packet(packet.clone());
     assert!(response.is_some());
 
     // Is is of the correct type?
@@ -197,9 +197,13 @@ fn test_handle_packet() {
     // ---------------------------------
 
     // fn test_connection_teardown() {
+    let old_packet = packet;
+    let old_response = response;
+
     let mut packet = UtpPacket::new();
     packet.set_type(ST_DATA);
     packet.header.connection_id = sender_connection_id;
+    packet.header.seq_nr = old_packet.header.seq_nr + 1;
     let sent = packet.header;
 
     let response = socket.handle_packet(packet);
@@ -216,6 +220,7 @@ fn test_handle_packet() {
     assert!(response.header.connection_id == sent.connection_id - 1);
 
     assert!(response.header.ack_nr == sent.seq_nr);
+    assert!(old_response.header.seq_nr == response.header.seq_nr + 1);
     // }
 }
 
