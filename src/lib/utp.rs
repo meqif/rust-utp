@@ -291,7 +291,8 @@ impl UtpPacket {
         self.header.set_type(t);
     }
 
-    fn get_type(self) -> UtpPacketType {
+    // TODO: Read up on pointers and ownership
+    fn get_type(&self) -> UtpPacketType {
         self.header.get_type()
     }
 
@@ -530,9 +531,8 @@ impl UtpSocket {
         try!(self.socket.recvfrom(buf));
         let resp = UtpPacket::decode(buf);
         println!("received {}", resp.header);
-        let x = resp.header;
         assert_eq!(resp.get_type(), ST_STATE);
-        assert_eq!(Int::from_be(x.ack_nr), self.seq_nr);
+        assert_eq!(Int::from_be(resp.header.ack_nr), self.seq_nr);
 
         // Success, increment sequence number
         if buf.len() > 0 {
