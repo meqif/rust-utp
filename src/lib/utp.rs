@@ -159,6 +159,66 @@ fn test_recvfrom_on_closed_socket() {
     drop(server);
 }
 
+#[test]
+fn test_handle_packet() {
+    use std::io::test::next_test_ip4;
+
+    //fn test_connection_setup() {
+    let initial_connection_id: u16 = random();
+    let sender_connection_id = initial_connection_id + 1;
+    let serverAddr = next_test_ip4();
+    let mut socket = UtpSocket::bind(serverAddr).unwrap();
+
+    let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+    packet.set_type(ST_SYN);
+    packet.header.connection_id = initial_connection_id;
+    let sent = packet.header;
+
+    // Do we have a response?
+    let response = socket.handle_packet(packet);
+    assert!(response.is_some());
+
+    // Is is of the correct type?
+    let response = response.unwrap();
+    assert!(response.get_type() == ST_STATE);
+
+    // Same connection id on both ends during connection establishment
+    println!("sent connection id: {}", sent.connection_id);
+    println!("received connection id: {}", response.header.connection_id);
+    assert!(response.header.connection_id == sent.connection_id);
+
+    // Response acknowledges SYN
+    assert!(response.header.ack_nr == sent.seq_nr);
+
+    // No payload?
+    assert!(response.payload.is_empty());
+    //}
+
+    // ---------------------------------
+
+    // fn test_connection_teardown() {
+    let mut packet = UtpPacket::new();
+    packet.set_type(ST_DATA);
+    packet.header.connection_id = sender_connection_id;
+    let sent = packet.header;
+
+    let response = socket.handle_packet(packet);
+    assert!(response.is_some());
+
+    let response = response.unwrap();
+    assert!(response.get_type() == ST_STATE);
+
+    // Sender (i.e., who initated connection and sent SYN) has connection id
+    // equal to initial connection id + 1
+    // Receiver (i.e., who accepted connection) has connection id equal to
+    // initial connection id
+    assert!(response.header.connection_id == initial_connection_id);
+    assert!(response.header.connection_id == sent.connection_id - 1);
+
+    assert!(response.header.ack_nr == sent.seq_nr);
+    // }
+}
+
 /// Return current time in microseconds since the UNIX epoch.
 fn now_microseconds() -> u32 {
     let t = time::get_time();
