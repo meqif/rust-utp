@@ -647,6 +647,9 @@ impl UtpSocket {
         r
     }
 
+    /// Handle incoming packet, updating socket state accordingly.
+    ///
+    /// Returns appropriate reply packet, if needed.
     fn handle_packet(&mut self, packet: UtpPacket) -> Option<UtpPacket> {
         self.ack_nr = Int::from_be(packet.header.seq_nr);
 
