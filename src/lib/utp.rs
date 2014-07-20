@@ -30,232 +30,6 @@ use std::fmt;
 static HEADER_SIZE: uint = 20;
 static BUF_SIZE: uint = 4096;
 
-#[test]
-fn test_packet_decode() {
-    let buf = [0x21, 0x00, 0x41, 0xa8, 0x99, 0x2f, 0xd0, 0x2a, 0x9f, 0x4a,
-                0x26, 0x21, 0x00, 0x10, 0x00, 0x00, 0x3a, 0xf2, 0x6c, 0x79];
-    let pkt = UtpPacket::decode(buf);
-    assert_eq!(pkt.header.get_version(), 1);
-    assert_eq!(pkt.header.get_type(), ST_STATE);
-    assert_eq!(pkt.header.extension, 0);
-    assert_eq!(Int::from_be(pkt.header.connection_id), 16808);
-    assert_eq!(Int::from_be(pkt.header.timestamp_microseconds), 2570047530);
-    assert_eq!(Int::from_be(pkt.header.timestamp_difference_microseconds), 2672436769);
-    assert_eq!(Int::from_be(pkt.header.wnd_size), ::std::num::pow(2u32, 20));
-    assert_eq!(Int::from_be(pkt.header.seq_nr), 15090);
-    assert_eq!(Int::from_be(pkt.header.ack_nr), 27769);
-    assert_eq!(pkt.len(), buf.len());
-    assert!(pkt.payload.is_empty());
-}
-
-#[test]
-fn test_packet_encode() {
-    let payload = Vec::from_slice("Hello\n".as_bytes());
-    let (timestamp, timestamp_diff): (u32, u32) = (15270793, 1707040186);
-    let (connection_id, seq_nr, ack_nr): (u16, u16, u16) = (16808, 15090, 17096);
-    let window_size: u32 = 1048576;
-    let mut pkt = UtpPacket::new();
-    pkt.set_type(ST_DATA);
-    pkt.header.timestamp_microseconds = timestamp.to_be();
-    pkt.header.timestamp_difference_microseconds = timestamp_diff.to_be();
-    pkt.header.connection_id = connection_id.to_be();
-    pkt.header.seq_nr = seq_nr.to_be();
-    pkt.header.ack_nr = ack_nr.to_be();
-    pkt.header.wnd_size = window_size.to_be();
-    pkt.payload = payload.clone();
-    let header = pkt.header;
-    let buf: &[u8] = [0x01, 0x00, 0x41, 0xa8, 0x00, 0xe9, 0x03, 0x89,
-                0x65, 0xbf, 0x5d, 0xba, 0x00, 0x10, 0x00, 0x00,
-                0x3a, 0xf2, 0x42, 0xc8, 0x48, 0x65, 0x6c, 0x6c,
-                0x6f, 0x0a];
-
-    assert_eq!(pkt.len(), buf.len());
-    assert_eq!(pkt.len(), HEADER_SIZE + payload.len());
-    assert_eq!(pkt.payload, payload);
-    assert_eq!(header.get_version(), 1);
-    assert_eq!(header.get_type(), ST_DATA);
-    assert_eq!(header.extension, 0);
-    assert_eq!(Int::from_be(header.connection_id), connection_id);
-    assert_eq!(Int::from_be(header.seq_nr), seq_nr);
-    assert_eq!(Int::from_be(header.ack_nr), ack_nr);
-    assert_eq!(Int::from_be(header.wnd_size), window_size);
-    assert_eq!(Int::from_be(header.timestamp_microseconds), timestamp);
-    assert_eq!(Int::from_be(header.timestamp_difference_microseconds), timestamp_diff);
-    assert_eq!(pkt.bytes(), Vec::from_slice(buf));
-}
-
-#[test]
-fn test_reversible() {
-    let buf: &[u8] = [0x01, 0x00, 0x41, 0xa8, 0x00, 0xe9, 0x03, 0x89,
-                0x65, 0xbf, 0x5d, 0xba, 0x00, 0x10, 0x00, 0x00,
-                0x3a, 0xf2, 0x42, 0xc8, 0x48, 0x65, 0x6c, 0x6c,
-                0x6f, 0x0a];
-    assert_eq!(UtpPacket::decode(buf).bytes().as_slice(), buf);
-}
-
-#[test]
-fn test_socket_ipv4() {
-    use std::io::test::next_test_ip4;
-
-    let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
-
-    let client = UtpSocket::bind(clientAddr).unwrap();
-    let mut server = UtpSocket::bind(serverAddr).unwrap();
-
-    assert!(server.state == CS_NEW);
-    assert!(client.state == CS_NEW);
-
-    spawn(proc() {
-        let client = client.connect(serverAddr);
-        assert!(client.state == CS_CONNECTED);
-        drop(client);
-    });
-
-    let mut buf = [0u8, ..BUF_SIZE];
-    match server.recvfrom(buf) {
-        e => println!("{}", e),
-    }
-
-    assert!(server.state == CS_CONNECTED);
-    drop(server);
-}
-
-#[test]
-#[ignore]
-fn test_recvfrom_on_closed_socket() {
-    use std::io::test::next_test_ip4;
-    use std::io::EndOfFile;
-
-    let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
-
-    let client = UtpSocket::bind(clientAddr).unwrap();
-    let mut server = UtpSocket::bind(serverAddr).unwrap();
-
-    assert!(server.state == CS_NEW);
-    assert!(client.state == CS_NEW);
-
-    spawn(proc() {
-        let mut client = client.connect(serverAddr);
-        assert!(client.state == CS_CONNECTED);
-        assert_eq!(client.close(), Ok(()));
-        drop(client);
-    });
-
-    let mut buf = [0u8, ..BUF_SIZE];
-    let resp = server.recvfrom(buf);
-    println!("{}", resp);
-    assert!(server.state == CS_CONNECTED);
-
-    match server.recvfrom(buf) {
-        Err(e) => fail!("{}", e),
-        _ => {},
-    }
-    assert!(server.state == CS_FIN_RECEIVED);
-
-    match server.recvfrom(buf) {
-        Err(e) => assert_eq!(e.kind, EndOfFile),
-        _ => fail!("should fail with error"),
-    }
-    drop(server);
-}
-
-#[test]
-fn test_handle_packet() {
-    use std::io::test::next_test_ip4;
-
-    //fn test_connection_setup() {
-    let initial_connection_id: u16 = random();
-    let sender_connection_id = initial_connection_id + 1;
-    let serverAddr = next_test_ip4();
-    let mut socket = UtpSocket::bind(serverAddr).unwrap();
-
-    let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
-    packet.set_type(ST_SYN);
-    packet.header.connection_id = initial_connection_id.to_be();
-    let sent = packet.header;
-
-    // Do we have a response?
-    let response = socket.handle_packet(packet.clone());
-    assert!(response.is_some());
-
-    // Is is of the correct type?
-    let response = response.unwrap();
-    assert!(response.get_type() == ST_STATE);
-
-    // Same connection id on both ends during connection establishment
-    assert!(response.header.connection_id == sent.connection_id);
-
-    // Response acknowledges SYN
-    assert!(response.header.ack_nr == sent.seq_nr);
-
-    // No payload?
-    assert!(response.payload.is_empty());
-    //}
-
-    // ---------------------------------
-
-    // fn test_connection_usage() {
-    let old_packet = packet;
-    let old_response = response;
-
-    let mut packet = UtpPacket::new();
-    packet.set_type(ST_DATA);
-    packet.header.connection_id = sender_connection_id.to_be();
-    packet.header.seq_nr = (Int::from_be(old_packet.header.seq_nr) + 1).to_be();
-    packet.header.ack_nr = old_response.header.seq_nr;
-    let sent = packet.header;
-
-    let response = socket.handle_packet(packet.clone());
-    assert!(response.is_some());
-
-    let response = response.unwrap();
-    assert!(response.get_type() == ST_STATE);
-
-    // Sender (i.e., who initated connection and sent SYN) has connection id
-    // equal to initial connection id + 1
-    // Receiver (i.e., who accepted connection) has connection id equal to
-    // initial connection id
-    assert!(Int::from_be(response.header.connection_id) == initial_connection_id);
-    assert!(Int::from_be(response.header.connection_id) == Int::from_be(sent.connection_id) - 1);
-
-    // Previous packets should be ack'ed
-    assert!(Int::from_be(response.header.ack_nr) == Int::from_be(sent.seq_nr));
-
-    // Responses with no payload should not increase the sequence number
-    assert!(response.payload.is_empty());
-    assert!(Int::from_be(response.header.seq_nr) == Int::from_be(old_response.header.seq_nr));
-    // }
-
-    //fn test_connection_teardown() {
-    let old_packet = packet;
-    let old_response = response;
-
-    let mut packet = UtpPacket::new();
-    packet.set_type(ST_FIN);
-    packet.header.connection_id = sender_connection_id.to_be();
-    packet.header.seq_nr = (Int::from_be(old_packet.header.seq_nr) + 1).to_be();
-    packet.header.ack_nr = old_response.header.seq_nr;
-    let sent = packet.header;
-
-    let response = socket.handle_packet(packet);
-    assert!(response.is_some());
-
-    let response = response.unwrap();
-
-    assert!(response.get_type() == ST_STATE);
-
-    // FIN packets have no payload but the sequence number shouldn't increase.
-    assert!(Int::from_be(sent.seq_nr) == Int::from_be(old_packet.header.seq_nr) + 1);
-
-    // Nor should the ACK's sequence number
-    assert!(response.header.seq_nr == old_response.header.seq_nr);
-
-    // FIN should be acknowledged
-    assert!(response.header.ack_nr == sent.seq_nr);
-
-    //}
-}
-
 /// Return current time in microseconds since the UNIX epoch.
 fn now_microseconds() -> u32 {
     let t = time::get_time();
@@ -709,4 +483,242 @@ impl Writer for UtpStream {
         let dst = self.socket.connected_to;
         self.socket.sendto(buf, dst)
     }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{UtpSocket, UtpPacket};
+    use super::{ST_STATE, ST_FIN, ST_DATA, ST_RESET, ST_SYN};
+    use super::{BUF_SIZE, HEADER_SIZE};
+    use super::{CS_CONNECTED, CS_NEW, CS_FIN_RECEIVED};
+    use std::rand::random;
+
+    #[test]
+    fn test_packet_decode() {
+        let buf = [0x21, 0x00, 0x41, 0xa8, 0x99, 0x2f, 0xd0, 0x2a, 0x9f, 0x4a,
+                    0x26, 0x21, 0x00, 0x10, 0x00, 0x00, 0x3a, 0xf2, 0x6c, 0x79];
+        let pkt = UtpPacket::decode(buf);
+        assert_eq!(pkt.header.get_version(), 1);
+        assert_eq!(pkt.header.get_type(), ST_STATE);
+        assert_eq!(pkt.header.extension, 0);
+        assert_eq!(Int::from_be(pkt.header.connection_id), 16808);
+        assert_eq!(Int::from_be(pkt.header.timestamp_microseconds), 2570047530);
+        assert_eq!(Int::from_be(pkt.header.timestamp_difference_microseconds), 2672436769);
+        assert_eq!(Int::from_be(pkt.header.wnd_size), ::std::num::pow(2u32, 20));
+        assert_eq!(Int::from_be(pkt.header.seq_nr), 15090);
+        assert_eq!(Int::from_be(pkt.header.ack_nr), 27769);
+        assert_eq!(pkt.len(), buf.len());
+        assert!(pkt.payload.is_empty());
+    }
+
+    #[test]
+    fn test_packet_encode() {
+        let payload = Vec::from_slice("Hello\n".as_bytes());
+        let (timestamp, timestamp_diff): (u32, u32) = (15270793, 1707040186);
+        let (connection_id, seq_nr, ack_nr): (u16, u16, u16) = (16808, 15090, 17096);
+        let window_size: u32 = 1048576;
+        let mut pkt = UtpPacket::new();
+        pkt.set_type(ST_DATA);
+        pkt.header.timestamp_microseconds = timestamp.to_be();
+        pkt.header.timestamp_difference_microseconds = timestamp_diff.to_be();
+        pkt.header.connection_id = connection_id.to_be();
+        pkt.header.seq_nr = seq_nr.to_be();
+        pkt.header.ack_nr = ack_nr.to_be();
+        pkt.header.wnd_size = window_size.to_be();
+        pkt.payload = payload.clone();
+        let header = pkt.header;
+        let buf: &[u8] = [0x01, 0x00, 0x41, 0xa8, 0x00, 0xe9, 0x03, 0x89,
+                    0x65, 0xbf, 0x5d, 0xba, 0x00, 0x10, 0x00, 0x00,
+                    0x3a, 0xf2, 0x42, 0xc8, 0x48, 0x65, 0x6c, 0x6c,
+                    0x6f, 0x0a];
+
+        assert_eq!(pkt.len(), buf.len());
+        assert_eq!(pkt.len(), HEADER_SIZE + payload.len());
+        assert_eq!(pkt.payload, payload);
+        assert_eq!(header.get_version(), 1);
+        assert_eq!(header.get_type(), ST_DATA);
+        assert_eq!(header.extension, 0);
+        assert_eq!(Int::from_be(header.connection_id), connection_id);
+        assert_eq!(Int::from_be(header.seq_nr), seq_nr);
+        assert_eq!(Int::from_be(header.ack_nr), ack_nr);
+        assert_eq!(Int::from_be(header.wnd_size), window_size);
+        assert_eq!(Int::from_be(header.timestamp_microseconds), timestamp);
+        assert_eq!(Int::from_be(header.timestamp_difference_microseconds), timestamp_diff);
+        assert_eq!(pkt.bytes(), Vec::from_slice(buf));
+    }
+
+    #[test]
+    fn test_reversible() {
+        let buf: &[u8] = [0x01, 0x00, 0x41, 0xa8, 0x00, 0xe9, 0x03, 0x89,
+                    0x65, 0xbf, 0x5d, 0xba, 0x00, 0x10, 0x00, 0x00,
+                    0x3a, 0xf2, 0x42, 0xc8, 0x48, 0x65, 0x6c, 0x6c,
+                    0x6f, 0x0a];
+        assert_eq!(UtpPacket::decode(buf).bytes().as_slice(), buf);
+    }
+
+    #[test]
+    fn test_socket_ipv4() {
+        use std::io::test::next_test_ip4;
+
+        let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
+
+        let client = UtpSocket::bind(clientAddr).unwrap();
+        let mut server = UtpSocket::bind(serverAddr).unwrap();
+
+        assert!(server.state == CS_NEW);
+        assert!(client.state == CS_NEW);
+
+        spawn(proc() {
+            let client = client.connect(serverAddr);
+            assert!(client.state == CS_CONNECTED);
+            drop(client);
+        });
+
+        let mut buf = [0u8, ..BUF_SIZE];
+        match server.recvfrom(buf) {
+            e => println!("{}", e),
+        }
+
+        assert!(server.state == CS_CONNECTED);
+        drop(server);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_recvfrom_on_closed_socket() {
+        use std::io::test::next_test_ip4;
+        use std::io::EndOfFile;
+
+        let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
+
+        let client = UtpSocket::bind(clientAddr).unwrap();
+        let mut server = UtpSocket::bind(serverAddr).unwrap();
+
+        assert!(server.state == CS_NEW);
+        assert!(client.state == CS_NEW);
+
+        spawn(proc() {
+            let mut client = client.connect(serverAddr);
+            assert!(client.state == CS_CONNECTED);
+            assert_eq!(client.close(), Ok(()));
+            drop(client);
+        });
+
+        let mut buf = [0u8, ..BUF_SIZE];
+        let resp = server.recvfrom(buf);
+        println!("{}", resp);
+        assert!(server.state == CS_CONNECTED);
+
+        match server.recvfrom(buf) {
+            Err(e) => fail!("{}", e),
+            _ => {},
+        }
+        assert!(server.state == CS_FIN_RECEIVED);
+
+        match server.recvfrom(buf) {
+            Err(e) => assert_eq!(e.kind, EndOfFile),
+            _ => fail!("should fail with error"),
+        }
+        drop(server);
+    }
+
+    #[test]
+    fn test_handle_packet() {
+        use std::io::test::next_test_ip4;
+
+        //fn test_connection_setup() {
+        let initial_connection_id: u16 = random();
+        let sender_connection_id = initial_connection_id + 1;
+        let serverAddr = next_test_ip4();
+        let mut socket = UtpSocket::bind(serverAddr).unwrap();
+
+        let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+        packet.set_type(ST_SYN);
+        packet.header.connection_id = initial_connection_id.to_be();
+        let sent = packet.header;
+
+        // Do we have a response?
+        let response = socket.handle_packet(packet.clone());
+        assert!(response.is_some());
+
+        // Is is of the correct type?
+        let response = response.unwrap();
+        assert!(response.get_type() == ST_STATE);
+
+        // Same connection id on both ends during connection establishment
+        assert!(response.header.connection_id == sent.connection_id);
+
+        // Response acknowledges SYN
+        assert!(response.header.ack_nr == sent.seq_nr);
+
+        // No payload?
+        assert!(response.payload.is_empty());
+        //}
+
+        // ---------------------------------
+
+        // fn test_connection_usage() {
+        let old_packet = packet;
+        let old_response = response;
+
+        let mut packet = UtpPacket::new();
+        packet.set_type(ST_DATA);
+        packet.header.connection_id = sender_connection_id.to_be();
+        packet.header.seq_nr = (Int::from_be(old_packet.header.seq_nr) + 1).to_be();
+        packet.header.ack_nr = old_response.header.seq_nr;
+        let sent = packet.header;
+
+        let response = socket.handle_packet(packet.clone());
+        assert!(response.is_some());
+
+        let response = response.unwrap();
+        assert!(response.get_type() == ST_STATE);
+
+        // Sender (i.e., who initated connection and sent SYN) has connection id
+        // equal to initial connection id + 1
+        // Receiver (i.e., who accepted connection) has connection id equal to
+        // initial connection id
+        assert!(Int::from_be(response.header.connection_id) == initial_connection_id);
+        assert!(Int::from_be(response.header.connection_id) == Int::from_be(sent.connection_id) - 1);
+
+        // Previous packets should be ack'ed
+        assert!(Int::from_be(response.header.ack_nr) == Int::from_be(sent.seq_nr));
+
+        // Responses with no payload should not increase the sequence number
+        assert!(response.payload.is_empty());
+        assert!(Int::from_be(response.header.seq_nr) == Int::from_be(old_response.header.seq_nr));
+        // }
+
+        //fn test_connection_teardown() {
+        let old_packet = packet;
+        let old_response = response;
+
+        let mut packet = UtpPacket::new();
+        packet.set_type(ST_FIN);
+        packet.header.connection_id = sender_connection_id.to_be();
+        packet.header.seq_nr = (Int::from_be(old_packet.header.seq_nr) + 1).to_be();
+        packet.header.ack_nr = old_response.header.seq_nr;
+        let sent = packet.header;
+
+        let response = socket.handle_packet(packet);
+        assert!(response.is_some());
+
+        let response = response.unwrap();
+
+        assert!(response.get_type() == ST_STATE);
+
+        // FIN packets have no payload but the sequence number shouldn't increase.
+        assert!(Int::from_be(sent.seq_nr) == Int::from_be(old_packet.header.seq_nr) + 1);
+
+        // Nor should the ACK's sequence number
+        assert!(response.header.seq_nr == old_response.header.seq_nr);
+
+        // FIN should be acknowledged
+        assert!(response.header.ack_nr == sent.seq_nr);
+
+        //}
+    }
+
+    // TODO: test response to keepalive ACK
+    // TODO: test response to packets with wrong connection id
 }
