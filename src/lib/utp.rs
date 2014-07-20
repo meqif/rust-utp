@@ -729,5 +729,38 @@ mod test {
     }
 
     // TODO: test response to keepalive ACK
-    // TODO: test response to packets with wrong connection id
+
+    #[test]
+    fn test_response_to_wrong_connection_id() {
+        use std::io::test::next_test_ip4;
+
+        // Boilerplate test setup
+        let initial_connection_id: u16 = random();
+        let sender_connection_id = initial_connection_id + 1;
+        let serverAddr = next_test_ip4();
+        let mut socket = UtpSocket::bind(serverAddr).unwrap();
+
+        // Establish connection
+        let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+        packet.set_type(ST_SYN);
+        packet.header.connection_id = initial_connection_id.to_be();
+
+        let response = socket.handle_packet(packet.clone());
+        assert!(response.is_some());
+        assert!(response.unwrap().get_type() == ST_STATE);
+
+        // Now, disrupt connection with a packet with an incorrect connection id
+        let new_connection_id = initial_connection_id.to_le();
+
+        let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+        packet.set_type(ST_STATE);
+        packet.header.connection_id = new_connection_id;
+
+        let response = socket.handle_packet(packet.clone());
+        assert!(response.is_some());
+
+        let response = response.unwrap();
+        assert!(response.get_type() == ST_RESET);
+        assert!(response.header.ack_nr == packet.header.seq_nr);
+    }
 }
