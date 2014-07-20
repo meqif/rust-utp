@@ -87,7 +87,7 @@ impl UtpPacketHeader {
 
     /// Read byte buffer and return corresponding packet header.
     /// It assumes the fields are in network (big-endian) byte order,
-    /// preseving it.
+    /// preserving it.
     fn decode(buf: &[u8]) -> UtpPacketHeader {
         UtpPacketHeader {
             type_ver: buf[0],
