@@ -414,6 +414,13 @@ impl UtpSocket {
     ///
     /// Returns appropriate reply packet, if needed.
     fn handle_packet(&mut self, packet: UtpPacket) -> Option<UtpPacket> {
+        // Reset connection if connection id doesn't match and this isn't a SYN
+        if packet.get_type() != ST_SYN &&
+           !(Int::from_be(packet.header.connection_id) == self.sender_connection_id ||
+           Int::from_be(packet.header.connection_id) == self.receiver_connection_id) {
+            return Some(self.prepare_reply(&packet.header, ST_RESET));
+        }
+
         self.ack_nr = Int::from_be(packet.header.seq_nr);
 
         match packet.header.get_type() {
