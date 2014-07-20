@@ -341,7 +341,9 @@ impl UtpSocket {
             Some(pkt) => {
                 let pkt = pkt.wnd_size(BUF_SIZE as u32);
                 try!(self.socket.sendto(pkt.bytes().as_slice(), _src));
-                println!("sent {}", pkt.header);
+                if cfg!(not(test)) {
+                    println!("sent {}", pkt.header);
+                }
             },
             None => {}
         };
