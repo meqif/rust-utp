@@ -546,7 +546,6 @@ impl UtpSocket {
 
         let packet = UtpPacket::decode(b);
         if cfg!(not(test)) { println!("received {}", packet.header) };
-        self.ack_nr = Int::from_be(packet.header.seq_nr);
 
         match self.handle_packet(packet) {
             Some(pkt) => {
@@ -620,6 +619,8 @@ impl UtpSocket {
     }
 
     fn handle_packet(&mut self, packet: UtpPacket) -> Option<UtpPacket> {
+        self.ack_nr = Int::from_be(packet.header.seq_nr);
+
         match packet.header.get_type() {
             ST_SYN => { // Respond with an ACK and populate own fields
                 // Update socket information for new connections
