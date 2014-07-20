@@ -171,7 +171,7 @@ fn test_handle_packet() {
 
     let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
     packet.set_type(ST_SYN);
-    packet.header.connection_id = initial_connection_id;
+    packet.header.connection_id = initial_connection_id.to_be();
     let sent = packet.header;
 
     // Do we have a response?
@@ -183,8 +183,6 @@ fn test_handle_packet() {
     assert!(response.get_type() == ST_STATE);
 
     // Same connection id on both ends during connection establishment
-    println!("sent connection id: {}", sent.connection_id);
-    println!("received connection id: {}", response.header.connection_id);
     assert!(response.header.connection_id == sent.connection_id);
 
     // Response acknowledges SYN
@@ -202,8 +200,9 @@ fn test_handle_packet() {
 
     let mut packet = UtpPacket::new();
     packet.set_type(ST_DATA);
-    packet.header.connection_id = sender_connection_id;
-    packet.header.seq_nr = old_packet.header.seq_nr + 1;
+    packet.header.connection_id = sender_connection_id.to_be();
+    packet.header.seq_nr = (Int::from_be(old_packet.header.seq_nr) + 1).to_be();
+    packet.header.ack_nr = old_response.header.seq_nr;
     let sent = packet.header;
 
     let response = socket.handle_packet(packet);
@@ -216,11 +215,15 @@ fn test_handle_packet() {
     // equal to initial connection id + 1
     // Receiver (i.e., who accepted connection) has connection id equal to
     // initial connection id
-    assert!(response.header.connection_id == initial_connection_id);
-    assert!(response.header.connection_id == sent.connection_id - 1);
+    assert!(Int::from_be(response.header.connection_id) == initial_connection_id);
+    assert!(Int::from_be(response.header.connection_id) == Int::from_be(sent.connection_id) - 1);
 
-    assert!(response.header.ack_nr == sent.seq_nr);
-    assert!(old_response.header.seq_nr == response.header.seq_nr + 1);
+    // Previous packets should be ack'ed
+    assert!(Int::from_be(response.header.ack_nr) == Int::from_be(sent.seq_nr));
+
+    // Responses with no payload should not increase the sequence number
+    assert!(response.payload.is_empty());
+    assert!(Int::from_be(response.header.seq_nr) == Int::from_be(old_response.header.seq_nr));
     // }
 }
 
