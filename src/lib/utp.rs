@@ -571,7 +571,7 @@ impl UtpSocket {
         let self_t_micro: u32 = now_microseconds();
         let other_t_micro: u32 = Int::from_be(original.timestamp_microseconds);
         resp.header.timestamp_microseconds = self_t_micro.to_be();
-        resp.header.timestamp_difference_microseconds = (self_t_micro.to_le() - other_t_micro.to_le()).to_be();
+        resp.header.timestamp_difference_microseconds = (self_t_micro - other_t_micro).to_be();
         resp.header.connection_id = self.sender_connection_id.to_be();
         resp.header.seq_nr = self.seq_nr.to_be();
         resp.header.ack_nr = self.ack_nr.to_be();
