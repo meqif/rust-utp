@@ -194,7 +194,7 @@ fn test_handle_packet() {
 
     // ---------------------------------
 
-    // fn test_connection_teardown() {
+    // fn test_connection_usage() {
     let old_packet = packet;
     let old_response = response;
 
@@ -205,7 +205,7 @@ fn test_handle_packet() {
     packet.header.ack_nr = old_response.header.seq_nr;
     let sent = packet.header;
 
-    let response = socket.handle_packet(packet);
+    let response = socket.handle_packet(packet.clone());
     assert!(response.is_some());
 
     let response = response.unwrap();
@@ -225,6 +225,35 @@ fn test_handle_packet() {
     assert!(response.payload.is_empty());
     assert!(Int::from_be(response.header.seq_nr) == Int::from_be(old_response.header.seq_nr));
     // }
+
+    //fn test_connection_teardown() {
+    let old_packet = packet;
+    let old_response = response;
+
+    let mut packet = UtpPacket::new();
+    packet.set_type(ST_FIN);
+    packet.header.connection_id = sender_connection_id.to_be();
+    packet.header.seq_nr = (Int::from_be(old_packet.header.seq_nr) + 1).to_be();
+    packet.header.ack_nr = old_response.header.seq_nr;
+    let sent = packet.header;
+
+    let response = socket.handle_packet(packet);
+    assert!(response.is_some());
+
+    let response = response.unwrap();
+
+    assert!(response.get_type() == ST_STATE);
+
+    // FIN packets have no payload but the sequence number shouldn't increase.
+    assert!(Int::from_be(sent.seq_nr) == Int::from_be(old_packet.header.seq_nr) + 1);
+
+    // Nor should the ACK's sequence number
+    assert!(response.header.seq_nr == old_response.header.seq_nr);
+
+    // FIN should be acknowledged
+    assert!(response.header.ack_nr == sent.seq_nr);
+
+    //}
 }
 
 /// Return current time in microseconds since the UNIX epoch.
