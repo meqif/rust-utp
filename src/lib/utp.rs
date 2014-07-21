@@ -728,7 +728,42 @@ mod test {
         //}
     }
 
-    // TODO: test response to keepalive ACK
+    #[test]
+    fn test_response_to_keepalive_ack() {
+        use std::io::test::next_test_ip4;
+
+        // Boilerplate test setup
+        let initial_connection_id: u16 = random();
+        let serverAddr = next_test_ip4();
+        let mut socket = UtpSocket::bind(serverAddr).unwrap();
+
+        // Establish connection
+        let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+        packet.set_type(ST_SYN);
+        packet.header.connection_id = initial_connection_id.to_be();
+
+        let response = socket.handle_packet(packet.clone());
+        assert!(response.is_some());
+        let response = response.unwrap();
+        assert!(response.get_type() == ST_STATE);
+
+        let old_packet = packet;
+        let old_response = response;
+
+        // Now, send a keepalive packet
+        let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+        packet.set_type(ST_STATE);
+        packet.header.connection_id = initial_connection_id.to_be();
+        packet.header.seq_nr = (Int::from_be(old_packet.header.seq_nr) + 1).to_be();
+        packet.header.ack_nr = old_response.header.seq_nr;
+
+        let response = socket.handle_packet(packet.clone());
+        assert!(response.is_none());
+
+        // Send a second keepalive packet, identical to the previous one
+        let response = socket.handle_packet(packet.clone());
+        assert!(response.is_none());
+    }
 
     #[test]
     fn test_response_to_wrong_connection_id() {
