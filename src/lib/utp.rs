@@ -736,7 +736,6 @@ mod test {
 
         // Boilerplate test setup
         let initial_connection_id: u16 = random();
-        let sender_connection_id = initial_connection_id + 1;
         let serverAddr = next_test_ip4();
         let mut socket = UtpSocket::bind(serverAddr).unwrap();
 
