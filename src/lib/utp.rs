@@ -302,28 +302,6 @@ impl UtpSocket {
     ///
     /// On success, returns the number of bytes read and the sender's address.
     pub fn recvfrom(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
-        /*
-        use std::io::IoError;
-        use std::io::{ConnectionReset, EndOfFile};
-        match self.state {
-            CS_RST_RECEIVED => {
-                return Err(IoError {
-                    kind: ConnectionReset,
-                    desc: "socket closed with CS_RST_RECEIVED",
-                    detail: None,
-                });
-            },
-            CS_FIN_RECEIVED => {
-                return Err(IoError {
-                    kind: EndOfFile,
-                    desc: "socket closed with CS_FIN_RECEIVED",
-                    detail: None,
-                });
-            },
-            _ => { /* Pattern here just to shush the compiler */ },
-        }
-        */
-
         let mut b = [0, ..BUF_SIZE];
         let response = self.socket.recvfrom(b);
 
@@ -376,14 +354,6 @@ impl UtpSocket {
     /// TODO: return error on send after connection closed (RST or FIN + all
     /// packets received)
     pub fn sendto(&mut self, buf: &[u8], dst: SocketAddr) -> IoResult<()> {
-        /*
-        match self.state {
-            CS_RST_RECEIVED => fail!("socket closed with CS_RST_RECEIVED"),
-            CS_FIN_RECEIVED => fail!("socket closed with CS_FIN_RECEIVED"),
-            _ => { /* Pattern here just to shush the compiler */ },
-        }
-        */
-
         let mut packet = UtpPacket::new();
         packet.set_type(ST_DATA);
         packet.payload = Vec::from_slice(buf);
