@@ -10,7 +10,7 @@ test-torresmo: src/lib/utp.rs
 	rustc -A dead_code --test $< -o $@
 
 test: test-torresmo
-	./test-torresmo
+	./test-torresmo --color always
 
 doc: src/lib/utp.rs
 	rustdoc $<
