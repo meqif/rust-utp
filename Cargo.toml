@@ -1,0 +1,13 @@
+[project]
+
+name = "utp"
+version = "0.0.0"
+authors = [ "Ricardo Martins <ricardo@scarybox.net>" ]
+
+[[lib]]
+name = "utp"
+path = "src/lib/utp.rs"
+
+[[example]]
+name = "utp-example"
+path = "src/main.rs"
