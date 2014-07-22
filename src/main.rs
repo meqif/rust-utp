@@ -9,7 +9,7 @@ extern crate utp;
 use std::io::net::ip::{Ipv4Addr, SocketAddr};
 
 fn usage() {
-    println!("Usage: torresmo [-s|-c] <address> <port>");
+    println!("Usage: utp [-s|-c] <address> <port>");
 }
 
 fn main() {

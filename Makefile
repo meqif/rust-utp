@@ -1,22 +1,22 @@
-all: torresmo doc test
+all: utp doc test
 
 lib: src/lib/utp.rs
 	rustc --crate-type=dylib $<
 
-torresmo: src/main.rs lib
+utp: src/main.rs lib
 	rustc -L . src/main.rs -o $@
 
-test-torresmo: src/lib/utp.rs
+test-utp: src/lib/utp.rs
 	rustc -A dead_code --test $< -o $@
 
-test: test-torresmo
-	./test-torresmo --color always
+test: test-utp
+	./test-utp --color always
 
 doc: src/lib/utp.rs
 	rustdoc $<
 
 clean:
-	rm test-torresmo torresmo *.dylib
-	rm -r doc
+	rm -rf -- test-utp utp *.dylib
+	rm -rf doc
 
 .PHONY: lib
