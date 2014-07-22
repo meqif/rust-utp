@@ -433,6 +433,7 @@ impl UtpSocket {
             ST_DATA => Some(self.prepare_reply(&packet.header, ST_STATE)),
             ST_FIN => {
                 self.state = CS_FIN_RECEIVED;
+                // TODO: check if no packets are missing
                 // If all packets are received
                 self.state = CS_CLOSED;
                 Some(self.prepare_reply(&packet.header, ST_STATE))
