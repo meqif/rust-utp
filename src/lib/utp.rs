@@ -498,7 +498,7 @@ mod test {
     use super::{UtpSocket, UtpPacket};
     use super::{ST_STATE, ST_FIN, ST_DATA, ST_RESET, ST_SYN};
     use super::{BUF_SIZE, HEADER_SIZE};
-    use super::{CS_CONNECTED, CS_NEW, CS_FIN_RECEIVED, CS_CLOSED};
+    use super::{CS_CONNECTED, CS_NEW, CS_CLOSED};
     use std::rand::random;
 
     macro_rules! expect_eq(
@@ -624,8 +624,9 @@ mod test {
             drop(client);
         });
 
+        // Make the server listen for incoming connections
         let mut buf = [0u8, ..BUF_SIZE];
-        let resp = server.recvfrom(buf);
+        let _resp = server.recvfrom(buf);
         assert!(server.state == CS_CONNECTED);
 
         // Closing the connection is fine
