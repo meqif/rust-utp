@@ -237,8 +237,8 @@ impl UtpSocket {
             Ok(x)  => Ok(UtpSocket {
                 socket: x,
                 connected_to: addr,
-                receiver_connection_id: r.to_be(),
-                sender_connection_id: (r + 1).to_be(),
+                receiver_connection_id: r,
+                sender_connection_id: r + 1,
                 seq_nr: 1,
                 ack_nr: 0,
                 state: CS_NEW,
@@ -250,10 +250,11 @@ impl UtpSocket {
     /// Open a uTP connection to a remote host by hostname or IP address.
     pub fn connect(mut self, other: SocketAddr) -> UtpSocket {
         self.connected_to = other;
+        assert_eq!(self.receiver_connection_id + 1, self.sender_connection_id);
 
         let mut packet = UtpPacket::new();
         packet.set_type(ST_SYN);
-        packet.header.connection_id = (self.sender_connection_id - 1).to_be();
+        packet.header.connection_id = self.receiver_connection_id.to_be();
         packet.header.seq_nr = self.seq_nr.to_be();
         packet.header.timestamp_microseconds = now_microseconds().to_be();
 
@@ -281,8 +282,9 @@ impl UtpSocket {
     /// flight.
     pub fn close(&mut self) -> IoResult<()> {
         let mut packet = UtpPacket::new();
-        packet.header.connection_id = (self.sender_connection_id - 1).to_be();
+        packet.header.connection_id = self.sender_connection_id.to_be();
         packet.header.seq_nr = self.seq_nr.to_be();
+        packet.header.ack_nr = self.ack_nr.to_be();
         packet.header.timestamp_microseconds = now_microseconds().to_be();
         packet.set_type(ST_FIN);
 
