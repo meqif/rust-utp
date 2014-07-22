@@ -200,13 +200,14 @@ impl Clone for UtpPacket {
 }
 
 #[allow(non_camel_case_types)]
-#[deriving(PartialEq,Eq)]
+#[deriving(PartialEq,Eq,Show)]
 enum UtpSocketState {
     CS_NEW,
     CS_CONNECTED,
     CS_SYN_SENT,
     CS_FIN_RECEIVED,
     CS_RST_RECEIVED,
+    CS_CLOSED,
 }
 
 /// A uTP (Micro Transport Protocol) socket.
@@ -295,6 +296,9 @@ impl UtpSocket {
         let resp = UtpPacket::decode(buf);
         assert!(resp.get_type() == ST_STATE);
 
+        // Set socket state
+        self.state = CS_CLOSED;
+
         Ok(())
     }
 
@@ -302,6 +306,17 @@ impl UtpSocket {
     ///
     /// On success, returns the number of bytes read and the sender's address.
     pub fn recvfrom(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
+        use std::cmp::min;
+
+        if self.state == CS_CLOSED {
+            use std::io::{IoError, Closed};
+
+            return Err(IoError {
+                kind: Closed,
+                desc: "Connection closed",
+                detail: None,
+            });
+        }
         let mut b = [0, ..BUF_SIZE];
         let response = self.socket.recvfrom(b);
 
@@ -315,6 +330,16 @@ impl UtpSocket {
         let packet = UtpPacket::decode(b);
         if cfg!(not(test)) { println!("received {}", packet.header) };
 
+        if packet.get_type() == ST_RESET {
+            use std::io::{IoError, ConnectionReset};
+
+            return Err(IoError {
+                kind: ConnectionReset,
+                desc: "Remote host aborted connection (incorrect connection id)",
+                detail: None,
+            });
+        }
+
         match self.handle_packet(packet) {
             Some(pkt) => {
                 let pkt = pkt.wnd_size(BUF_SIZE as u32);
@@ -326,7 +351,7 @@ impl UtpSocket {
             None => {}
         };
 
-        for i in range(0u, ::std::cmp::min(buf.len(), read-HEADER_SIZE)) {
+        for i in range(0u, min(buf.len(), read-HEADER_SIZE)) {
             buf[i] = b[i+HEADER_SIZE];
         }
 
@@ -406,6 +431,8 @@ impl UtpSocket {
             ST_DATA => Some(self.prepare_reply(&packet.header, ST_STATE)),
             ST_FIN => {
                 self.state = CS_FIN_RECEIVED;
+                // If all packets are received
+                self.state = CS_CLOSED;
                 Some(self.prepare_reply(&packet.header, ST_STATE))
             }
             ST_STATE => None,
