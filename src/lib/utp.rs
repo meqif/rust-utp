@@ -498,8 +498,16 @@ mod test {
     use super::{UtpSocket, UtpPacket};
     use super::{ST_STATE, ST_FIN, ST_DATA, ST_RESET, ST_SYN};
     use super::{BUF_SIZE, HEADER_SIZE};
-    use super::{CS_CONNECTED, CS_NEW, CS_FIN_RECEIVED};
+    use super::{CS_CONNECTED, CS_NEW, CS_FIN_RECEIVED, CS_CLOSED};
     use std::rand::random;
+
+    macro_rules! expect_eq(
+        ($left:expr, $right:expr) => (
+            if !($left == $right) {
+                fail!("expected {}, got {}", $right, $left);
+            }
+        );
+    )
 
     #[test]
     fn test_packet_decode() {
@@ -597,10 +605,9 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn test_recvfrom_on_closed_socket() {
         use std::io::test::next_test_ip4;
-        use std::io::EndOfFile;
+        use std::io::Closed;
 
         let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
 
@@ -619,19 +626,21 @@ mod test {
 
         let mut buf = [0u8, ..BUF_SIZE];
         let resp = server.recvfrom(buf);
-        println!("{}", resp);
         assert!(server.state == CS_CONNECTED);
 
+        // Closing the connection is fine
         match server.recvfrom(buf) {
             Err(e) => fail!("{}", e),
             _ => {},
         }
-        assert!(server.state == CS_FIN_RECEIVED);
+        expect_eq!(server.state, CS_CLOSED);
 
+        // Trying to listen on the socket after closing it raises an error
         match server.recvfrom(buf) {
-            Err(e) => assert_eq!(e.kind, EndOfFile),
-            _ => fail!("should fail with error"),
+            Err(e) => expect_eq!(e.kind, Closed),
+            v => fail!("expected {}, got {}", Closed, v),
         }
+
         drop(server);
     }
 
