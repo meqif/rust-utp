@@ -730,10 +730,10 @@ mod test {
 
         assert!(response.get_type() == ST_STATE);
 
-        // FIN packets have no payload but the sequence number shouldn't increase.
+        // FIN packets have no payload but the sequence number shouldn't increase
         assert!(Int::from_be(sent.seq_nr) == Int::from_be(old_packet.header.seq_nr) + 1);
 
-        // Nor should the ACK's sequence number
+        // Nor should the ACK packet's sequence number
         assert!(response.header.seq_nr == old_response.header.seq_nr);
 
         // FIN should be acknowledged
