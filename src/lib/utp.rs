@@ -574,6 +574,9 @@ mod test {
         assert!(server.state == CS_NEW);
         assert!(client.state == CS_NEW);
 
+        // Check proper difference in client's send connection id and receive connection id
+        assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
+
         spawn(proc() {
             let client = client.connect(serverAddr);
             assert!(client.state == CS_CONNECTED);
@@ -584,6 +587,8 @@ mod test {
         match server.recvfrom(buf) {
             e => println!("{}", e),
         }
+        // After establishing a new connection, the server's ids are a mirror of the client's.
+        assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
 
         assert!(server.state == CS_CONNECTED);
         drop(server);
