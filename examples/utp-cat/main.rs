@@ -41,7 +41,7 @@ fn main() {
             println!("Serving on {}", addr);
 
             loop {
-                match sock.recvfrom(buf) {
+                match sock.recv_from(buf) {
                     Ok((_read, _src)) => {}
                     Err(e) => fail!("{}", e),
                 }

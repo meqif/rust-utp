@@ -231,7 +231,7 @@ pub struct UtpSocket {
 macro_rules! reply_with_ack(
     ($header:expr, $src:expr) => ({
         let resp = self.prepare_reply($header, ST_STATE).wnd_size(BUF_SIZE as u32);
-        try!(self.socket.sendto(resp.bytes().as_slice(), $src));
+        try!(self.socket.send_to(resp.bytes().as_slice(), $src));
         if cfg!(not(test)) { println!("sent {}", resp.header) };
     })
 )
@@ -268,13 +268,13 @@ impl UtpSocket {
 
         // Send packet
         let dst = self.connected_to;
-        let _result = self.socket.sendto(packet.bytes().as_slice(), dst);
+        let _result = self.socket.send_to(packet.bytes().as_slice(), dst);
         if cfg!(not(test)) { println!("sent {}", packet.header) };
 
         self.state = CS_SYN_SENT;
 
         let mut buf = [0, ..BUF_SIZE];
-        let (_len, addr) = self.recvfrom(buf).unwrap();
+        let (_len, addr) = self.recv_from(buf).unwrap();
         if cfg!(not(test)) { println!("connected to: {} {}", addr, self.connected_to) };
         assert!(addr == self.connected_to);
 
@@ -298,11 +298,11 @@ impl UtpSocket {
 
         // Send FIN
         let dst = self.connected_to;
-        try!(self.socket.sendto(packet.bytes().as_slice(), dst));
+        try!(self.socket.send_to(packet.bytes().as_slice(), dst));
 
         // Receive JAKE
         let mut buf = [0u8, ..BUF_SIZE];
-        try!(self.socket.recvfrom(buf));
+        try!(self.socket.recv_from(buf));
         let resp = UtpPacket::decode(buf);
         assert!(resp.get_type() == ST_STATE);
 
@@ -315,7 +315,7 @@ impl UtpSocket {
     /// Receive data from socket.
     ///
     /// On success, returns the number of bytes read and the sender's address.
-    pub fn recvfrom(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
+    pub fn recv_from(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
         use std::cmp::min;
 
         if self.state == CS_CLOSED {
@@ -328,7 +328,7 @@ impl UtpSocket {
             });
         }
         let mut b = [0, ..BUF_SIZE];
-        let response = self.socket.recvfrom(b);
+        let response = self.socket.recv_from(b);
 
         let _src: SocketAddr;
         let read;
@@ -353,7 +353,7 @@ impl UtpSocket {
         match self.handle_packet(packet) {
             Some(pkt) => {
                 let pkt = pkt.wnd_size(BUF_SIZE as u32);
-                try!(self.socket.sendto(pkt.bytes().as_slice(), _src));
+                try!(self.socket.send_to(pkt.bytes().as_slice(), _src));
                 if cfg!(not(test)) {
                     println!("sent {}", pkt.header);
                 }
@@ -372,6 +372,12 @@ impl UtpSocket {
         Ok((read-HEADER_SIZE, _src))
     }
 
+    #[allow(missing_doc)]
+    #[deprecated = "renamed to `recv_from`"]
+    pub fn recvfrom(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
+        self.recv_from(buf)
+    }
+
     fn prepare_reply(&self, original: &UtpPacketHeader, t: UtpPacketType) -> UtpPacket {
         let mut resp = UtpPacket::new();
         resp.set_type(t);
@@ -388,7 +394,7 @@ impl UtpSocket {
 
     /// TODO: return error on send after connection closed (RST or FIN + all
     /// packets received)
-    pub fn sendto(&mut self, buf: &[u8], dst: SocketAddr) -> IoResult<()> {
+    pub fn send_to(&mut self, buf: &[u8], dst: SocketAddr) -> IoResult<()> {
         let mut packet = UtpPacket::new();
         packet.set_type(ST_DATA);
         packet.payload = Vec::from_slice(buf);
@@ -397,11 +403,11 @@ impl UtpSocket {
         packet.header.ack_nr = self.ack_nr.to_be();
         packet.header.connection_id = self.sender_connection_id.to_be();
 
-        let r = self.socket.sendto(packet.bytes().as_slice(), dst);
+        let r = self.socket.send_to(packet.bytes().as_slice(), dst);
 
         // Expect ACK
         let mut buf = [0, ..BUF_SIZE];
-        try!(self.socket.recvfrom(buf));
+        try!(self.socket.recv_from(buf));
         let resp = UtpPacket::decode(buf);
         println!("received {}", resp.header);
         assert_eq!(resp.get_type(), ST_STATE);
@@ -413,6 +419,12 @@ impl UtpSocket {
         }
 
         r
+    }
+
+    #[allow(missing_doc)]
+    #[deprecated = "renamed to `send_to`"]
+    pub fn sendto(&mut self, buf: &[u8], dst: SocketAddr) -> IoResult<()> {
+        self.send_to(buf, dst)
     }
 
     /// Handle incoming packet, updating socket state accordingly.
@@ -493,7 +505,7 @@ impl UtpStream {
 
 impl Reader for UtpStream {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<uint> {
-        match self.socket.recvfrom(buf) {
+        match self.socket.recv_from(buf) {
             Ok((read, _src)) => Ok(read),
             Err(e) => Err(e),
         }
@@ -503,7 +515,7 @@ impl Reader for UtpStream {
 impl Writer for UtpStream {
     fn write(&mut self, buf: &[u8]) -> IoResult<()> {
         let dst = self.socket.connected_to;
-        self.socket.sendto(buf, dst)
+        self.socket.send_to(buf, dst)
     }
 }
 
@@ -608,7 +620,7 @@ mod test {
         });
 
         let mut buf = [0u8, ..BUF_SIZE];
-        match server.recvfrom(buf) {
+        match server.recv_from(buf) {
             e => println!("{}", e),
         }
         // After establishing a new connection, the server's ids are a mirror of the client's.
@@ -640,18 +652,18 @@ mod test {
 
         // Make the server listen for incoming connections
         let mut buf = [0u8, ..BUF_SIZE];
-        let _resp = server.recvfrom(buf);
+        let _resp = server.recv_from(buf);
         assert!(server.state == CS_CONNECTED);
 
         // Closing the connection is fine
-        match server.recvfrom(buf) {
+        match server.recv_from(buf) {
             Err(e) => fail!("{}", e),
             _ => {},
         }
         expect_eq!(server.state, CS_CLOSED);
 
         // Trying to listen on the socket after closing it raises an error
-        match server.recvfrom(buf) {
+        match server.recv_from(buf) {
             Err(e) => expect_eq!(e.kind, Closed),
             v => fail!("expected {}, got {}", Closed, v),
         }
