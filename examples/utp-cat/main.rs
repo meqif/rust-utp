@@ -29,12 +29,12 @@ fn main() {
 
     if args.len() == 4 {
         addr = SocketAddr {
-            ip:   FromStr::from_str(args.get(2).as_slice()).unwrap(),
-            port: FromStr::from_str(args.get(3).as_slice()).unwrap(),
+            ip:   FromStr::from_str(args[2].as_slice()).unwrap(),
+            port: FromStr::from_str(args[3].as_slice()).unwrap(),
         };
     }
 
-    match args.get(1).as_slice() {
+    match args[1].as_slice() {
         "-s" => {
             let mut buf = [0, ..BUF_SIZE];
             let mut sock = UtpSocket::bind(addr).unwrap();
