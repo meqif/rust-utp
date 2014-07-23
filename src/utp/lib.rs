@@ -18,6 +18,10 @@
 
 #![crate_name = "utp"]
 
+#![license = "MIT/ASL2"]
+#![crate_type = "dylib"]
+#![crate_type = "rlib"]
+
 #![feature(macro_rules)]
 
 extern crate time;

@@ -18,3 +18,8 @@ and lost packet handling, as well as the Selective ACK extension.
 - [ ] handle packet loss
 - [x] stream interface
 
+## License
+
+This library is distributed under similar terms to Rust: dual licensed under the MIT license and the Apache license (version 2.0).
+
+See LICENSE-APACHE, LICENSE-MIT, and COPYRIGHT for details.
