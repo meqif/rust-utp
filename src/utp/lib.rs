@@ -236,6 +236,7 @@ macro_rules! reply_with_ack(
 )
 
 impl UtpSocket {
+    /// Create a UTP socket from the given address.
     pub fn bind(addr: SocketAddr) -> IoResult<UtpSocket> {
         let skt = UdpSocket::bind(addr);
         let r: u16 = random();
@@ -470,6 +471,7 @@ pub struct UtpStream {
 }
 
 impl UtpStream {
+    /// Open a uTP connection to a remote host by hostname or IP address.
     pub fn connect(dst: SocketAddr) -> UtpStream {
         use std::io::net::ip::{Ipv4Addr};
         use std::rand::random;
@@ -479,6 +481,10 @@ impl UtpStream {
         UtpStream { socket: socket }
     }
 
+    /// Gracefully close connection to peer.
+    ///
+    /// This method allows both peers to receive all packets still in
+    /// flight.
     pub fn close(&mut self) -> IoResult<()> {
         self.socket.close()
     }
