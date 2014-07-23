@@ -23,6 +23,7 @@
 #![crate_type = "rlib"]
 
 #![feature(macro_rules)]
+#![deny(missing_doc)]
 
 extern crate time;
 
