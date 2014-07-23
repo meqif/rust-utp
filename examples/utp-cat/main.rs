@@ -22,6 +22,11 @@ fn main() {
 
     let args = std::os::args();
 
+	if args.len() != 2 && args.len() != 4 {
+		usage();
+		return;
+	}
+
     if args.len() == 4 {
         addr = SocketAddr {
             ip:   FromStr::from_str(args.get(2).as_slice()).unwrap(),
