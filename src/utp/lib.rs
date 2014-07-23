@@ -16,6 +16,8 @@
 //! - packet loss
 //! - test UtpSocket
 
+#![crate_name = "utp"]
+
 #![feature(macro_rules)]
 
 extern crate time;
