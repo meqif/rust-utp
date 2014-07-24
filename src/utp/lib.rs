@@ -7,14 +7,10 @@
 //!
 //! - congestion control
 //! - proper connection closing
-//!     - handle both RST and FIN
-//!     - send FIN on close
-//!     - automatically send FIN (or should it be RST?) on drop if not already closed
-//! - sending RST on mismatch
+//!     - automatically send FIN (or should it be RST?) on `drop` if not already closed
 //! - setters and getters that hide header field endianness conversion
 //! - SACK extension
-//! - packet loss
-//! - test UtpSocket
+//! - handle packet loss
 
 #![crate_name = "utp"]
 
