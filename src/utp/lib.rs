@@ -842,4 +842,28 @@ mod test {
         assert!(response.get_type() == ST_RESET);
         assert!(response.header.ack_nr == packet.header.seq_nr);
     }
+
+    #[test]
+    fn test_utp_stream() {
+        use super::UtpStream;
+        use std::io::test::next_test_ip4;
+        use std::io::Closed;
+
+        let serverAddr = next_test_ip4();
+        let mut server = UtpStream::bind(serverAddr);
+
+        spawn(proc() {
+            let mut client = UtpStream::connect(serverAddr);
+            client.close();
+        });
+
+        let mut buf = [0, ..BUF_SIZE];
+        loop {
+            match server.read(buf) {
+                Err(ref e) if e.kind == Closed => break,
+                Err(e) => fail!("{}", e),
+                Ok(_) => {},
+            };
+        }
+    }
 }
