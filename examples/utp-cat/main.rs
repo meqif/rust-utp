@@ -13,7 +13,7 @@ fn usage() {
 }
 
 fn main() {
-    use utp::{UtpStream, UtpSocket};
+    use utp::UtpStream;
     use std::from_str::FromStr;
 
     // Defaults
@@ -37,12 +37,13 @@ fn main() {
     match args[1].as_slice() {
         "-s" => {
             let mut buf = [0, ..BUF_SIZE];
-            let mut sock = UtpSocket::bind(addr).unwrap();
+            let mut stream = UtpStream::bind(addr);
+
             println!("Serving on {}", addr);
 
             loop {
-                match sock.recv_from(buf) {
-                    Ok((_read, _src)) => {}
+                match stream.read(buf) {
+                    Ok(_read) => {}
                     Err(e) => fail!("{}", e),
                 }
             }
