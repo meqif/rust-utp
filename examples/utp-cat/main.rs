@@ -57,12 +57,6 @@ fn main() {
                 Err(e) => fail!("{}", e),
             }
 
-            let mut buf = [0u8, ..BUF_SIZE];
-            match stream.read(buf) {
-                Ok(n) => println!("{}", Vec::from_slice(buf.slice(0, n))),
-                Err(e) => println!("{}", e),
-            }
-
             match stream.close() {
                 Ok(_) => {},
                 Err(e) => fail!("{}", e),
