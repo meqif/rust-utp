@@ -480,6 +480,15 @@ pub struct UtpStream {
 }
 
 impl UtpStream {
+    /// Create a uTP stream listening on the given address.
+    pub fn bind(addr: SocketAddr) -> IoResult<UtpStream> {
+        let socket = UtpSocket::bind(addr);
+        match socket {
+            Ok(_)  => Ok(UtpStream { socket: socket.unwrap() }),
+            Err(e) => Err(e),
+        }
+    }
+
     /// Open a uTP connection to a remote host by hostname or IP address.
     pub fn connect(dst: SocketAddr) -> UtpStream {
         use std::io::net::ip::{Ipv4Addr};
