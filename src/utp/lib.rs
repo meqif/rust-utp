@@ -405,7 +405,7 @@ impl UtpSocket {
         let mut buf = [0, ..BUF_SIZE];
         try!(self.socket.recv_from(buf));
         let resp = UtpPacket::decode(buf);
-        println!("received {}", resp.header);
+        if cfg!(not(test)) { println!("received {}", resp.header); }
         assert_eq!(resp.get_type(), ST_STATE);
         assert_eq!(Int::from_be(resp.header.ack_nr), self.seq_nr);
 
