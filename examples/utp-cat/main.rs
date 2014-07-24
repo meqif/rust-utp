@@ -15,6 +15,7 @@ fn usage() {
 fn main() {
     use utp::UtpStream;
     use std::from_str::FromStr;
+    use std::io::{stdin, EndOfFile};
 
     // Defaults
     static BUF_SIZE: uint = 4096;
@@ -50,11 +51,15 @@ fn main() {
         }
         "-c" => {
             let mut stream = UtpStream::connect(addr);
+            let mut buf = [0, ..BUF_SIZE];
+            let mut reader = stdin();
 
-            let buf = [0xF, ..BUF_SIZE];
-            match stream.write(buf) {
-                Ok(_) => {},
-                Err(e) => fail!("{}", e),
+            loop {
+                match reader.read(buf) {
+                    Ok(nread) => stream.write(buf.slice(0, nread)),
+                    Err(ref e) if e.kind == EndOfFile => break,
+                    Err(e) => fail!("{}", e),
+                };
             }
 
             match stream.close() {
