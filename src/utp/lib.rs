@@ -544,6 +544,10 @@ mod test {
         );
     )
 
+    macro_rules! iotry(
+        ($e:expr) => (match $e { Ok(e) => e, Err(e) => fail!("{}", e) })
+    )
+
     #[test]
     fn test_packet_decode() {
         let buf = [0x21, 0x00, 0x41, 0xa8, 0x99, 0x2f, 0xd0, 0x2a, 0x9f, 0x4a,
@@ -858,7 +862,7 @@ mod test {
 
         spawn(proc() {
             let mut client = UtpStream::connect(serverAddr);
-            client.close();
+            iotry!(client.close());
         });
 
         let mut buf = [0, ..BUF_SIZE];
@@ -888,8 +892,8 @@ mod test {
 
         spawn(proc() {
             let mut client = UtpStream::connect(serverAddr);
-            client.write(d.as_slice());
-            client.close();
+            iotry!(client.write(d.as_slice()));
+            iotry!(client.close());
         });
 
         let mut buf = [0, ..len];
@@ -928,8 +932,8 @@ mod test {
 
         spawn(proc() {
             let mut client = UtpStream::connect(serverAddr);
-            client.write(d.as_slice());
-            client.close();
+            iotry!(client.write(d.as_slice()));
+            iotry!(client.close());
         });
 
         let mut buf = [0, ..len];
