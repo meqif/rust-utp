@@ -323,7 +323,7 @@ impl UtpSocket {
                 detail: None,
             });
         }
-        let mut b = [0, ..BUF_SIZE];
+        let mut b = [0, ..BUF_SIZE + HEADER_SIZE];
         let response = self.socket.recv_from(b);
 
         let _src: SocketAddr;
