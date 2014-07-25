@@ -520,7 +520,11 @@ impl Reader for UtpStream {
 impl Writer for UtpStream {
     fn write(&mut self, buf: &[u8]) -> IoResult<()> {
         let dst = self.socket.connected_to;
-        self.socket.send_to(buf, dst)
+
+        for chunk in buf.chunks(BUF_SIZE) {
+            try!(self.socket.send_to(chunk, dst));
+        }
+        Ok(())
     }
 }
 
