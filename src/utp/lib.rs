@@ -870,4 +870,84 @@ mod test {
             };
         }
     }
+
+    #[test]
+    fn test_utp_stream_small_data() {
+        use super::UtpStream;
+        use std::io::test::next_test_ip4;
+        use std::io::Closed;
+
+        // Fits in a packet
+        static len: uint = 1024;
+        let data: Vec<u8> = range(0, len).map(|x:uint| x as u8).collect();
+        expect_eq!(len, data.len());
+
+        let d = data.clone();
+        let serverAddr = next_test_ip4();
+        let mut server = UtpStream::bind(serverAddr);
+
+        spawn(proc() {
+            let mut client = UtpStream::connect(serverAddr);
+            client.write(d.as_slice());
+            client.close();
+        });
+
+        let mut buf = [0, ..len];
+        let mut nread = 0;
+        let mut read = Vec::new();
+        loop {
+            match server.read(buf) {
+                Err(ref e) if e.kind == Closed => break,
+                Err(e) => fail!("{}", e),
+                Ok(_nread) => {
+                    nread += _nread;
+                    read.push_all(buf.slice_to(_nread));
+                },
+            };
+        }
+        // let read = server.read_to_end();
+
+        expect_eq!(nread, data.len());
+        expect_eq!(read, data);
+    }
+
+    #[test]
+    fn test_utp_stream_large_data() {
+        use super::UtpStream;
+        use std::io::test::next_test_ip4;
+        use std::io::Closed;
+
+        // Has to be sent over several packets
+        static len: uint = 1024 * 1024;
+        let data: Vec<u8> = range(0, len).map(|x:uint| x as u8).collect();
+        expect_eq!(len, data.len());
+
+        let d = data.clone();
+        let serverAddr = next_test_ip4();
+        let mut server = UtpStream::bind(serverAddr);
+
+        spawn(proc() {
+            let mut client = UtpStream::connect(serverAddr);
+            client.write(d.as_slice());
+            client.close();
+        });
+
+        let mut buf = [0, ..len];
+        let mut nread = 0;
+        let mut read = Vec::new();
+        loop {
+            match server.read(buf) {
+                Err(ref e) if e.kind == Closed => break,
+                Err(e) => fail!("{}", e),
+                Ok(_nread) => {
+                    nread += _nread;
+                    read.push_all(buf.slice_to(_nread));
+                },
+            };
+        }
+        // let read = server.read_to_end();
+
+        expect_eq!(nread, data.len());
+        expect_eq!(read, data);
+    }
 }
