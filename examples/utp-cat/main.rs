@@ -15,10 +15,9 @@ fn usage() {
 fn main() {
     use utp::UtpStream;
     use std::from_str::FromStr;
-    use std::io::{stdin, EndOfFile};
+    use std::io::{stdin, stdout};
 
     // Defaults
-    static BUF_SIZE: uint = 4096;
     let mut addr = SocketAddr { ip: Ipv4Addr(127,0,0,1), port: 8080 };
 
     let args = std::os::args();
@@ -37,30 +36,33 @@ fn main() {
 
     match args[1].as_slice() {
         "-s" => {
-            let mut buf = [0, ..BUF_SIZE];
             let mut stream = UtpStream::bind(addr);
-
+            let mut writer = stdout();
             println!("Serving on {}", addr);
 
-            loop {
-                match stream.read(buf) {
-                    Ok(_read) => {}
-                    Err(e) => fail!("{}", e),
-                }
+            let payload = match stream.read_to_end() {
+                Ok(v) => v,
+                Err(e) => fail!("{}", e),
+            };
+
+            match writer.write(payload.as_slice()) {
+                Ok(_) => {},
+                Err(e) => fail!("{}", e),
             }
         }
         "-c" => {
             let mut stream = UtpStream::connect(addr);
-            let mut buf = [0, ..BUF_SIZE];
             let mut reader = stdin();
 
-            loop {
-                match reader.read(buf) {
-                    Ok(nread) => stream.write(buf.slice(0, nread)),
-                    Err(ref e) if e.kind == EndOfFile => break,
-                    Err(e) => fail!("{}", e),
-                };
-            }
+            let payload = match reader.read_to_end() {
+                Ok(v) => v,
+                Err(e) => fail!("{}", e),
+            };
+
+            match stream.write(payload.as_slice()) {
+                Ok(_) => {},
+                Err(e) => fail!("{}", e),
+            };
 
             match stream.close() {
                 Ok(_) => {},
