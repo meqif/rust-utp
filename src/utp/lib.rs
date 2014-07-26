@@ -541,7 +541,7 @@ mod test {
     use super::{UtpSocket, UtpPacket};
     use super::{ST_STATE, ST_FIN, ST_DATA, ST_RESET, ST_SYN};
     use super::{BUF_SIZE, HEADER_SIZE};
-    use super::{CS_CONNECTED, CS_NEW, CS_CLOSED};
+    use super::{CS_CONNECTED, CS_NEW, CS_CLOSED, CS_EOF};
     use std::rand::random;
 
     macro_rules! expect_eq(
@@ -654,7 +654,7 @@ mod test {
     #[test]
     fn test_recvfrom_on_closed_socket() {
         use std::io::test::next_test_ip4;
-        use std::io::Closed;
+        use std::io::{Closed, EndOfFile};
 
         let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
 
@@ -681,9 +681,18 @@ mod test {
             Err(e) => fail!("{}", e),
             _ => {},
         }
+        expect_eq!(server.state, CS_EOF);
+
+        // Trying to listen on the socket after closing it raises an
+        // EOF error
+        match server.recv_from(buf) {
+            Err(e) => expect_eq!(e.kind, EndOfFile),
+            v => fail!("expected {}, got {}", EndOfFile, v),
+        }
+
         expect_eq!(server.state, CS_CLOSED);
 
-        // Trying to listen on the socket after closing it raises an error
+        // Trying again raises a Closed error
         match server.recv_from(buf) {
             Err(e) => expect_eq!(e.kind, Closed),
             v => fail!("expected {}, got {}", Closed, v),
@@ -873,14 +882,7 @@ mod test {
             iotry!(client.close());
         });
 
-        let mut buf = [0, ..BUF_SIZE];
-        loop {
-            match server.read(buf) {
-                Err(ref e) if e.kind == Closed => break,
-                Err(e) => fail!("{}", e),
-                Ok(_) => {},
-            };
-        }
+        iotry!(server.read_to_end());
     }
 
     #[test]
@@ -904,22 +906,7 @@ mod test {
             iotry!(client.close());
         });
 
-        let mut buf = [0, ..len];
-        let mut nread = 0;
-        let mut read = Vec::new();
-        loop {
-            match server.read(buf) {
-                Err(ref e) if e.kind == Closed => break,
-                Err(e) => fail!("{}", e),
-                Ok(_nread) => {
-                    nread += _nread;
-                    read.push_all(buf.slice_to(_nread));
-                },
-            };
-        }
-        // let read = server.read_to_end();
-
-        expect_eq!(nread, data.len());
+        let read = iotry!(server.read_to_end());
         expect_eq!(read, data);
     }
 
@@ -944,22 +931,7 @@ mod test {
             iotry!(client.close());
         });
 
-        let mut buf = [0, ..len];
-        let mut nread = 0;
-        let mut read = Vec::new();
-        loop {
-            match server.read(buf) {
-                Err(ref e) if e.kind == Closed => break,
-                Err(e) => fail!("{}", e),
-                Ok(_nread) => {
-                    nread += _nread;
-                    read.push_all(buf.slice_to(_nread));
-                },
-            };
-        }
-        // let read = server.read_to_end();
-
-        expect_eq!(nread, data.len());
+        let read = iotry!(server.read_to_end());
         expect_eq!(read, data);
     }
 }
