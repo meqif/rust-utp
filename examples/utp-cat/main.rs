@@ -10,7 +10,7 @@ fn usage() {
 fn main() {
     use utp::UtpStream;
     use std::from_str::FromStr;
-    use std::io::{stdin, stdout};
+    use std::io::{stdin, stdout, stderr};
 
     // Defaults
     let mut addr = SocketAddr { ip: Ipv4Addr(127,0,0,1), port: 8080 };
@@ -33,7 +33,7 @@ fn main() {
         "-s" => {
             let mut stream = UtpStream::bind(addr);
             let mut writer = stdout();
-            println!("Serving on {}", addr);
+            let _ = writeln!(stderr(), "Serving on {}", addr);
 
             let payload = match stream.read_to_end() {
                 Ok(v) => v,
