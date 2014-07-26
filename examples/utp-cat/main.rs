@@ -1,9 +1,6 @@
 #![feature(macro_rules)]
 
-//! Implementation of a Micro Transport Protocol library,
-//! as well as a small client and server.
-//!
-//! http://www.bittorrent.org/beps/bep_0029.html
+//! Implementation of a simple uTP client and server.
 
 extern crate utp;
 use std::io::net::ip::{Ipv4Addr, SocketAddr};
