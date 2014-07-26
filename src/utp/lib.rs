@@ -211,6 +211,7 @@ enum UtpSocketState {
     CS_FIN_RECEIVED,
     CS_RST_RECEIVED,
     CS_CLOSED,
+    CS_EOF,
 }
 
 /// A uTP (Micro Transport Protocol) socket.
@@ -314,19 +315,30 @@ impl UtpSocket {
     /// Receive data from socket.
     ///
     /// On success, returns the number of bytes read and the sender's address.
+    /// Returns CS_EOF after receiving a FIN packet when the remaining
+    /// inflight packets are consumed. Subsequent calls return CS_CLOSED.
     #[unstable]
     pub fn recv_from(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
         use std::cmp::min;
+        use std::io::{IoError, EndOfFile, Closed};
+
+        if self.state == CS_EOF {
+            self.state = CS_CLOSED;
+            return Err(IoError {
+                kind: EndOfFile,
+                desc: "End of file reached",
+                detail: None,
+            });
+        }
 
         if self.state == CS_CLOSED {
-            use std::io::{IoError, Closed};
-
             return Err(IoError {
                 kind: Closed,
                 desc: "Connection closed",
                 detail: None,
             });
         }
+
         let mut b = [0, ..BUF_SIZE + HEADER_SIZE];
         let response = self.socket.recv_from(b);
 
@@ -456,7 +468,7 @@ impl UtpSocket {
                 self.state = CS_FIN_RECEIVED;
                 // TODO: check if no packets are missing
                 // If all packets are received
-                self.state = CS_CLOSED;
+                self.state = CS_EOF;
                 Some(self.prepare_reply(&packet.header, ST_STATE))
             }
             ST_STATE => None,
