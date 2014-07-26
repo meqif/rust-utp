@@ -18,10 +18,11 @@
 #![crate_type = "dylib"]
 #![crate_type = "rlib"]
 
-#![feature(macro_rules)]
+#![feature(macro_rules, phase)]
 #![deny(missing_doc)]
 
 extern crate time;
+#[phase(plugin, link)] extern crate log;
 
 use std::io::net::udp::UdpSocket;
 use std::io::net::ip::SocketAddr;
@@ -229,7 +230,7 @@ macro_rules! reply_with_ack(
     ($header:expr, $src:expr) => ({
         let resp = self.prepare_reply($header, ST_STATE).wnd_size(BUF_SIZE as u32);
         try!(self.socket.send_to(resp.bytes().as_slice(), $src));
-        if cfg!(not(test)) { println!("sent {}", resp.header) };
+        debug!("sent {}", resp.header);
     })
 )
 
@@ -268,13 +269,13 @@ impl UtpSocket {
         // Send packet
         let dst = self.connected_to;
         let _result = self.socket.send_to(packet.bytes().as_slice(), dst);
-        if cfg!(not(test)) { println!("sent {}", packet.header) };
+        debug!("sent {}", packet.header);
 
         self.state = CS_SYN_SENT;
 
         let mut buf = [0, ..BUF_SIZE];
         let (_len, addr) = self.recv_from(buf).unwrap();
-        if cfg!(not(test)) { println!("connected to: {} {}", addr, self.connected_to) };
+        debug!("connected to: {} {}", addr, self.connected_to);
         assert!(addr == self.connected_to);
 
         self.state = CS_CONNECTED;
@@ -350,7 +351,7 @@ impl UtpSocket {
         };
 
         let packet = UtpPacket::decode(b);
-        if cfg!(not(test)) { println!("received {}", packet.header) };
+        debug!("received {}", packet.header);
 
         if packet.get_type() == ST_RESET {
             use std::io::{IoError, ConnectionReset};
@@ -366,19 +367,13 @@ impl UtpSocket {
             Some(pkt) => {
                 let pkt = pkt.wnd_size(BUF_SIZE as u32);
                 try!(self.socket.send_to(pkt.bytes().as_slice(), _src));
-                if cfg!(not(test)) {
-                    println!("sent {}", pkt.header);
-                }
+                debug!("sent {}", pkt.header);
             },
             None => {}
         };
 
         for i in range(0u, min(buf.len(), read-HEADER_SIZE)) {
             buf[i] = b[i+HEADER_SIZE];
-        }
-
-        if cfg!(debug) && cfg!(not(test)) {
-            println!("payload: {}", Vec::from_slice(buf.slice(0,read-HEADER_SIZE)));
         }
 
         Ok((read-HEADER_SIZE, _src))
@@ -424,7 +419,7 @@ impl UtpSocket {
         let mut buf = [0, ..BUF_SIZE];
         try!(self.socket.recv_from(buf));
         let resp = UtpPacket::decode(buf);
-        if cfg!(not(test)) { println!("received {}", resp.header); }
+        debug!("received {}", resp.header);
         assert_eq!(resp.get_type(), ST_STATE);
         assert_eq!(Int::from_be(resp.header.ack_nr), self.seq_nr);
 
