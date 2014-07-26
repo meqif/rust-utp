@@ -931,4 +931,33 @@ mod test {
         let read = iotry!(server.read_to_end());
         expect_eq!(read, data);
     }
+
+    #[test]
+    fn test_utp_stream_successive_reads() {
+        use super::UtpStream;
+        use std::io::test::next_test_ip4;
+        use std::io::Closed;
+
+        static len: uint = 1024;
+        let data: Vec<u8> = range(0, len).map(|x:uint| x as u8).collect();
+        expect_eq!(len, data.len());
+
+        let d = data.clone();
+        let serverAddr = next_test_ip4();
+        let mut server = UtpStream::bind(serverAddr);
+
+        spawn(proc() {
+            let mut client = UtpStream::connect(serverAddr);
+            iotry!(client.write(d.as_slice()));
+            iotry!(client.close());
+        });
+
+        iotry!(server.read_to_end());
+
+        let mut buf = [0u8, ..4096];
+        match server.read(buf) {
+            Err(ref e) if e.kind == Closed => {},
+            _ => fail!("should have failed with Closed"),
+        };
+    }
 }
