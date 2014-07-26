@@ -234,6 +234,7 @@ macro_rules! reply_with_ack(
 
 impl UtpSocket {
     /// Create a UTP socket from the given address.
+    #[unstable]
     pub fn bind(addr: SocketAddr) -> IoResult<UtpSocket> {
         let skt = UdpSocket::bind(addr);
         let r: u16 = random();
@@ -252,6 +253,7 @@ impl UtpSocket {
     }
 
     /// Open a uTP connection to a remote host by hostname or IP address.
+    #[unstable]
     pub fn connect(mut self, other: SocketAddr) -> UtpSocket {
         self.connected_to = other;
         assert_eq!(self.receiver_connection_id + 1, self.sender_connection_id);
@@ -284,6 +286,7 @@ impl UtpSocket {
     ///
     /// This method allows both peers to receive all packets still in
     /// flight.
+    #[unstable]
     pub fn close(&mut self) -> IoResult<()> {
         let mut packet = UtpPacket::new();
         packet.header.connection_id = self.sender_connection_id.to_be();
@@ -311,6 +314,7 @@ impl UtpSocket {
     /// Receive data from socket.
     ///
     /// On success, returns the number of bytes read and the sender's address.
+    #[unstable]
     pub fn recv_from(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
         use std::cmp::min;
 
@@ -390,6 +394,7 @@ impl UtpSocket {
 
     /// TODO: return error on send after connection closed (RST or FIN + all
     /// packets received)
+    #[unstable]
     pub fn send_to(&mut self, buf: &[u8], dst: SocketAddr) -> IoResult<()> {
         let mut packet = UtpPacket::new();
         packet.set_type(ST_DATA);
@@ -481,6 +486,7 @@ pub struct UtpStream {
 
 impl UtpStream {
     /// Create a uTP stream listening on the given address.
+    #[unstable]
     pub fn bind(addr: SocketAddr) -> IoResult<UtpStream> {
         let socket = UtpSocket::bind(addr);
         match socket {
@@ -490,6 +496,7 @@ impl UtpStream {
     }
 
     /// Open a uTP connection to a remote host by hostname or IP address.
+    #[unstable]
     pub fn connect(dst: SocketAddr) -> UtpStream {
         use std::io::net::ip::{Ipv4Addr};
         use std::rand::random;
@@ -503,6 +510,7 @@ impl UtpStream {
     ///
     /// This method allows both peers to receive all packets still in
     /// flight.
+    #[unstable]
     pub fn close(&mut self) -> IoResult<()> {
         self.socket.close()
     }
