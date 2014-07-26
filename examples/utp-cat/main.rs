@@ -1,5 +1,3 @@
-#![feature(macro_rules)]
-
 //! Implementation of a simple uTP client and server.
 
 extern crate utp;
