@@ -22,10 +22,10 @@ fn main() {
 
     let args = std::os::args();
 
-	if args.len() != 2 && args.len() != 4 {
-		usage();
-		return;
-	}
+    if args.len() != 2 && args.len() != 4 {
+        usage();
+        return;
+    }
 
     if args.len() == 4 {
         addr = SocketAddr {
