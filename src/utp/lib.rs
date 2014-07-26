@@ -404,8 +404,10 @@ impl UtpSocket {
         resp
     }
 
-    /// TODO: return error on send after connection closed (RST or FIN + all
-    /// packets received)
+    /// Send data on socket to the given address. Returns nothing on success.
+    //
+    // TODO: return error on send after connection closed (RST or FIN + all
+    // packets received)
     #[unstable]
     pub fn send_to(&mut self, buf: &[u8], dst: SocketAddr) -> IoResult<()> {
         let mut packet = UtpPacket::new();
