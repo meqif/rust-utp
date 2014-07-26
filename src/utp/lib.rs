@@ -872,7 +872,6 @@ mod test {
     fn test_utp_stream() {
         use super::UtpStream;
         use std::io::test::next_test_ip4;
-        use std::io::Closed;
 
         let serverAddr = next_test_ip4();
         let mut server = UtpStream::bind(serverAddr);
@@ -889,7 +888,6 @@ mod test {
     fn test_utp_stream_small_data() {
         use super::UtpStream;
         use std::io::test::next_test_ip4;
-        use std::io::Closed;
 
         // Fits in a packet
         static len: uint = 1024;
@@ -914,7 +912,6 @@ mod test {
     fn test_utp_stream_large_data() {
         use super::UtpStream;
         use std::io::test::next_test_ip4;
-        use std::io::Closed;
 
         // Has to be sent over several packets
         static len: uint = 1024 * 1024;
