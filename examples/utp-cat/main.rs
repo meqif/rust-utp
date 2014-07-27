@@ -29,8 +29,8 @@ fn main() {
 
     if args.len() == 4 {
         addr = SocketAddr {
-            ip:   FromStr::from_str(args[2].as_slice()).unwrap(),
-            port: FromStr::from_str(args[3].as_slice()).unwrap(),
+            ip:   FromStr::from_str(args[2].as_slice()).expect("Invalid address"),
+            port: FromStr::from_str(args[3].as_slice()).expect("Invalid port"),
         };
     }
 
