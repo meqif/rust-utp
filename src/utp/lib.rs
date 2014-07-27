@@ -499,7 +499,7 @@ impl UtpStream {
     pub fn bind(addr: SocketAddr) -> IoResult<UtpStream> {
         let socket = UtpSocket::bind(addr);
         match socket {
-            Ok(_)  => Ok(UtpStream { socket: socket.unwrap() }),
+            Ok(s)  => Ok(UtpStream { socket: s }),
             Err(e) => Err(e),
         }
     }
