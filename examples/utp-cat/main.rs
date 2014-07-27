@@ -1,7 +1,12 @@
 //! Implementation of a simple uTP client and server.
+#![feature(macro_rules)]
 
 extern crate utp;
 use std::io::net::ip::{Ipv4Addr, SocketAddr};
+
+macro_rules! iotry(
+    ($e:expr) => (match $e { Ok(v) => v, Err(e) => fail!("{}", e), })
+)
 
 fn usage() {
     println!("Usage: utp [-s|-c] <address> <port>");
@@ -35,34 +40,16 @@ fn main() {
             let mut writer = stdout();
             let _ = writeln!(stderr(), "Serving on {}", addr);
 
-            let payload = match stream.read_to_end() {
-                Ok(v) => v,
-                Err(e) => fail!("{}", e),
-            };
-
-            match writer.write(payload.as_slice()) {
-                Ok(_) => {},
-                Err(e) => fail!("{}", e),
-            }
+            let payload = iotry!(stream.read_to_end());
+            iotry!(writer.write(payload.as_slice()));
         }
         "-c" => {
             let mut stream = UtpStream::connect(addr);
             let mut reader = stdin();
 
-            let payload = match reader.read_to_end() {
-                Ok(v) => v,
-                Err(e) => fail!("{}", e),
-            };
-
-            match stream.write(payload.as_slice()) {
-                Ok(_) => {},
-                Err(e) => fail!("{}", e),
-            };
-
-            match stream.close() {
-                Ok(_) => {},
-                Err(e) => fail!("{}", e),
-            }
+            let payload = iotry!(reader.read_to_end());
+            iotry!(stream.write(payload.as_slice()));
+            iotry!(stream.close());
             drop(stream);
         }
         _ => usage(),
