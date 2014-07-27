@@ -239,13 +239,13 @@ impl UtpSocket {
     #[unstable]
     pub fn bind(addr: SocketAddr) -> IoResult<UtpSocket> {
         let skt = UdpSocket::bind(addr);
-        let r: u16 = random();
+        let connection_id = random::<u16>();
         match skt {
             Ok(x)  => Ok(UtpSocket {
                 socket: x,
                 connected_to: addr,
-                receiver_connection_id: r,
-                sender_connection_id: r + 1,
+                receiver_connection_id: connection_id,
+                sender_connection_id: connection_id + 1,
                 seq_nr: 1,
                 ack_nr: 0,
                 state: CS_NEW,
@@ -900,7 +900,7 @@ mod test {
 
         // Fits in a packet
         static len: uint = 1024;
-        let data: Vec<u8> = range(0, len).map(|x:uint| x as u8).collect();
+        let data = range(0, len).map(|x:uint| x as u8).collect::<Vec<_>>();
         expect_eq!(len, data.len());
 
         let d = data.clone();
