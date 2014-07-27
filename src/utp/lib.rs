@@ -634,8 +634,8 @@ mod test {
 
         let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
 
-        let client = UtpSocket::bind(clientAddr).unwrap();
-        let mut server = UtpSocket::bind(serverAddr).unwrap();
+        let client = iotry!(UtpSocket::bind(clientAddr));
+        let mut server = iotry!(UtpSocket::bind(serverAddr));
 
         assert!(server.state == CS_NEW);
         assert!(client.state == CS_NEW);
@@ -667,8 +667,8 @@ mod test {
 
         let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
 
-        let client = UtpSocket::bind(clientAddr).unwrap();
-        let mut server = UtpSocket::bind(serverAddr).unwrap();
+        let client = iotry!(UtpSocket::bind(clientAddr));
+        let mut server = iotry!(UtpSocket::bind(serverAddr));
 
         assert!(server.state == CS_NEW);
         assert!(client.state == CS_NEW);
@@ -718,7 +718,7 @@ mod test {
         let initial_connection_id: u16 = random();
         let sender_connection_id = initial_connection_id + 1;
         let serverAddr = next_test_ip4();
-        let mut socket = UtpSocket::bind(serverAddr).unwrap();
+        let mut socket = iotry!(UtpSocket::bind(serverAddr));
 
         let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
         packet.set_type(ST_SYN);
@@ -814,7 +814,7 @@ mod test {
         // Boilerplate test setup
         let initial_connection_id: u16 = random();
         let serverAddr = next_test_ip4();
-        let mut socket = UtpSocket::bind(serverAddr).unwrap();
+        let mut socket = iotry!(UtpSocket::bind(serverAddr));
 
         // Establish connection
         let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
@@ -851,7 +851,7 @@ mod test {
         // Boilerplate test setup
         let initial_connection_id: u16 = random();
         let serverAddr = next_test_ip4();
-        let mut socket = UtpSocket::bind(serverAddr).unwrap();
+        let mut socket = iotry!(UtpSocket::bind(serverAddr));
 
         // Establish connection
         let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
