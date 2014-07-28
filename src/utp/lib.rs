@@ -285,7 +285,10 @@ impl UtpSocket {
         self.state = CS_SYN_SENT;
 
         let mut buf = [0, ..BUF_SIZE];
-        let (_len, addr) = self.recv_from(buf).unwrap();
+        let (_len, addr) = match self.recv_from(buf) {
+            Ok(v) => v,
+            Err(e) => fail!("{}", e),
+        };
         debug!("connected to: {} {}", addr, self.connected_to);
         assert!(addr == self.connected_to);
 
