@@ -966,6 +966,8 @@ mod test {
         });
 
         let read = iotry!(server.read_to_end());
+        assert!(!read.is_empty());
+        expect_eq!(read.len(), data.len());
         expect_eq!(read, data);
     }
 
@@ -990,6 +992,8 @@ mod test {
         });
 
         let read = iotry!(server.read_to_end());
+        assert!(!read.is_empty());
+        expect_eq!(read.len(), data.len());
         expect_eq!(read, data);
     }
 
@@ -1020,5 +1024,133 @@ mod test {
             Err(ref e) if e.kind == Closed => {},
             _ => fail!("should have failed with Closed"),
         };
+    }
+
+    #[test]
+    fn test_unordered_packets() {
+        use std::io::test::next_test_ip4;
+
+        // Boilerplate test setup
+        let initial_connection_id: u16 = random();
+        let serverAddr = next_test_ip4();
+        let mut socket = iotry!(UtpSocket::bind(serverAddr));
+
+        // Establish connection
+        let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+        packet.set_type(ST_SYN);
+        packet.header.connection_id = initial_connection_id.to_be();
+
+        let response = socket.handle_packet(packet.clone());
+        assert!(response.is_some());
+        let response = response.unwrap();
+        assert!(response.get_type() == ST_STATE);
+
+        let old_packet = packet;
+        let old_response = response;
+
+        let mut window: Vec<UtpPacket> = Vec::new();
+
+        // Now, send a keepalive packet
+        let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+        packet.set_type(ST_DATA);
+        packet.header.connection_id = initial_connection_id.to_be();
+        packet.header.seq_nr = (Int::from_be(old_packet.header.seq_nr) + 1).to_be();
+        packet.header.ack_nr = old_response.header.seq_nr;
+        packet.payload = vec!(1,2,3);
+        window.push(packet);
+
+        let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+        packet.set_type(ST_DATA);
+        packet.header.connection_id = initial_connection_id.to_be();
+        packet.header.seq_nr = (Int::from_be(old_packet.header.seq_nr) + 2).to_be();
+        packet.header.ack_nr = old_response.header.seq_nr;
+        packet.payload = vec!(4,5,6);
+        window.push(packet);
+
+        // Send packets in reverse order
+        let response = socket.handle_packet(window[1].clone());
+        assert!(response.is_some());
+        let response = response.unwrap();
+        assert!(response.header.ack_nr != window[1].header.seq_nr);
+
+        let response = socket.handle_packet(window[0].clone());
+        assert!(response.is_some());
+    }
+
+    #[test]
+    fn test_socket_unordered_packets() {
+        use std::io::test::next_test_ip4;
+        use super::UtpStream;
+
+        let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
+
+        let client = iotry!(UtpSocket::bind(clientAddr));
+        let mut server = iotry!(UtpSocket::bind(serverAddr));
+
+        assert!(server.state == CS_NEW);
+        assert!(client.state == CS_NEW);
+
+        // Check proper difference in client's send connection id and receive connection id
+        assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
+
+        spawn(proc() {
+            let client = client.connect(serverAddr);
+            assert!(client.state == CS_CONNECTED);
+            let mut s = client.socket;
+            let mut window: Vec<UtpPacket> = Vec::new();
+
+            // Now, send a keepalive packet
+            let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+            packet.set_type(ST_DATA);
+            packet.header.connection_id = client.sender_connection_id.to_be();
+            packet.header.seq_nr = (client.seq_nr).to_be();
+            packet.header.ack_nr = client.ack_nr.to_be();
+            packet.payload = vec!(1,2,3);
+            window.push(packet);
+
+            let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+            packet.set_type(ST_DATA);
+            packet.header.connection_id = client.sender_connection_id.to_be();
+            packet.header.seq_nr = (client.seq_nr + 1).to_be();
+            packet.header.ack_nr = client.ack_nr.to_be();
+            packet.payload = vec!(4,5,6);
+            window.push(packet);
+
+            let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+            packet.set_type(ST_FIN);
+            packet.header.connection_id = client.sender_connection_id.to_be();
+            packet.header.seq_nr = (client.seq_nr + 2).to_be();
+            packet.header.ack_nr = client.ack_nr.to_be();
+            window.push(packet);
+
+            iotry!(s.send_to(window[1].bytes().as_slice(), serverAddr));
+            iotry!(s.send_to(window[0].bytes().as_slice(), serverAddr));
+            iotry!(s.send_to(window[2].bytes().as_slice(), serverAddr));
+
+            for _ in range(0u, 2) {
+                let mut buf = [0, ..BUF_SIZE];
+                iotry!(s.recv_from(buf));
+            }
+        });
+
+        let mut buf = [0u8, ..BUF_SIZE];
+        match server.recv_from(buf) {
+            e => println!("{}", e),
+        }
+        // After establishing a new connection, the server's ids are a mirror of the client's.
+        assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
+
+        assert!(server.state == CS_CONNECTED);
+
+        let mut stream = UtpStream { socket: server };
+        let expected: Vec<u8> = vec!(1, 2, 3, 4, 5, 6);
+
+        match stream.read_to_end() {
+            Ok(data) => {
+                expect_eq!(data.len(), expected.len());
+                expect_eq!(data, expected);
+            },
+            Err(e) => fail!("{}", e),
+        }
     }
 }
