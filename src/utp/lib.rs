@@ -203,6 +203,12 @@ impl Clone for UtpPacket {
     }
 }
 
+impl fmt::Show for UtpPacket {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        self.header.fmt(f)
+    }
+}
+
 #[allow(non_camel_case_types)]
 #[deriving(PartialEq,Eq,Show)]
 enum UtpSocketState {
