@@ -235,6 +235,8 @@ pub struct UtpSocket {
     seq_nr: u16,
     ack_nr: u16,
     state: UtpSocketState,
+
+    buffer: Vec<UtpPacket>,
 }
 
 macro_rules! reply_with_ack(
@@ -260,6 +262,7 @@ impl UtpSocket {
                 seq_nr: 1,
                 ack_nr: 0,
                 state: CS_NEW,
+                buffer: Vec::new(),
             }),
             Err(e) => Err(e)
         }
@@ -377,7 +380,25 @@ impl UtpSocket {
             });
         }
 
-        match self.handle_packet(packet) {
+        // TODO: Deal with duplicates
+        // Did we miss any packets?
+        if packet.get_type() != ST_STATE && self.ack_nr + 1 < Int::from_be(packet.header.seq_nr) {
+            debug!("current ack_nr ({}) is too much behind received packet seq_nr ({})!", self.ack_nr, Int::from_be(packet.header.seq_nr));
+            // Add to buffer but do not acknowledge until all packets between ack_nr + 1 and curr_packet.seq_nr - 1 are received
+            let mut i = 0;
+            for pkt in self.buffer.iter() {
+                if Int::from_be(pkt.header.seq_nr) >= Int::from_be(packet.header.seq_nr) {
+                    break;
+                }
+                i += 1;
+            }
+            let mut pkt = packet.clone();
+            pkt.payload = Vec::from_slice(pkt.payload.slice_to(read - HEADER_SIZE));
+            self.buffer.insert(i, pkt);
+            return Ok((0, self.connected_to));
+        }
+
+        match self.handle_packet(packet.clone()) {
             Some(pkt) => {
                 let pkt = pkt.wnd_size(BUF_SIZE as u32);
                 try!(self.socket.send_to(pkt.bytes().as_slice(), _src));
@@ -386,11 +407,25 @@ impl UtpSocket {
             None => {}
         };
 
-        for i in range(0u, min(buf.len(), read-HEADER_SIZE)) {
-            buf[i] = b[i+HEADER_SIZE];
+        for i in range(0u, min(buf.len(), read - HEADER_SIZE)) {
+            buf[i] = b[i + HEADER_SIZE];
         }
 
-        Ok((read-HEADER_SIZE, _src))
+        // Empty buffer if possible
+        let current_packet_seq_nr = Int::from_be(packet.header.seq_nr);
+        let mut read = read - HEADER_SIZE;
+        while !self.buffer.is_empty() && current_packet_seq_nr + 1 == Int::from_be(self.buffer[0].header.seq_nr) {
+            let packet = self.buffer.shift().unwrap();
+            debug!("Removing packet from buffer: {}", packet);
+
+            for i in range(0u, packet.payload.len()) {
+                buf[read] = packet.payload[i];
+                read += 1;
+            }
+            self.ack_nr = Int::from_be(packet.header.seq_nr);
+        }
+
+        Ok((read, _src))
     }
 
     #[allow(missing_doc)]
@@ -462,7 +497,10 @@ impl UtpSocket {
             return Some(self.prepare_reply(&packet.header, ST_RESET));
         }
 
-        self.ack_nr = Int::from_be(packet.header.seq_nr);
+        if packet.get_type() == ST_STATE ||
+            self.ack_nr + 1 == Int::from_be(packet.header.seq_nr) {
+            self.ack_nr = Int::from_be(packet.header.seq_nr);
+        }
 
         match packet.header.get_type() {
             ST_SYN => { // Respond with an ACK and populate own fields
@@ -498,6 +536,7 @@ impl Clone for UtpSocket {
             seq_nr: self.seq_nr,
             ack_nr: self.ack_nr,
             state: self.state,
+            buffer: Vec::new(),
         }
     }
 }
