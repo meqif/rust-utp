@@ -17,6 +17,7 @@ and lost packet handling, as well as the Selective ACK extension.
 - [ ] SACK extension
 - [ ] handle packet loss
 - [x] stream interface
+- [x] handle unordered packets
 
 ## License
 
