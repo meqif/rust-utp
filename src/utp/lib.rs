@@ -368,7 +368,7 @@ impl UtpSocket {
             Err(e) => return Err(e),
         };
 
-        let packet = UtpPacket::decode(b);
+        let packet = UtpPacket::decode(b.slice_to(read));
         debug!("received {}", packet.header);
 
         if packet.get_type() == ST_RESET {
@@ -386,16 +386,7 @@ impl UtpSocket {
         if packet.get_type() != ST_STATE && self.ack_nr + 1 < Int::from_be(packet.header.seq_nr) {
             debug!("current ack_nr ({}) is too much behind received packet seq_nr ({})!", self.ack_nr, Int::from_be(packet.header.seq_nr));
             // Add to buffer but do not acknowledge until all packets between ack_nr + 1 and curr_packet.seq_nr - 1 are received
-            let mut i = 0;
-            for pkt in self.buffer.iter() {
-                if Int::from_be(pkt.header.seq_nr) >= Int::from_be(packet.header.seq_nr) {
-                    break;
-                }
-                i += 1;
-            }
-            let mut pkt = packet.clone();
-            pkt.payload = Vec::from_slice(pkt.payload.slice_to(read - HEADER_SIZE));
-            self.buffer.insert(i, pkt);
+            self.insert_into_buffer(packet);
             return Ok((0, self.connected_to));
         }
 
@@ -524,6 +515,22 @@ impl UtpSocket {
             ST_STATE => None,
             ST_RESET => /* TODO */ None,
         }
+    }
+
+    /// Insert a packet into the socket's buffer.
+    ///
+    /// The packet is inserted in such a way that the buffer is
+    /// ordered ascendingly by their sequence number. This allows
+    /// storing packets that were received out of order.
+    fn insert_into_buffer(&mut self, packet: UtpPacket) {
+        let mut i = 0;
+        for pkt in self.buffer.iter() {
+            if Int::from_be(pkt.header.seq_nr) >= Int::from_be(packet.header.seq_nr) {
+                break;
+            }
+            i += 1;
+        }
+        self.buffer.insert(i, packet);
     }
 }
 
