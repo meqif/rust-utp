@@ -373,11 +373,14 @@ impl UtpSocket {
             });
         }
 
-        // TODO: Deal with duplicates
-        // Did we miss any packets?
+        // Check if the packet is out of order (that is, it's sequence number
+        // does not immediately follow the ACK number)
         if packet.get_type() != ST_STATE && self.ack_nr + 1 < Int::from_be(packet.header.seq_nr) {
-            debug!("current ack_nr ({}) is too much behind received packet seq_nr ({})!", self.ack_nr, Int::from_be(packet.header.seq_nr));
-            // Add to buffer but do not acknowledge until all packets between ack_nr + 1 and curr_packet.seq_nr - 1 are received
+            debug!("current ack_nr ({}) is behind received packet seq_nr ({})",
+                   self.ack_nr, Int::from_be(packet.header.seq_nr));
+
+            // Add to buffer but do not acknowledge until all packets between
+            // ack_nr + 1 and curr_packet.seq_nr - 1 are received
             self.insert_into_buffer(packet);
             return Ok((0, self.connected_to));
         }
