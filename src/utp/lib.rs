@@ -271,6 +271,8 @@ impl UtpSocket {
     /// Open a uTP connection to a remote host by hostname or IP address.
     #[unstable]
     pub fn connect(mut self, other: SocketAddr) -> IoResult<UtpSocket> {
+        use std::io::{IoError, ConnectionFailed};
+
         self.connected_to = other;
         assert_eq!(self.receiver_connection_id + 1, self.sender_connection_id);
 
@@ -288,12 +290,23 @@ impl UtpSocket {
         self.state = CS_SYN_SENT;
 
         let mut buf = [0, ..BUF_SIZE];
-        let (_len, addr) = match self.recv_from(buf) {
+        let (_len, addr) = match self.socket.recv_from(buf) {
             Ok(v) => v,
             Err(e) => fail!("{}", e),
         };
-        assert!(_len == 0);
+        assert!(_len == HEADER_SIZE);
         assert!(addr == self.connected_to);
+
+        let packet = UtpPacket::decode(buf.slice_to(_len));
+        if packet.get_type() != ST_STATE {
+            return Err(IoError {
+                kind: ConnectionFailed,
+                desc: "The remote peer sent an incorrect reply",
+                detail: None,
+            });
+        }
+        self.ack_nr = Int::from_be(packet.header.seq_nr);
+
         debug!("connected to: {} {}", addr, self.connected_to);
 
         self.state = CS_CONNECTED;
