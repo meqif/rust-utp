@@ -359,15 +359,7 @@ impl UtpSocket {
         }
 
         let mut b = [0, ..BUF_SIZE + HEADER_SIZE];
-        let response = self.socket.recv_from(b);
-
-        let _src: SocketAddr;
-        let read;
-        match response {
-            Ok((nread, src)) => { read = nread; _src = src },
-            Err(e) => return Err(e),
-        };
-
+        let (read, src) = try!(self.socket.recv_from(b));
         let packet = UtpPacket::decode(b.slice_to(read));
         debug!("received {}", packet.header);
 
@@ -393,7 +385,7 @@ impl UtpSocket {
         match self.handle_packet(packet.clone()) {
             Some(pkt) => {
                 let pkt = pkt.wnd_size(BUF_SIZE as u32);
-                try!(self.socket.send_to(pkt.bytes().as_slice(), _src));
+                try!(self.socket.send_to(pkt.bytes().as_slice(), src));
                 debug!("sent {}", pkt.header);
             },
             None => {}
@@ -417,7 +409,7 @@ impl UtpSocket {
             self.ack_nr = Int::from_be(packet.header.seq_nr);
         }
 
-        Ok((read, _src))
+        Ok((read, src))
     }
 
     #[allow(missing_doc)]
