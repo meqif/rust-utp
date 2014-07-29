@@ -44,7 +44,7 @@ fn main() {
             iotry!(writer.write(payload.as_slice()));
         }
         "-c" => {
-            let mut stream = UtpStream::connect(addr);
+            let mut stream = iotry!(UtpStream::connect(addr));
             let mut reader = stdin();
 
             let payload = iotry!(reader.read_to_end());

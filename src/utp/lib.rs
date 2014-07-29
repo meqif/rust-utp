@@ -270,7 +270,7 @@ impl UtpSocket {
 
     /// Open a uTP connection to a remote host by hostname or IP address.
     #[unstable]
-    pub fn connect(mut self, other: SocketAddr) -> UtpSocket {
+    pub fn connect(mut self, other: SocketAddr) -> IoResult<UtpSocket> {
         self.connected_to = other;
         assert_eq!(self.receiver_connection_id + 1, self.sender_connection_id);
 
@@ -299,7 +299,7 @@ impl UtpSocket {
         self.state = CS_CONNECTED;
         self.seq_nr += 1;
 
-        self
+        Ok(self)
     }
 
     /// Gracefully close connection to peer.
@@ -561,13 +561,15 @@ impl UtpStream {
 
     /// Open a uTP connection to a remote host by hostname or IP address.
     #[unstable]
-    pub fn connect(dst: SocketAddr) -> UtpStream {
+    pub fn connect(dst: SocketAddr) -> IoResult<UtpStream> {
         use std::io::net::ip::{Ipv4Addr};
         use std::rand::random;
 
         let my_addr = SocketAddr { ip: Ipv4Addr(127,0,0,1), port: random() };
-        let socket = UtpSocket::bind(my_addr).unwrap().connect(dst);
-        UtpStream { socket: socket }
+        match UtpSocket::bind(my_addr).unwrap().connect(dst) {
+            Ok(socket) => Ok(UtpStream { socket: socket }),
+            Err(e) => Err(e),
+        }
     }
 
     /// Gracefully close connection to peer.
