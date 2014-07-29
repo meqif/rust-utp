@@ -721,6 +721,7 @@ mod test {
         use std::io::test::next_test_ip4;
 
         let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
+        let (tx, rx) = channel();
 
         let client = iotry!(UtpSocket::bind(clientAddr));
         let server = iotry!(UtpSocket::bind(serverAddr));
@@ -730,6 +731,7 @@ mod test {
             let mut server = server;
             let mut buf = [0u8, ..BUF_SIZE];
             let _resp = server.recv_from(buf);
+            tx.send(server.seq_nr);
 
             // Close the connection
             iotry!(server.recv_from(buf));
@@ -739,8 +741,10 @@ mod test {
 
         let mut client = client.connect(serverAddr);
         assert!(client.state == CS_CONNECTED);
+        let sender_seq_nr = rx.recv();
         let ack_nr = client.ack_nr;
         assert!(ack_nr != 0);
+        assert!(ack_nr == sender_seq_nr);
         assert_eq!(client.close(), Ok(()));
 
         // The reply to both connect (SYN) and close (FIN) should be
