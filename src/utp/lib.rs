@@ -1140,38 +1140,17 @@ mod test {
             let mut s = client.socket;
             let mut window: Vec<UtpPacket> = Vec::new();
 
-            // Now, send a keepalive packet
-            let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
-            packet.set_type(ST_DATA);
-            packet.header.connection_id = client.sender_connection_id.to_be();
-            packet.header.seq_nr = (client.seq_nr).to_be();
-            packet.header.ack_nr = client.ack_nr.to_be();
-            packet.payload = vec!(1,2,3);
-            window.push(packet);
-
-            let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
-            packet.set_type(ST_DATA);
-            packet.header.connection_id = client.sender_connection_id.to_be();
-            packet.header.seq_nr = (client.seq_nr + 1).to_be();
-            packet.header.ack_nr = client.ack_nr.to_be();
-            packet.payload = vec!(4,5,6);
-            window.push(packet);
-
-            let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
-            packet.set_type(ST_DATA);
-            packet.header.connection_id = client.sender_connection_id.to_be();
-            packet.header.seq_nr = (client.seq_nr + 2).to_be();
-            packet.header.ack_nr = client.ack_nr.to_be();
-            packet.payload = vec!(7,8,9);
-            window.push(packet);
-
-            let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
-            packet.set_type(ST_DATA);
-            packet.header.connection_id = client.sender_connection_id.to_be();
-            packet.header.seq_nr = (client.seq_nr + 3).to_be();
-            packet.header.ack_nr = client.ack_nr.to_be();
-            packet.payload = vec!(10,11,12);
-            window.push(packet);
+            let mut i = 0;
+            for data in Vec::from_fn(12, |idx| idx as u8 + 1).as_slice().chunks(3) {
+                let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+                packet.set_type(ST_DATA);
+                packet.header.connection_id = client.sender_connection_id.to_be();
+                packet.header.seq_nr = (client.seq_nr + i).to_be();
+                packet.header.ack_nr = client.ack_nr.to_be();
+                packet.payload = Vec::from_slice(data);
+                window.push(packet);
+                i += 1;
+            }
 
             let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
             packet.set_type(ST_FIN);
