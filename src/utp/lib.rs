@@ -717,6 +717,40 @@ mod test {
     }
 
     #[test]
+    fn test_acks_on_socket() {
+        use std::io::test::next_test_ip4;
+
+        let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
+
+        let client = iotry!(UtpSocket::bind(clientAddr));
+        let server = iotry!(UtpSocket::bind(serverAddr));
+
+        spawn(proc() {
+            // Make the server listen for incoming connections
+            let mut server = server;
+            let mut buf = [0u8, ..BUF_SIZE];
+            let _resp = server.recv_from(buf);
+
+            // Close the connection
+            iotry!(server.recv_from(buf));
+
+            drop(server);
+        });
+
+        let mut client = client.connect(serverAddr);
+        assert!(client.state == CS_CONNECTED);
+        let ack_nr = client.ack_nr;
+        assert!(ack_nr != 0);
+        assert_eq!(client.close(), Ok(()));
+
+        // The reply to both connect (SYN) and close (FIN) should be
+        // STATE packets, which don't increase the sequence number
+        // and, hence, the receiver's acknowledgement number.
+        assert!(client.ack_nr == ack_nr);
+        drop(client);
+    }
+
+    #[test]
     fn test_handle_packet() {
         use std::io::test::next_test_ip4;
 
