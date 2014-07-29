@@ -701,7 +701,7 @@ mod test {
         assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
 
         spawn(proc() {
-            let client = client.connect(serverAddr);
+            let client = iotry!(client.connect(serverAddr));
             assert!(client.state == CS_CONNECTED);
             drop(client);
         });
@@ -731,7 +731,7 @@ mod test {
         assert!(client.state == CS_NEW);
 
         spawn(proc() {
-            let mut client = client.connect(serverAddr);
+            let mut client = iotry!(client.connect(serverAddr));
             assert!(client.state == CS_CONNECTED);
             assert_eq!(client.close(), Ok(()));
             drop(client);
@@ -790,7 +790,7 @@ mod test {
             drop(server);
         });
 
-        let mut client = client.connect(serverAddr);
+        let mut client = iotry!(client.connect(serverAddr));
         assert!(client.state == CS_CONNECTED);
         let sender_seq_nr = rx.recv();
         let ack_nr = client.ack_nr;
@@ -981,7 +981,7 @@ mod test {
         let mut server = UtpStream::bind(serverAddr);
 
         spawn(proc() {
-            let mut client = UtpStream::connect(serverAddr);
+            let mut client = iotry!(UtpStream::connect(serverAddr));
             iotry!(client.close());
         });
 
@@ -1003,7 +1003,7 @@ mod test {
         let mut server = UtpStream::bind(serverAddr);
 
         spawn(proc() {
-            let mut client = UtpStream::connect(serverAddr);
+            let mut client = iotry!(UtpStream::connect(serverAddr));
             iotry!(client.write(d.as_slice()));
             iotry!(client.close());
         });
@@ -1029,7 +1029,7 @@ mod test {
         let mut server = UtpStream::bind(serverAddr);
 
         spawn(proc() {
-            let mut client = UtpStream::connect(serverAddr);
+            let mut client = iotry!(UtpStream::connect(serverAddr));
             iotry!(client.write(d.as_slice()));
             iotry!(client.close());
         });
@@ -1055,7 +1055,7 @@ mod test {
         let mut server = UtpStream::bind(serverAddr);
 
         spawn(proc() {
-            let mut client = UtpStream::connect(serverAddr);
+            let mut client = iotry!(UtpStream::connect(serverAddr));
             iotry!(client.write(d.as_slice()));
             iotry!(client.close());
         });
@@ -1137,7 +1137,7 @@ mod test {
         assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
 
         spawn(proc() {
-            let client = client.connect(serverAddr);
+            let client = iotry!(client.connect(serverAddr));
             assert!(client.state == CS_CONNECTED);
             let mut s = client.socket;
             let mut window: Vec<UtpPacket> = Vec::new();
