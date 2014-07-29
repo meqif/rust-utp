@@ -1019,7 +1019,7 @@ mod test {
 
         // Has to be sent over several packets
         static len: uint = 1024 * 1024;
-        let data: Vec<u8> = range(0, len).map(|x:uint| x as u8).collect();
+        let data = Vec::from_fn(len, |idx| idx as u8);
         expect_eq!(len, data.len());
 
         let d = data.clone();
@@ -1045,7 +1045,7 @@ mod test {
         use std::io::Closed;
 
         static len: uint = 1024;
-        let data: Vec<u8> = range(0, len).map(|x:uint| x as u8).collect();
+        let data: Vec<u8> = Vec::from_fn(len, |idx| idx as u8);
         expect_eq!(len, data.len());
 
         let d = data.clone();
