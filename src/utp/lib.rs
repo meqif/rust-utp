@@ -186,6 +186,11 @@ impl UtpPacket {
         self.header.len() + self.payload.len()
     }
 
+    /// Decode a byte slice and construct the equivalent UtpPacket.
+    ///
+    /// Note that this method makes no attempt to guess the payload size, saving
+    /// all except the initial 20 bytes corresponding to the header as payload.
+    /// It's the caller's responsability to use an appropriately sized buffer.
     fn decode(buf: &[u8]) -> UtpPacket {
         UtpPacket {
             header:  UtpPacketHeader::decode(buf),
