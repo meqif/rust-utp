@@ -993,7 +993,7 @@ mod test {
 
         // Fits in a packet
         static len: uint = 1024;
-        let data = range(0, len).map(|x:uint| x as u8).collect::<Vec<_>>();
+        let data = Vec::from_fn(len, |idx| idx as u8);
         expect_eq!(len, data.len());
 
         let d = data.clone();
