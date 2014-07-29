@@ -1159,15 +1159,33 @@ mod test {
             window.push(packet);
 
             let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+            packet.set_type(ST_DATA);
+            packet.header.connection_id = client.sender_connection_id.to_be();
+            packet.header.seq_nr = (client.seq_nr + 2).to_be();
+            packet.header.ack_nr = client.ack_nr.to_be();
+            packet.payload = vec!(7,8,9);
+            window.push(packet);
+
+            let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+            packet.set_type(ST_DATA);
+            packet.header.connection_id = client.sender_connection_id.to_be();
+            packet.header.seq_nr = (client.seq_nr + 3).to_be();
+            packet.header.ack_nr = client.ack_nr.to_be();
+            packet.payload = vec!(10,11,12);
+            window.push(packet);
+
+            let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
             packet.set_type(ST_FIN);
             packet.header.connection_id = client.sender_connection_id.to_be();
             packet.header.seq_nr = (client.seq_nr + 2).to_be();
             packet.header.ack_nr = client.ack_nr.to_be();
             window.push(packet);
 
+            iotry!(s.send_to(window[3].bytes().as_slice(), serverAddr));
+            iotry!(s.send_to(window[2].bytes().as_slice(), serverAddr));
             iotry!(s.send_to(window[1].bytes().as_slice(), serverAddr));
             iotry!(s.send_to(window[0].bytes().as_slice(), serverAddr));
-            iotry!(s.send_to(window[2].bytes().as_slice(), serverAddr));
+            iotry!(s.send_to(window[4].bytes().as_slice(), serverAddr));
 
             for _ in range(0u, 2) {
                 let mut buf = [0, ..BUF_SIZE];
@@ -1185,7 +1203,7 @@ mod test {
         assert!(server.state == CS_CONNECTED);
 
         let mut stream = UtpStream { socket: server };
-        let expected: Vec<u8> = vec!(1, 2, 3, 4, 5, 6);
+        let expected: Vec<u8> = Vec::from_fn(12, |idx| idx as u8 + 1);
 
         match stream.read_to_end() {
             Ok(data) => {
