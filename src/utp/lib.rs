@@ -399,9 +399,8 @@ impl UtpSocket {
         }
 
         // Empty buffer if possible
-        let current_packet_seq_nr = Int::from_be(packet.header.seq_nr);
         let mut read = read - HEADER_SIZE;
-        while !self.buffer.is_empty() && current_packet_seq_nr + 1 == Int::from_be(self.buffer[0].header.seq_nr) {
+        while !self.buffer.is_empty() && self.ack_nr + 1 == Int::from_be(self.buffer[0].header.seq_nr) {
             let packet = self.buffer.shift().unwrap();
             debug!("Removing packet from buffer: {}", packet);
 
