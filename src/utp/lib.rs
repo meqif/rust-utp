@@ -292,8 +292,9 @@ impl UtpSocket {
             Ok(v) => v,
             Err(e) => fail!("{}", e),
         };
-        debug!("connected to: {} {}", addr, self.connected_to);
+        assert!(_len == 0);
         assert!(addr == self.connected_to);
+        debug!("connected to: {} {}", addr, self.connected_to);
 
         self.state = CS_CONNECTED;
         self.seq_nr += 1;
