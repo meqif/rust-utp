@@ -575,10 +575,10 @@ impl UtpStream {
     /// Open a uTP connection to a remote host by hostname or IP address.
     #[unstable]
     pub fn connect(dst: SocketAddr) -> IoResult<UtpStream> {
-        use std::io::net::ip::{Ipv4Addr};
-        use std::rand::random;
+        use std::io::net::ip::Ipv4Addr;
 
-        let my_addr = SocketAddr { ip: Ipv4Addr(127,0,0,1), port: random() };
+        // Port 0 means the operating system gets to choose it
+        let my_addr = SocketAddr { ip: Ipv4Addr(127,0,0,1), port: 0 };
         let socket = match UtpSocket::bind(my_addr) {
             Ok(s) => s,
             Err(e) => return Err(e),
