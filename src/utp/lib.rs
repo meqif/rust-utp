@@ -497,7 +497,7 @@ impl UtpSocket {
             return Some(self.prepare_reply(&packet.header, ST_RESET));
         }
 
-        if packet.get_type() == ST_STATE ||
+        if packet.get_type() == ST_SYN ||
             self.ack_nr + 1 == Int::from_be(packet.header.seq_nr) {
             self.ack_nr = Int::from_be(packet.header.seq_nr);
         }
