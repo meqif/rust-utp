@@ -579,7 +579,12 @@ impl UtpStream {
         use std::rand::random;
 
         let my_addr = SocketAddr { ip: Ipv4Addr(127,0,0,1), port: random() };
-        match UtpSocket::bind(my_addr).unwrap().connect(dst) {
+        let socket = match UtpSocket::bind(my_addr) {
+            Ok(s) => s,
+            Err(e) => return Err(e),
+        };
+
+        match socket.connect(dst) {
             Ok(socket) => Ok(UtpStream { socket: socket }),
             Err(e) => Err(e),
         }
