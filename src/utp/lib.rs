@@ -991,7 +991,7 @@ mod test {
         use std::io::test::next_test_ip4;
 
         let serverAddr = next_test_ip4();
-        let mut server = UtpStream::bind(serverAddr);
+        let mut server = iotry!(UtpStream::bind(serverAddr));
 
         spawn(proc() {
             let mut client = iotry!(UtpStream::connect(serverAddr));
