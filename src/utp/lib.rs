@@ -51,6 +51,7 @@ enum UtpPacketType {
 }
 
 #[allow(dead_code)]
+#[deriving(Clone)]
 #[packed]
 struct UtpPacketHeader {
     type_ver: u8, // type: u4, ver: u4
@@ -77,6 +78,13 @@ impl UtpPacketHeader {
 
     fn get_version(&self) -> u8 {
         self.type_ver & 0x0F
+    }
+
+    fn wnd_size(self, new_wnd_size: u32) -> UtpPacketHeader {
+        UtpPacketHeader {
+            wnd_size: new_wnd_size.to_be(),
+            .. self.clone()
+        }
     }
 
     /// Return packet header as a slice of bytes.
@@ -158,18 +166,9 @@ impl UtpPacket {
         self.header.get_type()
     }
 
-    fn wnd_size(&self, new_wnd_size: u32) -> UtpPacket {
+    fn wnd_size(self, new_wnd_size: u32) -> UtpPacket {
         UtpPacket {
-            header: UtpPacketHeader {
-                type_ver: self.header.type_ver,
-                extension: self.header.extension,
-                connection_id: self.header.connection_id,
-                timestamp_microseconds: self.header.timestamp_microseconds,
-                timestamp_difference_microseconds: self.header.timestamp_difference_microseconds,
-                wnd_size: new_wnd_size.to_be(),
-                seq_nr: self.header.seq_nr,
-                ack_nr: self.header.ack_nr,
-            },
+            header: self.header.wnd_size(new_wnd_size),
             payload: self.payload.clone(),
         }
     }
