@@ -1206,4 +1206,41 @@ mod test {
             Err(e) => fail!("{}", e),
         }
     }
+
+    #[test]
+    fn test_socket_should_not_buffer_syn_packets() {
+        use std::io::test::next_test_ip4;
+        use std::io::net::udp::UdpSocket;
+        use super::UtpSocket;
+
+        let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
+        let server = iotry!(UtpSocket::bind(serverAddr));
+        let client = iotry!(UdpSocket::bind(clientAddr));
+
+        let test_syn_raw = [0x41, 0x00, 0x41, 0xa7, 0x00, 0x00, 0x00,
+        0x27, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x3a,
+        0xf1, 0x00, 0x00];
+        let test_syn_pkt = UtpPacket::decode(test_syn_raw);
+        let seq_nr = Int::from_be(test_syn_pkt.header.seq_nr);
+
+        spawn(proc() {
+            let mut client = client;
+            iotry!(client.send_to(test_syn_raw, serverAddr));
+            client.set_timeout(Some(10));
+            let mut buf = [0, ..BUF_SIZE];
+            let packet = match client.recv_from(buf) {
+                Ok((nread, _src)) => UtpPacket::decode(buf.slice_to(nread)),
+                Err(e) => fail!("{}", e),
+            };
+            expect_eq!(packet.header.ack_nr, seq_nr.to_be());
+            drop(client);
+        });
+
+        let mut server = server;
+        let mut buf = [0, ..20];
+        iotry!(server.recv_from(buf));
+        assert!(server.ack_nr != 0);
+        expect_eq!(server.ack_nr, seq_nr);
+        assert!(server.buffer.is_empty());
+    }
 }
