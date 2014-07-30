@@ -388,7 +388,8 @@ impl UtpSocket {
 
         // Check if the packet is out of order (that is, it's sequence number
         // does not immediately follow the ACK number)
-        if packet.get_type() != ST_STATE && self.ack_nr + 1 < Int::from_be(packet.header.seq_nr) {
+        if packet.get_type() != ST_STATE && packet.get_type() != ST_SYN
+            && self.ack_nr + 1 < Int::from_be(packet.header.seq_nr) {
             debug!("current ack_nr ({}) is behind received packet seq_nr ({})",
                    self.ack_nr, Int::from_be(packet.header.seq_nr));
 
