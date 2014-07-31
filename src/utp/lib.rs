@@ -34,6 +34,17 @@ use std::fmt;
 static HEADER_SIZE: uint = 20;
 static BUF_SIZE: uint = 4096;
 
+macro_rules! u8_to_unsigned_be(
+    ($src:ident[$start:expr..$end:expr] -> $t:ty) => ({
+        let mut result: $t = 0;
+        for i in range(0u, $end-$start+1).rev() {
+            debug!("{}[{}] << {}", stringify!($src), $start+i, i*8);
+            result = result | $src[$start+i] as $t << i*8;
+        }
+        result
+    })
+)
+
 /// Return current time in microseconds since the UNIX epoch.
 fn now_microseconds() -> u32 {
     let t = time::get_time();
@@ -104,12 +115,12 @@ impl UtpPacketHeader {
         UtpPacketHeader {
             type_ver: buf[0],
             extension: buf[1],
-            connection_id: buf[3] as u16 << 8 | buf[2] as u16,
-            timestamp_microseconds: buf[7] as u32 << 24 | buf[6] as u32 << 16 | buf[5] as u32 << 8 | buf[4] as u32,
-            timestamp_difference_microseconds: buf[11] as u32 << 24 | buf[10] as u32 << 16 | buf[9] as u32 << 8 | buf[8] as u32,
-            wnd_size: buf[15] as u32 << 24 | buf[14] as u32 << 16 | buf[13] as u32 << 8 | buf[12] as u32,
-            seq_nr: buf[17] as u16 << 8 | buf[16] as u16,
-            ack_nr: buf[19] as u16 << 8 | buf[18] as u16,
+            connection_id: u8_to_unsigned_be!(buf[2..3] -> u16),
+            timestamp_microseconds: u8_to_unsigned_be!(buf[4..7] -> u32),
+            timestamp_difference_microseconds: u8_to_unsigned_be!(buf[8..11] -> u32),
+            wnd_size: u8_to_unsigned_be!(buf[12..15] -> u32),
+            seq_nr: u8_to_unsigned_be!(buf[16..17] -> u16),
+            ack_nr: u8_to_unsigned_be!(buf[18..19] -> u16),
         }
     }
 }
