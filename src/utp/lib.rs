@@ -91,7 +91,7 @@ impl UtpPacketHeader {
         self.type_ver & 0x0F
     }
 
-    fn wnd_size(self, new_wnd_size: u32) -> UtpPacketHeader {
+    fn wnd_size(&self, new_wnd_size: u32) -> UtpPacketHeader {
         UtpPacketHeader {
             wnd_size: new_wnd_size.to_be(),
             .. self.clone()
@@ -177,7 +177,7 @@ impl UtpPacket {
         self.header.get_type()
     }
 
-    fn wnd_size(self, new_wnd_size: u32) -> UtpPacket {
+    fn wnd_size(&self, new_wnd_size: u32) -> UtpPacket {
         UtpPacket {
             header: self.header.wnd_size(new_wnd_size),
             payload: self.payload.clone(),
