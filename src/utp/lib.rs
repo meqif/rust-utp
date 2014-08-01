@@ -248,7 +248,8 @@ pub struct UtpSocket {
     ack_nr: u16,
     state: UtpSocketState,
 
-    buffer: Vec<UtpPacket>,
+    // Buffer for unordered incoming packets
+    incoming_buffer: Vec<UtpPacket>,
 }
 
 macro_rules! reply_with_ack(
@@ -274,7 +275,7 @@ impl UtpSocket {
                 seq_nr: 1,
                 ack_nr: 0,
                 state: CS_NEW,
-                buffer: Vec::new(),
+                incoming_buffer: Vec::new(),
             }),
             Err(e) => Err(e)
         }
@@ -434,8 +435,9 @@ impl UtpSocket {
 
         // Empty buffer if possible
         let mut read = read - HEADER_SIZE;
-        while !self.buffer.is_empty() && self.ack_nr + 1 == Int::from_be(self.buffer[0].header.seq_nr) {
-            let packet = self.buffer.shift().unwrap();
+        while !self.incoming_buffer.is_empty() &&
+            self.ack_nr + 1 == Int::from_be(self.incoming_buffer[0].header.seq_nr) {
+            let packet = self.incoming_buffer.shift().unwrap();
             debug!("Removing packet from buffer: {}", packet);
 
             for i in range(0u, packet.payload.len()) {
@@ -547,9 +549,9 @@ impl UtpSocket {
             ST_STATE => {
                 // Success, increment sequence number and advance send window
                 self.seq_nr += 1;
-                while !self.buffer.is_empty() &&
-                    Int::from_be(self.buffer[0].header.seq_nr) <= Int::from_be(self.ack_nr) {
-                    self.buffer.shift();
+                while !self.send_buffer.is_empty() &&
+                    Int::from_be(self.send_buffer[0].header.seq_nr) <= Int::from_be(self.ack_nr) {
+                    self.send_buffer.shift();
                 }
                 None
             },
@@ -564,13 +566,13 @@ impl UtpSocket {
     /// storing packets that were received out of order.
     fn insert_into_buffer(&mut self, packet: UtpPacket) {
         let mut i = 0;
-        for pkt in self.buffer.iter() {
+        for pkt in self.incoming_buffer.iter() {
             if Int::from_be(pkt.header.seq_nr) >= Int::from_be(packet.header.seq_nr) {
                 break;
             }
             i += 1;
         }
-        self.buffer.insert(i, packet);
+        self.incoming_buffer.insert(i, packet);
     }
 }
 
@@ -584,7 +586,7 @@ impl Clone for UtpSocket {
             seq_nr: self.seq_nr,
             ack_nr: self.ack_nr,
             state: self.state,
-            buffer: Vec::new(),
+            incoming_buffer: Vec::new(),
         }
     }
 }
@@ -1320,6 +1322,6 @@ mod test {
         iotry!(server.recv_from(buf));
         assert!(server.ack_nr != 0);
         expect_eq!(server.ack_nr, seq_nr);
-        assert!(server.buffer.is_empty());
+        assert!(server.incoming_buffer.is_empty());
     }
 }
