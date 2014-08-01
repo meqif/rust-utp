@@ -38,7 +38,6 @@ macro_rules! u8_to_unsigned_be(
     ($src:ident[$start:expr..$end:expr] -> $t:ty) => ({
         let mut result: $t = 0;
         for i in range(0u, $end-$start+1).rev() {
-            debug!("{}[{}] << {}", stringify!($src), $start+i, i*8);
             result = result | $src[$start+i] as $t << i*8;
         }
         result
