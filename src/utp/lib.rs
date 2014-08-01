@@ -32,7 +32,9 @@ use std::rand::random;
 use std::fmt;
 
 static HEADER_SIZE: uint = 20;
-static BUF_SIZE: uint = 4096;
+// For simplicity's sake, let us assume no packet will ever exceed the
+// Ethernet maximum transfer unit of 1500 bytes.
+static BUF_SIZE: uint = 1500;
 
 macro_rules! u8_to_unsigned_be(
     ($src:ident[$start:expr..$end:expr] -> $t:ty) => ({
