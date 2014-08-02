@@ -248,8 +248,12 @@ pub struct UtpSocket {
     ack_nr: u16,
     state: UtpSocketState,
 
-    // Buffer for unordered incoming packets
+    // Received but not acknowledged packets
     incoming_buffer: Vec<UtpPacket>,
+    // Sent but not yet acknowledged packets
+    send_buffer: Vec<UtpPacket>,
+    duplicate_ack_count: uint,
+    last_acked: u16,
 }
 
 macro_rules! reply_with_ack(
@@ -276,6 +280,9 @@ impl UtpSocket {
                 ack_nr: 0,
                 state: CS_NEW,
                 incoming_buffer: Vec::new(),
+                send_buffer: Vec::new(),
+                duplicate_ack_count: 0,
+                last_acked: 0,
             }),
             Err(e) => Err(e)
         }
@@ -492,6 +499,7 @@ impl UtpSocket {
         packet.header.connection_id = self.sender_connection_id.to_be();
 
         let r = self.socket.send_to(packet.bytes().as_slice(), dst);
+        self.send_buffer.push(packet);
 
         // Expect ACK
         let mut buf = [0, ..BUF_SIZE];
@@ -547,12 +555,25 @@ impl UtpSocket {
                 Some(self.prepare_reply(&packet.header, ST_STATE))
             }
             ST_STATE => {
+                if packet.header.ack_nr == self.last_acked {
+                    self.duplicate_ack_count += 1;
+                } else {
+                    self.last_acked = packet.header.ack_nr;
+                    self.duplicate_ack_count = 1;
+                }
+
+                // Three duplicate ACKs, must resend packets since `ack_nr + 1`
+                if self.duplicate_ack_count == 3 {
+                    self.send_buffer.iter().find(|pkt| Int::from_be(pkt.header.seq_nr) == Int::from_be(packet.header.ack_nr + 1));
+                }
+
                 // Success, increment sequence number and advance send window
                 self.seq_nr += 1;
                 while !self.send_buffer.is_empty() &&
                     Int::from_be(self.send_buffer[0].header.seq_nr) <= Int::from_be(self.ack_nr) {
                     self.send_buffer.shift();
                 }
+
                 None
             },
             ST_RESET => /* TODO */ None,
@@ -587,6 +608,9 @@ impl Clone for UtpSocket {
             ack_nr: self.ack_nr,
             state: self.state,
             incoming_buffer: Vec::new(),
+            send_buffer: Vec::new(),
+            duplicate_ack_count: 0,
+            last_acked: 0,
         }
     }
 }
