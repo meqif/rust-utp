@@ -16,6 +16,8 @@ and lost packet handling, as well as the Selective ACK extension.
 - [ ] setters and getters that hide header field endianness conversion
 - [ ] SACK extension
 - [ ] handle packet loss
+    - [ ] send triple-ACK to re-request lost packet
+    - [ ] rewind send window and resend in reply to triple-ACK
 - [x] stream interface
 - [x] handle unordered packets
 
