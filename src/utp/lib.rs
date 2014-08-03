@@ -733,6 +733,7 @@ mod test {
         spawn(proc() {
             let client = iotry!(client.connect(serverAddr));
             assert!(client.state == CS_CONNECTED);
+            assert_eq!(client.connected_to, serverAddr);
             drop(client);
         });
 
@@ -742,6 +743,7 @@ mod test {
         }
         // After establishing a new connection, the server's ids are a mirror of the client's.
         assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
+        assert_eq!(server.connected_to, clientAddr);
 
         assert!(server.state == CS_CONNECTED);
         drop(server);
