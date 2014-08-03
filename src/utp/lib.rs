@@ -232,6 +232,7 @@ enum UtpSocketState {
     CS_CONNECTED,
     CS_SYN_SENT,
     CS_FIN_RECEIVED,
+    CS_FIN_SENT,
     CS_RST_RECEIVED,
     CS_CLOSED,
     CS_EOF,
@@ -343,6 +344,7 @@ impl UtpSocket {
         let dst = self.connected_to;
         try!(self.socket.send_to(packet.bytes().as_slice(), dst));
         debug!("sent {}", packet);
+        self.state = CS_FIN_SENT;
 
         // Receive JAKE
         let mut buf = [0u8, ..BUF_SIZE];
