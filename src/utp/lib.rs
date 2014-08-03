@@ -465,11 +465,18 @@ impl UtpSocket {
     }
 
     /// Send data on socket to the given address. Returns nothing on success.
-    //
-    // TODO: return error on send after connection closed (RST or FIN + all
-    // packets received)
     #[unstable]
     pub fn send_to(&mut self, buf: &[u8], dst: SocketAddr) -> IoResult<()> {
+        use std::io::{IoError, Closed};
+
+        if self.state == CS_CLOSED {
+            return Err(IoError {
+                kind: Closed,
+                desc: "Connection closed",
+                detail: None,
+            });
+        }
+
         let mut packet = UtpPacket::new();
         packet.set_type(ST_DATA);
         packet.payload = Vec::from_slice(buf);
