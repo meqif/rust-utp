@@ -397,6 +397,11 @@ impl UtpSocket {
             });
         }
 
+        // TODO: move this to handle_packet?
+        if packet.get_type() == ST_SYN {
+            self.connected_to = src;
+        }
+
         // Check if the packet is out of order (that is, it's sequence number
         // does not immediately follow the ACK number)
         if packet.get_type() != ST_STATE && packet.get_type() != ST_SYN
