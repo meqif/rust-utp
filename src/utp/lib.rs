@@ -805,6 +805,45 @@ mod test {
     }
 
     #[test]
+    fn test_sendto_on_closed_socket() {
+        use std::io::test::next_test_ip4;
+        use std::io::Closed;
+
+        let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
+
+        let client = iotry!(UtpSocket::bind(clientAddr));
+        let mut server = iotry!(UtpSocket::bind(serverAddr));
+
+        assert!(server.state == CS_NEW);
+        assert!(client.state == CS_NEW);
+
+        spawn(proc() {
+            let client = iotry!(client.connect(serverAddr));
+            assert!(client.state == CS_CONNECTED);
+            let mut buf = [0u8, ..BUF_SIZE];
+            let mut client = client;
+            iotry!(client.recv_from(buf));
+        });
+
+        // Make the server listen for incoming connections
+        let mut buf = [0u8, ..BUF_SIZE];
+        let (_read, _src) = iotry!(server.recv_from(buf));
+        assert!(server.state == CS_CONNECTED);
+
+        iotry!(server.close());
+        expect_eq!(server.state, CS_CLOSED);
+
+        // Trying to send to the socket after closing it raises an
+        // error
+        match server.send_to(buf, clientAddr) {
+            Err(e) => expect_eq!(e.kind, Closed),
+            v => fail!("expected {}, got {}", Closed, v),
+        }
+
+        drop(server);
+    }
+
+    #[test]
     fn test_acks_on_socket() {
         use std::io::test::next_test_ip4;
 
