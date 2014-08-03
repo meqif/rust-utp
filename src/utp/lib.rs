@@ -524,14 +524,15 @@ impl UtpSocket {
             return Some(self.prepare_reply(&packet.header, ST_RESET));
         }
 
-        if packet.get_type() == ST_SYN ||
-            self.ack_nr + 1 == Int::from_be(packet.header.seq_nr) {
+        // Acknowledge only if the packet strictly follows the previous one
+        if self.ack_nr + 1 == Int::from_be(packet.header.seq_nr) {
             self.ack_nr = Int::from_be(packet.header.seq_nr);
         }
 
         match packet.header.get_type() {
             ST_SYN => { // Respond with an ACK and populate own fields
                 // Update socket information for new connections
+                self.ack_nr = Int::from_be(packet.header.seq_nr);
                 self.seq_nr = random();
                 self.receiver_connection_id = Int::from_be(packet.header.connection_id) + 1;
                 self.sender_connection_id = Int::from_be(packet.header.connection_id);
