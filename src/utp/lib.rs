@@ -342,11 +342,13 @@ impl UtpSocket {
         // Send FIN
         let dst = self.connected_to;
         try!(self.socket.send_to(packet.bytes().as_slice(), dst));
+        debug!("sent {}", packet);
 
         // Receive JAKE
         let mut buf = [0u8, ..BUF_SIZE];
         try!(self.socket.recv_from(buf));
         let resp = UtpPacket::decode(buf);
+        debug!("received {}", resp);
         assert!(resp.get_type() == ST_STATE);
 
         // Set socket state
