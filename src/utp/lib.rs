@@ -498,11 +498,7 @@ impl UtpSocket {
         debug!("received {}", resp.header);
         assert_eq!(resp.get_type(), ST_STATE);
         assert_eq!(Int::from_be(resp.header.ack_nr), self.seq_nr);
-
-        // Success, increment sequence number
-        if buf.len() > 0 {
-            self.seq_nr += 1;
-        }
+        self.handle_packet(resp);
 
         r
     }
@@ -548,7 +544,15 @@ impl UtpSocket {
                 self.state = CS_EOF;
                 Some(self.prepare_reply(&packet.header, ST_STATE))
             }
-            ST_STATE => None,
+            ST_STATE => {
+                // Success, increment sequence number and advance send window
+                self.seq_nr += 1;
+                while !self.buffer.is_empty() &&
+                    Int::from_be(self.buffer[0].header.seq_nr) <= Int::from_be(self.ack_nr) {
+                    self.buffer.shift();
+                }
+                None
+            },
             ST_RESET => /* TODO */ None,
         }
     }
