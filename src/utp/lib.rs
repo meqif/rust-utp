@@ -254,6 +254,10 @@ pub struct UtpSocket {
     send_buffer: Vec<UtpPacket>,
     duplicate_ack_count: uint,
     last_acked: u16,
+
+    rtt: int,
+    rtt_variance: int,
+    timeout: int,
 }
 
 macro_rules! reply_with_ack(
@@ -283,6 +287,9 @@ impl UtpSocket {
                 send_buffer: Vec::new(),
                 duplicate_ack_count: 0,
                 last_acked: 0,
+                rtt: 0,
+                rtt_variance: 0,
+                timeout: 1000,
             }),
             Err(e) => Err(e)
         }
@@ -565,6 +572,18 @@ impl UtpSocket {
                 Some(self.prepare_reply(&packet.header, ST_STATE))
             }
             ST_STATE => {
+                let packet_rtt = Int::from_be(packet.header.timestamp_difference_microseconds) as int;
+                let delta = self.rtt - packet_rtt;
+                self.rtt_variance += (std::num::abs(delta) - self.rtt_variance) / 4;
+                self.rtt += (packet_rtt - self.rtt) / 8;
+                self.timeout = std::cmp::max(self.rtt + self.rtt_variance * 4, 500);
+
+                debug!("packet_rtt: {}", packet_rtt);
+                debug!("delta: {}", delta);
+                debug!("self.rtt_variance: {}", self.rtt_variance);
+                debug!("self.rtt: {}", self.rtt);
+                debug!("self.timeout: {}", self.timeout);
+
                 if packet.header.ack_nr == Int::from_be(self.last_acked) {
                     self.duplicate_ack_count += 1;
                 } else {
@@ -633,6 +652,9 @@ impl Clone for UtpSocket {
             send_buffer: Vec::new(),
             duplicate_ack_count: 0,
             last_acked: 0,
+            rtt: 0,
+            rtt_variance: 0,
+            timeout: 500,
         }
     }
 }
