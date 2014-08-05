@@ -505,14 +505,11 @@ impl UtpSocket {
             self.seq_nr += 1;
         }
 
-        // Expect ACK
+        // Consume acknowledgements until latest packet
         let mut buf = [0, ..BUF_SIZE];
-        try!(self.socket.recv_from(buf));
-        let resp = UtpPacket::decode(buf);
-        debug!("received {}", resp.header);
-        assert_eq!(resp.get_type(), ST_STATE);
-        // assert_eq!(Int::from_be(resp.header.ack_nr), self.seq_nr);
-        self.handle_packet(resp);
+        while self.last_acked < self.seq_nr - 1 {
+            try!(self.recv_from(buf));
+        }
 
         Ok(())
     }
@@ -559,16 +556,26 @@ impl UtpSocket {
                 Some(self.prepare_reply(&packet.header, ST_STATE))
             }
             ST_STATE => {
-                if packet.header.ack_nr == self.last_acked {
+                if packet.header.ack_nr == Int::from_be(self.last_acked) {
                     self.duplicate_ack_count += 1;
                 } else {
-                    self.last_acked = packet.header.ack_nr;
+                    self.last_acked = Int::from_be(packet.header.ack_nr);
                     self.duplicate_ack_count = 1;
                 }
 
                 // Three duplicate ACKs, must resend packets since `ack_nr + 1`
                 if self.duplicate_ack_count == 3 {
-                    self.send_buffer.iter().find(|pkt| Int::from_be(pkt.header.seq_nr) == Int::from_be(packet.header.ack_nr + 1));
+                    assert!(!self.send_buffer.is_empty());
+                    match self.send_buffer.iter().position(|pkt| Int::from_be(pkt.header.seq_nr) == Int::from_be(packet.header.ack_nr) + 1) {
+                        None => fail!("Received request to resend packets since {} but none was found in send buffer!", Int::from_be(packet.header.ack_nr) + 1),
+                        Some(position) => {
+                            for _ in range(0u, position + 1) {
+                                let to_send = self.send_buffer.shift().unwrap();
+                                debug!("resending: {}", to_send);
+                                self.socket.send_to(to_send.bytes().as_slice(), self.connected_to);
+                            }
+                        },
+                    }
                 }
 
                 // Success, advance send window
