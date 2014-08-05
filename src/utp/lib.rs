@@ -1367,4 +1367,70 @@ mod test {
         expect_eq!(server.ack_nr, seq_nr);
         assert!(server.incoming_buffer.is_empty());
     }
+
+    #[test]
+    fn test_response_to_triple_ack() {
+        use std::io::test::next_test_ip4;
+
+        let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
+        let mut server = iotry!(UtpSocket::bind(serverAddr));
+        let client = iotry!(UtpSocket::bind(clientAddr));
+
+        // Fits in a packet
+        static len: uint = 1024;
+        let data = Vec::from_fn(len, |idx| idx as u8);
+        let d = data.clone();
+        expect_eq!(len, data.len());
+
+        spawn(proc() {
+            let mut client = iotry!(client.connect(serverAddr));
+            iotry!(client.send_to(d.as_slice(), serverAddr));
+            iotry!(client.close());
+        });
+
+        let mut buf = [0, ..BUF_SIZE];
+        // Expect SYN
+        iotry!(server.recv_from(buf));
+
+        // Receive data
+        let mut data_packet;
+        match server.socket.recv_from(buf) {
+            Ok((read, _src)) => {
+                data_packet = UtpPacket::decode(buf.slice_to(read));
+                assert!(data_packet.get_type() == ST_DATA);
+                expect_eq!(data_packet.payload, data);
+                assert_eq!(data_packet.payload.len(), data.len());
+            },
+            Err(e) => fail!("{}", e),
+        }
+        let data_packet = data_packet;
+
+        // Send triple ACK
+        let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+        packet.set_type(ST_STATE);
+        packet.header.seq_nr = server.seq_nr.to_be();
+        packet.header.ack_nr = (Int::from_be(data_packet.header.seq_nr) - 1).to_be();
+        packet.header.connection_id = server.sender_connection_id.to_be();
+
+        for _ in range(0u, 3) {
+            iotry!(server.socket.send_to(packet.bytes().as_slice(), clientAddr));
+        }
+
+        // Receive data again and check that it's the same we reported as missing
+        match server.socket.recv_from(buf) {
+            Ok((0, _)) => fail!("Received 0 bytes from socket"),
+            Ok((read, _src)) => {
+                let packet = UtpPacket::decode(buf.slice_to(read));
+                assert_eq!(packet.get_type(), ST_DATA);
+                assert_eq!(Int::from_be(packet.header.seq_nr), Int::from_be(data_packet.header.seq_nr));
+                assert!(packet.payload == data_packet.payload);
+                let response = server.handle_packet(packet).unwrap();
+                iotry!(server.socket.send_to(response.bytes().as_slice(), server.connected_to));
+            },
+            Err(e) => fail!("{}", e),
+        }
+
+        // Receive close
+        iotry!(server.recv_from(buf));
+    }
 }
