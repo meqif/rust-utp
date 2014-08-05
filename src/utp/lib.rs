@@ -490,16 +490,20 @@ impl UtpSocket {
             });
         }
 
-        let mut packet = UtpPacket::new();
-        packet.set_type(ST_DATA);
-        packet.payload = Vec::from_slice(buf);
-        packet.header.timestamp_microseconds = now_microseconds().to_be();
-        packet.header.seq_nr = self.seq_nr.to_be();
-        packet.header.ack_nr = self.ack_nr.to_be();
-        packet.header.connection_id = self.sender_connection_id.to_be();
+        for chunk in buf.chunks(BUF_SIZE) {
+            let mut packet = UtpPacket::new();
+            packet.set_type(ST_DATA);
+            packet.payload = Vec::from_slice(chunk);
+            packet.header.timestamp_microseconds = now_microseconds().to_be();
+            packet.header.seq_nr = self.seq_nr.to_be();
+            packet.header.ack_nr = self.ack_nr.to_be();
+            packet.header.connection_id = self.sender_connection_id.to_be();
 
-        let r = self.socket.send_to(packet.bytes().as_slice(), dst);
-        self.send_buffer.push(packet);
+            debug!("Pushing packet into send buffer: {}", packet);
+            self.send_buffer.push(packet.clone());
+            try!(self.socket.send_to(packet.bytes().as_slice(), dst));
+            self.seq_nr += 1;
+        }
 
         // Expect ACK
         let mut buf = [0, ..BUF_SIZE];
@@ -507,10 +511,10 @@ impl UtpSocket {
         let resp = UtpPacket::decode(buf);
         debug!("received {}", resp.header);
         assert_eq!(resp.get_type(), ST_STATE);
-        assert_eq!(Int::from_be(resp.header.ack_nr), self.seq_nr);
+        // assert_eq!(Int::from_be(resp.header.ack_nr), self.seq_nr);
         self.handle_packet(resp);
 
-        r
+        Ok(())
     }
 
     #[allow(missing_doc)]
@@ -567,10 +571,9 @@ impl UtpSocket {
                     self.send_buffer.iter().find(|pkt| Int::from_be(pkt.header.seq_nr) == Int::from_be(packet.header.ack_nr + 1));
                 }
 
-                // Success, increment sequence number and advance send window
-                self.seq_nr += 1;
+                // Success, advance send window
                 while !self.send_buffer.is_empty() &&
-                    Int::from_be(self.send_buffer[0].header.seq_nr) <= Int::from_be(self.ack_nr) {
+                    Int::from_be(self.send_buffer[0].header.seq_nr) <= self.last_acked {
                     self.send_buffer.shift();
                 }
 
