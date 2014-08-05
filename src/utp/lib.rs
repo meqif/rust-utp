@@ -478,6 +478,15 @@ impl UtpSocket {
     }
 
     /// Send data on socket to the given address. Returns nothing on success.
+    //
+    // # Implementation details
+    //
+    // This method inserts packets into the send buffer and keeps trying to
+    // advance the send window until an ACK corresponding to the last packet is
+    // received.
+    //
+    // Note that the buffer passed to `send_to` might exceed the maximum packet
+    // size, which will result in the data being split over several packets.
     #[unstable]
     pub fn send_to(&mut self, buf: &[u8], dst: SocketAddr) -> IoResult<()> {
         use std::io::{IoError, Closed};
