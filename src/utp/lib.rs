@@ -254,6 +254,7 @@ pub struct UtpSocket {
     send_buffer: Vec<UtpPacket>,
     duplicate_ack_count: uint,
     last_acked: u16,
+    last_acked_timestamp: u32,
 
     rtt: int,
     rtt_variance: int,
@@ -287,6 +288,7 @@ impl UtpSocket {
                 send_buffer: Vec::new(),
                 duplicate_ack_count: 0,
                 last_acked: 0,
+                last_acked_timestamp: 0,
                 rtt: 0,
                 rtt_variance: 0,
                 timeout: 1000,
@@ -559,6 +561,9 @@ impl UtpSocket {
         packet.header.connection_id = self.sender_connection_id.to_be();
 
         for _ in range(0u, 3) {
+            let t = now_microseconds();
+            packet.header.timestamp_microseconds = t.to_be();
+            packet.header.timestamp_difference_microseconds = (t - self.last_acked_timestamp).to_be();
             self.socket.send_to(packet.bytes().as_slice(), self.connected_to);
             debug!("sent {}", packet.header);
         }
@@ -616,6 +621,7 @@ impl UtpSocket {
                     self.duplicate_ack_count += 1;
                 } else {
                     self.last_acked = Int::from_be(packet.header.ack_nr);
+                    self.last_acked_timestamp = now_microseconds();
                     self.duplicate_ack_count = 1;
                 }
 
@@ -680,6 +686,7 @@ impl Clone for UtpSocket {
             send_buffer: Vec::new(),
             duplicate_ack_count: 0,
             last_acked: 0,
+            last_acked_timestamp: 0,
             rtt: 0,
             rtt_variance: 0,
             timeout: 500,
