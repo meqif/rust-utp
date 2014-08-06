@@ -595,7 +595,10 @@ impl UtpSocket {
 
                 None
             },
-            ST_RESET => /* TODO */ None,
+            ST_RESET => { // TODO
+                self.state = CS_RST_RECEIVED;
+                None
+            },
         }
     }
 
