@@ -384,7 +384,7 @@ impl UtpSocket {
     #[unstable]
     pub fn recv_from(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
         use std::cmp::min;
-        use std::io::{IoError, EndOfFile, Closed, TimedOut};
+        use std::io::{IoError, EndOfFile, Closed, TimedOut, ConnectionReset};
 
         if self.state == CS_EOF {
             self.state = CS_CLOSED;
@@ -420,8 +420,6 @@ impl UtpSocket {
         debug!("received {}", packet.header);
 
         if packet.get_type() == ST_RESET {
-            use std::io::{IoError, ConnectionReset};
-
             return Err(IoError {
                 kind: ConnectionReset,
                 desc: "Remote host aborted connection (incorrect connection id)",
