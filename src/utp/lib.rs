@@ -626,8 +626,10 @@ impl UtpSocket {
                 }
 
                 // Three duplicate ACKs, must resend packets since `ack_nr + 1`
-                if self.duplicate_ack_count == 3 {
-                    assert!(!self.send_buffer.is_empty());
+                // TODO: checking if the send buffer isn't empty isn't a
+                // foolproof way to differentiate between triple-ACK and three
+                // keep alives spread in time
+                if !self.send_buffer.is_empty() && self.duplicate_ack_count == 3 {
                     match self.send_buffer.iter().position(|pkt| Int::from_be(pkt.header.seq_nr) == Int::from_be(packet.header.ack_nr) + 1) {
                         None => fail!("Received request to resend packets since {} but none was found in send buffer!", Int::from_be(packet.header.ack_nr) + 1),
                         Some(position) => {
