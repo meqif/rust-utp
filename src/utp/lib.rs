@@ -382,7 +382,7 @@ impl UtpSocket {
     #[unstable]
     pub fn recv_from(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
         use std::cmp::min;
-        use std::io::{IoError, EndOfFile, Closed};
+        use std::io::{IoError, EndOfFile, Closed, TimedOut};
 
         if self.state == CS_EOF {
             self.state = CS_CLOSED;
@@ -402,7 +402,18 @@ impl UtpSocket {
         }
 
         let mut b = [0, ..BUF_SIZE + HEADER_SIZE];
-        let (read, src) = try!(self.socket.recv_from(b));
+        debug!("setting read timeout of {} ms", self.timeout);
+        self.socket.set_read_timeout(Some(self.timeout as u64));
+        let (read, src) = match self.socket.recv_from(b) {
+            Err(ref e) if e.kind == TimedOut => {
+                debug!("recv_from timed out");
+                self.timeout = self.timeout * 2;
+                self.send_fast_resend_request();
+                return Ok((0, self.connected_to));
+            },
+            Ok(x) => x,
+            Err(e) => return Err(e),
+        };
         let packet = UtpPacket::decode(b.slice_to(read));
         debug!("received {}", packet.header);
 
