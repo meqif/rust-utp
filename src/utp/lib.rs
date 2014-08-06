@@ -1482,4 +1482,57 @@ mod test {
         // Receive close
         iotry!(server.recv_from(buf));
     }
+
+    #[test]
+    fn test_socket_timeout_request() {
+        use std::io::test::next_test_ip4;
+
+        let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
+
+        let client = iotry!(UtpSocket::bind(clientAddr));
+        let mut server = iotry!(UtpSocket::bind(serverAddr));
+        let len = 512;
+        let data = Vec::from_fn(len, |idx| idx as u8);
+        let d = data.clone();
+
+        assert!(server.state == CS_NEW);
+        assert!(client.state == CS_NEW);
+
+        // Check proper difference in client's send connection id and receive connection id
+        assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
+
+        spawn(proc() {
+            let mut client = iotry!(client.connect(serverAddr));
+            assert!(client.state == CS_CONNECTED);
+            assert_eq!(client.connected_to, serverAddr);
+            iotry!(client.send_to(d.as_slice(), serverAddr));
+            drop(client);
+        });
+
+        let mut buf = [0u8, ..BUF_SIZE];
+        match server.recv_from(buf) {
+            e => println!("{}", e),
+        }
+        // After establishing a new connection, the server's ids are a mirror of the client's.
+        assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
+        assert_eq!(server.connected_to, clientAddr);
+
+        assert!(server.state == CS_CONNECTED);
+
+        // Purposefully read from UDP socket directly and discard it, in order
+        // to behave as if the packet was lost and thus trigger the timeout
+        // handling in the *next* call to `UtpSocket.recv_from`.
+        iotry!(server.socket.recv_from(buf));
+
+        // Now wait for the previously discarded packet
+        loop {
+            match server.recv_from(buf) {
+                Ok((0, _)) => continue,
+                Ok(_) => break,
+                Err(e) => fail!("{}", e),
+            }
+        }
+
+        drop(server);
+    }
 }
