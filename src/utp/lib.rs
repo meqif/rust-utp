@@ -46,6 +46,14 @@ macro_rules! u8_to_unsigned_be(
     })
 )
 
+macro_rules! reply_with_ack(
+    ($header:expr, $src:expr) => ({
+        let resp = self.prepare_reply($header, ST_STATE).wnd_size(BUF_SIZE as u32);
+        try!(self.socket.send_to(resp.bytes().as_slice(), $src));
+        debug!("sent {}", resp.header);
+    })
+)
+
 /// Return current time in microseconds since the UNIX epoch.
 fn now_microseconds() -> u32 {
     let t = time::get_time();
@@ -260,14 +268,6 @@ pub struct UtpSocket {
     rtt_variance: int,
     timeout: int,
 }
-
-macro_rules! reply_with_ack(
-    ($header:expr, $src:expr) => ({
-        let resp = self.prepare_reply($header, ST_STATE).wnd_size(BUF_SIZE as u32);
-        try!(self.socket.send_to(resp.bytes().as_slice(), $src));
-        debug!("sent {}", resp.header);
-    })
-)
 
 impl UtpSocket {
     /// Create a UTP socket from the given address.
