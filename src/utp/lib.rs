@@ -536,6 +536,23 @@ impl UtpSocket {
         self.send_to(buf, dst)
     }
 
+    /// Send fast resend request.
+    ///
+    /// Sends three identical ACK/STATE packets to the remote host, signalling a
+    /// fast resend request.
+    fn send_fast_resend_request(&mut self) {
+        let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+        packet.set_type(ST_STATE);
+        packet.header.ack_nr = self.ack_nr.to_be();
+        packet.header.seq_nr = self.seq_nr.to_be();
+        packet.header.connection_id = self.sender_connection_id.to_be();
+
+        for _ in range(0u, 3) {
+            self.socket.send_to(packet.bytes().as_slice(), self.connected_to);
+            debug!("sent {}", packet.header);
+        }
+    }
+
     /// Handle incoming packet, updating socket state accordingly.
     ///
     /// Returns appropriate reply packet, if needed.
