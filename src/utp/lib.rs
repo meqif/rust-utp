@@ -458,19 +458,8 @@ impl UtpSocket {
             buf[i] = b[i + HEADER_SIZE];
         }
 
-        // Empty buffer if possible
-        let mut read = read - HEADER_SIZE;
-        while !self.incoming_buffer.is_empty() &&
-            self.ack_nr + 1 == Int::from_be(self.incoming_buffer[0].header.seq_nr) {
-            let packet = self.incoming_buffer.shift().unwrap();
-            debug!("Removing packet from buffer: {}", packet);
-
-            for i in range(0u, packet.payload.len()) {
-                buf[read] = packet.payload[i];
-                read += 1;
-            }
-            self.ack_nr = Int::from_be(packet.header.seq_nr);
-        }
+        // Flush incoming buffer if possible
+        let read = self.flush_incoming_buffer(buf, read - HEADER_SIZE);
 
         Ok((read, src))
     }
@@ -493,6 +482,28 @@ impl UtpSocket {
         resp.header.ack_nr = self.ack_nr.to_be();
 
         resp
+    }
+
+    /// Discards sequential, ordered packets in incoming buffer, starting from
+    /// the most recently acknowledged to the most recent, as long as there are
+    /// no missing packets. The discarded packets' payload is written to the
+    /// slice `buf`, starting in position `start`.
+    /// Returns the last written index.
+    fn flush_incoming_buffer(&mut self, buf: &mut [u8], start: uint) -> uint {
+        let mut idx = start;
+        while !self.incoming_buffer.is_empty() &&
+            self.ack_nr + 1 == Int::from_be(self.incoming_buffer[0].header.seq_nr) {
+            let packet = self.incoming_buffer.shift().unwrap();
+            debug!("Removing packet from buffer: {}", packet);
+
+            for i in range(0u, packet.payload.len()) {
+                buf[idx] = packet.payload[i];
+                idx += 1;
+            }
+            self.ack_nr = Int::from_be(packet.header.seq_nr);
+        }
+
+        return idx;
     }
 
     /// Send data on socket to the given address. Returns nothing on success.
