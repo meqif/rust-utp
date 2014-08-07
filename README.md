@@ -21,6 +21,7 @@ and lost packet handling, as well as the Selective ACK extension.
     - [ ] resend packet on ACK timeout
 - [x] stream interface
 - [x] handle unordered packets
+- [ ] path MTU discovery
 
 ## License
 
