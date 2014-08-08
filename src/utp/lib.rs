@@ -673,6 +673,9 @@ impl UtpSocket {
     /// The packet is inserted in such a way that the buffer is
     /// ordered ascendingly by their sequence number. This allows
     /// storing packets that were received out of order.
+    ///
+    /// Inserting a duplicate of a packet will replace the one in the buffer if
+    /// it's more recent (larger timestamp).
     fn insert_into_buffer(&mut self, packet: UtpPacket) {
         let mut i = 0;
         for pkt in self.incoming_buffer.iter() {
@@ -681,7 +684,14 @@ impl UtpSocket {
             }
             i += 1;
         }
-        self.incoming_buffer.insert(i, packet);
+
+        if !self.incoming_buffer.is_empty() && i < self.incoming_buffer.len() &&
+            self.incoming_buffer[i].header.seq_nr == packet.header.seq_nr {
+            self.incoming_buffer.remove(i);
+            self.incoming_buffer.insert(i, packet);
+        } else {
+            self.incoming_buffer.insert(i, packet);
+        }
     }
 }
 
