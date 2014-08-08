@@ -1606,4 +1606,70 @@ mod test {
         assert_eq!(socket.incoming_buffer[1].header.seq_nr, 2);
         assert_eq!(socket.incoming_buffer[1].header.timestamp_microseconds, 456);
     }
+
+    #[test]
+    fn test_duplicate_packet_handling() {
+        use std::io::test::next_test_ip4;
+        use super::UtpStream;
+
+        let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
+
+        let client = iotry!(UtpSocket::bind(clientAddr));
+        let mut server = iotry!(UtpSocket::bind(serverAddr));
+
+        assert!(server.state == CS_NEW);
+        assert!(client.state == CS_NEW);
+
+        // Check proper difference in client's send connection id and receive connection id
+        assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
+
+        spawn(proc() {
+            let mut client = iotry!(client.connect(serverAddr));
+            assert!(client.state == CS_CONNECTED);
+            let mut s = client.socket.clone();
+
+            let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+            packet.set_type(ST_DATA);
+            packet.header.connection_id = client.sender_connection_id.to_be();
+            packet.header.seq_nr = client.seq_nr.to_be();
+            packet.header.ack_nr = client.ack_nr.to_be();
+            packet.payload = vec!(1,2,3);
+
+            // Send two copies of the packet, with different timestamps
+            for _ in range(0u, 2) {
+                packet.header.timestamp_microseconds = super::now_microseconds();
+                iotry!(s.send_to(packet.bytes().as_slice(), serverAddr));
+            }
+            client.seq_nr += 1;
+
+            // Receive one ACK
+            for _ in range(0u, 1) {
+                let mut buf = [0, ..BUF_SIZE];
+                iotry!(s.recv_from(buf));
+            }
+
+            iotry!(client.close());
+        });
+
+        let mut buf = [0u8, ..BUF_SIZE];
+        match server.recv_from(buf) {
+            e => println!("{}", e),
+        }
+        // After establishing a new connection, the server's ids are a mirror of the client's.
+        assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
+
+        assert!(server.state == CS_CONNECTED);
+
+        let mut stream = UtpStream { socket: server };
+        let expected: Vec<u8> = vec!(1,2,3);
+
+        match stream.read_to_end() {
+            Ok(data) => {
+                println!("{}", data);
+                expect_eq!(data.len(), expected.len());
+                expect_eq!(data, expected);
+            },
+            Err(e) => fail!("{}", e),
+        }
+    }
 }
