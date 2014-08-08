@@ -22,6 +22,7 @@ and lost packet handling, as well as the Selective ACK extension.
 - [x] stream interface
 - [x] handle unordered packets
 - [ ] path MTU discovery
+- [x] duplicate packet handling
 
 ## License
 
