@@ -156,6 +156,7 @@ impl fmt::Show for UtpPacketHeader {
 #[allow(dead_code)]
 struct UtpPacket {
     header: UtpPacketHeader,
+    extensions: Vec<u8>,
     payload: Vec<u8>,
 }
 
@@ -173,6 +174,7 @@ impl UtpPacket {
                 seq_nr: 0,
                 ack_nr: 0,
             },
+            extensions: Vec::new(),
             payload: Vec::new(),
         }
     }
@@ -189,7 +191,41 @@ impl UtpPacket {
     fn wnd_size(&self, new_wnd_size: u32) -> UtpPacket {
         UtpPacket {
             header: self.header.wnd_size(new_wnd_size),
-            payload: self.payload.clone(),
+            .. UtpPacket::new()
+        }
+    }
+
+    /// Set Selective ACK field in packet header and add appropriate data.
+    ///
+    /// If None is passed, the SACK extension is disabled and the respective
+    /// data is flushed. Otherwise, the SACK extension is enabled and the
+    /// vector `v` is taken as the extension's payload.
+    ///
+    /// The length of the SACK extension is expressed in bytes, which
+    /// must be a multiple of 4 and at least 4.
+    fn set_sack(&mut self, v: Option<Vec<u8>>) {
+        static SACK_EXTENSION_ID: u8 = 1;
+        match v {
+            None => {
+                self.header.extension = 0;
+                self.extensions = Vec::new();
+            },
+            Some(bv) => {
+                // The length of the SACK extension is expressed in bytes, which
+                // must be a multiple of 4 and at least 4.
+                assert!(bv.len() >= 4);
+                assert!(bv.len() % 4 == 0);
+                self.header.extension = 1;
+                // Extension list header
+                self.extensions.push(SACK_EXTENSION_ID);
+                // length in bytes, multiples of 4, >= 4
+                self.extensions.push(bv.len() as u8);
+
+                // Elements
+                for byte in bv.iter() {
+                    self.extensions.push(*byte);
+                }
+            }
         }
     }
 
@@ -197,12 +233,21 @@ impl UtpPacket {
     fn bytes(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(self.len());
         buf.push_all(self.header.bytes());
+        buf.push_all(self.extensions.as_slice());
         buf.push_all(self.payload.as_slice());
         return buf;
     }
 
     fn len(&self) -> uint {
-        self.header.len() + self.payload.len()
+        let len = self.header.len() + self.payload.len();
+
+        // Add an extra two bytes to extension length corresponding to the list
+        // header (extension identifier + list length)
+        if self.extensions.is_empty() {
+            len
+        } else {
+            len + self.extensions.len() + 2
+        }
     }
 
     /// Decode a byte slice and construct the equivalent UtpPacket.
@@ -211,9 +256,22 @@ impl UtpPacket {
     /// all except the initial 20 bytes corresponding to the header as payload.
     /// It's the caller's responsability to use an appropriately sized buffer.
     fn decode(buf: &[u8]) -> UtpPacket {
+        let header = UtpPacketHeader::decode(buf);
+
+        let (extensions, payload) = if header.extension == 1 { // SACK extension
+            assert!(buf[HEADER_SIZE] == 1);
+            let len = buf[HEADER_SIZE + 1] as uint;
+            let extension_start = HEADER_SIZE + 2;
+            (Vec::from_slice(buf.slice(extension_start, extension_start + len)),
+             Vec::from_slice(buf.slice_from(extension_start + len)))
+        } else {
+            (Vec::new(), Vec::from_slice(buf.slice_from(HEADER_SIZE)))
+        };
+
         UtpPacket {
-            header:  UtpPacketHeader::decode(buf),
-            payload: Vec::from_slice(buf.slice(HEADER_SIZE, buf.len()))
+            header: header,
+            extensions: extensions,
+            payload: payload,
         }
     }
 }
@@ -222,6 +280,7 @@ impl Clone for UtpPacket {
     fn clone(&self) -> UtpPacket {
         UtpPacket {
             header:  self.header,
+            extensions: self.extensions.clone(),
             payload: self.payload.clone(),
         }
     }
