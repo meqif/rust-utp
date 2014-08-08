@@ -447,6 +447,16 @@ impl UtpSocket {
             return Ok((0, self.connected_to));
         }
 
+        // Copy received payload to output buffer if packet isn't a duplicate
+        let mut read = read - HEADER_SIZE;
+        if self.ack_nr < Int::from_be(packet.header.seq_nr) {
+            for i in range(0u, min(buf.len(), read)) {
+                buf[i] = b[i + HEADER_SIZE];
+            }
+        } else {
+            read = 0;
+        }
+
         match self.handle_packet(packet.clone()) {
             Some(pkt) => {
                 let pkt = pkt.wnd_size(BUF_SIZE as u32);
@@ -456,12 +466,8 @@ impl UtpSocket {
             None => {}
         };
 
-        for i in range(0u, min(buf.len(), read - HEADER_SIZE)) {
-            buf[i] = b[i + HEADER_SIZE];
-        }
-
         // Flush incoming buffer if possible
-        let read = self.flush_incoming_buffer(buf, read - HEADER_SIZE);
+        let read = self.flush_incoming_buffer(buf, read);
 
         Ok((read, src))
     }
