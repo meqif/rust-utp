@@ -1555,4 +1555,45 @@ mod test {
 
         drop(server);
     }
+
+    #[test]
+    fn test_sorted_buffer_insertion() {
+        use std::io::test::next_test_ip4;
+
+        let serverAddr = next_test_ip4();
+        let mut socket = iotry!(UtpSocket::bind(serverAddr));
+
+        let mut packet = UtpPacket::new();
+        packet.header.seq_nr = 1;
+
+        assert!(socket.incoming_buffer.is_empty());
+
+        socket.insert_into_buffer(packet.clone());
+        assert_eq!(socket.incoming_buffer.len(), 1);
+
+        packet.header.seq_nr = 2;
+        packet.header.timestamp_microseconds = 128;
+
+        socket.insert_into_buffer(packet.clone());
+        assert_eq!(socket.incoming_buffer.len(), 2);
+        assert_eq!(socket.incoming_buffer[1].header.seq_nr, 2);
+        assert_eq!(socket.incoming_buffer[1].header.timestamp_microseconds, 128);
+
+        packet.header.seq_nr = 3;
+        packet.header.timestamp_microseconds = 256;
+
+        socket.insert_into_buffer(packet.clone());
+        assert_eq!(socket.incoming_buffer.len(), 3);
+        assert_eq!(socket.incoming_buffer[2].header.seq_nr, 3);
+        assert_eq!(socket.incoming_buffer[2].header.timestamp_microseconds, 256);
+
+        // Replace a packet with a more recent version
+        packet.header.seq_nr = 2;
+        packet.header.timestamp_microseconds = 456;
+
+        socket.insert_into_buffer(packet.clone());
+        assert_eq!(socket.incoming_buffer.len(), 3);
+        assert_eq!(socket.incoming_buffer[1].header.seq_nr, 2);
+        assert_eq!(socket.incoming_buffer[1].header.timestamp_microseconds, 456);
+    }
 }
