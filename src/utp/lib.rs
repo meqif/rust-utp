@@ -405,7 +405,9 @@ impl UtpSocket {
 
         let mut b = [0, ..BUF_SIZE + HEADER_SIZE];
         debug!("setting read timeout of {} ms", self.timeout);
-        self.socket.set_read_timeout(Some(self.timeout as u64));
+        if self.state != CS_NEW {
+            self.socket.set_read_timeout(Some(self.timeout as u64));
+        }
         let (read, src) = match self.socket.recv_from(b) {
             Err(ref e) if e.kind == TimedOut => {
                 debug!("recv_from timed out");
