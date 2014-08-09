@@ -70,8 +70,29 @@ enum UtpPacketType {
     ST_SYN   = 4,
 }
 
+#[deriving(PartialEq,Eq,Show,Clone)]
 enum UtpExtensionType {
     SelectiveAckExtension = 1,
+}
+
+#[deriving(Clone)]
+struct UtpExtension {
+    ty: UtpExtensionType,
+    data: Vec<u8>,
+}
+
+impl UtpExtension {
+    fn len(&self) -> uint {
+        2 + self.data.len()
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut result = Vec::with_capacity(self.len());
+        result.push(self.ty as u8);
+        result.push(self.len() as u8);
+        result.push_all(self.data.as_slice());
+        result
+    }
 }
 
 #[allow(dead_code)]
@@ -160,7 +181,7 @@ impl fmt::Show for UtpPacketHeader {
 #[allow(dead_code)]
 struct UtpPacket {
     header: UtpPacketHeader,
-    extensions: Vec<u8>,
+    extensions: Vec<UtpExtension>,
     payload: Vec<u8>,
 }
 
@@ -218,16 +239,12 @@ impl UtpPacket {
                 // must be a multiple of 4 and at least 4.
                 assert!(bv.len() >= 4);
                 assert!(bv.len() % 4 == 0);
-                self.header.extension = SelectiveAckExtension as u8;
-                // Extension list header
-                self.extensions.push(SelectiveAckExtension as u8);
-                // length in bytes, multiples of 4, >= 4
-                self.extensions.push(bv.len() as u8);
 
-                // Elements
-                for byte in bv.iter() {
-                    self.extensions.push(*byte);
-                }
+                let extension = UtpExtension {
+                    ty: SelectiveAckExtension,
+                    data: bv,
+                };
+                self.extensions.push(extension);
             }
         }
     }
@@ -236,21 +253,16 @@ impl UtpPacket {
     fn bytes(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(self.len());
         buf.push_all(self.header.bytes());
-        buf.push_all(self.extensions.as_slice());
+        for extension in self.extensions.iter() {
+            buf.push_all(extension.to_bytes().as_slice());
+        }
         buf.push_all(self.payload.as_slice());
         return buf;
     }
 
     fn len(&self) -> uint {
-        let len = self.header.len() + self.payload.len();
-
-        // Add an extra two bytes to extension length corresponding to the list
-        // header (extension identifier + list length)
-        if self.extensions.is_empty() {
-            len
-        } else {
-            len + self.extensions.len() + 2
-        }
+        let ext_len = self.extensions.iter().fold(0, |acc, ext| acc + ext.len());
+        self.header.len() + self.payload.len() + ext_len
     }
 
     /// Decode a byte slice and construct the equivalent UtpPacket.
@@ -265,8 +277,11 @@ impl UtpPacket {
             assert!(buf[HEADER_SIZE] == SelectiveAckExtension as u8);
             let len = buf[HEADER_SIZE + 1] as uint;
             let extension_start = HEADER_SIZE + 2;
-            (Vec::from_slice(buf.slice(extension_start, extension_start + len)),
-             Vec::from_slice(buf.slice_from(extension_start + len)))
+            let extension = UtpExtension {
+                ty: SelectiveAckExtension,
+                data: Vec::from_slice(buf.slice(extension_start, extension_start + len)),
+            };
+            (vec!(extension), Vec::from_slice(buf.slice_from(extension_start + len)))
         } else {
             (Vec::new(), Vec::from_slice(buf.slice_from(HEADER_SIZE)))
         };
@@ -885,6 +900,8 @@ mod test {
 
     #[test]
     fn test_decode_packet_with_extension() {
+        use super::SelectiveAckExtension;
+
         let buf = [0x21, 0x01, 0x41, 0xa7, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                    0x00, 0x00, 0x00, 0x00, 0x05, 0xdc, 0xab, 0x53, 0x3a, 0xf5,
                    0x01, 0x04, 0x00, 0x00, 0x00, 0x00];
@@ -900,8 +917,11 @@ mod test {
         assert_eq!(Int::from_be(packet.header.ack_nr), 15093);
         assert_eq!(packet.len(), buf.len());
         assert!(packet.payload.is_empty());
-        assert!(packet.extensions.len() == 4);
-        assert!(packet.extensions == vec!(0,0,0,0));
+        assert!(packet.extensions.len() == 1);
+        assert!(packet.extensions[0].ty == SelectiveAckExtension);
+        assert!(packet.extensions[0].data == vec!(0,0,0,0));
+        assert!(packet.extensions[0].len() == 2 + packet.extensions[0].data.len());
+        assert!(packet.extensions[0].len() == 6);
     }
 
     #[test]
