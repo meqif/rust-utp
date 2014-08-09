@@ -70,6 +70,10 @@ enum UtpPacketType {
     ST_SYN   = 4,
 }
 
+enum UtpExtension {
+    SelectiveAckExtensionId = 1,
+}
+
 #[allow(dead_code)]
 #[deriving(Clone)]
 #[packed]
@@ -204,7 +208,6 @@ impl UtpPacket {
     /// The length of the SACK extension is expressed in bytes, which
     /// must be a multiple of 4 and at least 4.
     fn set_sack(&mut self, v: Option<Vec<u8>>) {
-        static SACK_EXTENSION_ID: u8 = 1;
         match v {
             None => {
                 self.header.extension = 0;
@@ -215,9 +218,9 @@ impl UtpPacket {
                 // must be a multiple of 4 and at least 4.
                 assert!(bv.len() >= 4);
                 assert!(bv.len() % 4 == 0);
-                self.header.extension = 1;
+                self.header.extension = SelectiveAckExtensionId as u8;
                 // Extension list header
-                self.extensions.push(SACK_EXTENSION_ID);
+                self.extensions.push(SelectiveAckExtensionId as u8);
                 // length in bytes, multiples of 4, >= 4
                 self.extensions.push(bv.len() as u8);
 
@@ -258,8 +261,8 @@ impl UtpPacket {
     fn decode(buf: &[u8]) -> UtpPacket {
         let header = UtpPacketHeader::decode(buf);
 
-        let (extensions, payload) = if header.extension == 1 { // SACK extension
-            assert!(buf[HEADER_SIZE] == 1);
+        let (extensions, payload) = if header.extension == SelectiveAckExtensionId as u8 {
+            assert!(buf[HEADER_SIZE] == SelectiveAckExtensionId as u8);
             let len = buf[HEADER_SIZE + 1] as uint;
             let extension_start = HEADER_SIZE + 2;
             (Vec::from_slice(buf.slice(extension_start, extension_start + len)),
