@@ -868,7 +868,7 @@ mod test {
     #[test]
     fn test_packet_decode() {
         let buf = [0x21, 0x00, 0x41, 0xa8, 0x99, 0x2f, 0xd0, 0x2a, 0x9f, 0x4a,
-                    0x26, 0x21, 0x00, 0x10, 0x00, 0x00, 0x3a, 0xf2, 0x6c, 0x79];
+                   0x26, 0x21, 0x00, 0x10, 0x00, 0x00, 0x3a, 0xf2, 0x6c, 0x79];
         let pkt = UtpPacket::decode(buf);
         assert_eq!(pkt.header.get_version(), 1);
         assert_eq!(pkt.header.get_type(), ST_STATE);
@@ -881,6 +881,27 @@ mod test {
         assert_eq!(Int::from_be(pkt.header.ack_nr), 27769);
         assert_eq!(pkt.len(), buf.len());
         assert!(pkt.payload.is_empty());
+    }
+
+    #[test]
+    fn test_decode_packet_with_extension() {
+        let buf = [0x21, 0x01, 0x41, 0xa7, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                   0x00, 0x00, 0x00, 0x00, 0x05, 0xdc, 0xab, 0x53, 0x3a, 0xf5,
+                   0x01, 0x04, 0x00, 0x00, 0x00, 0x00];
+        let packet = UtpPacket::decode(buf);
+        assert_eq!(packet.header.get_version(), 1);
+        assert_eq!(packet.header.get_type(), ST_STATE);
+        assert_eq!(packet.header.extension, 1);
+        assert_eq!(Int::from_be(packet.header.connection_id), 16807);
+        assert_eq!(Int::from_be(packet.header.timestamp_microseconds), 0);
+        assert_eq!(Int::from_be(packet.header.timestamp_difference_microseconds), 0);
+        assert_eq!(Int::from_be(packet.header.wnd_size), 1500);
+        assert_eq!(Int::from_be(packet.header.seq_nr), 43859);
+        assert_eq!(Int::from_be(packet.header.ack_nr), 15093);
+        assert_eq!(packet.len(), buf.len());
+        assert!(packet.payload.is_empty());
+        assert!(packet.extensions.len() == 4);
+        assert!(packet.extensions == vec!(0,0,0,0));
     }
 
     #[test]
