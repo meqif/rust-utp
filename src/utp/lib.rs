@@ -578,7 +578,7 @@ impl UtpSocket {
         let mut idx = start;
         while !self.incoming_buffer.is_empty() &&
             self.ack_nr + 1 == Int::from_be(self.incoming_buffer[0].header.seq_nr) {
-            let packet = self.incoming_buffer.shift().unwrap();
+            let packet = self.incoming_buffer.remove(0).unwrap();
             debug!("Removing packet from buffer: {}", packet);
 
             for i in range(0u, packet.payload.len()) {
@@ -728,7 +728,7 @@ impl UtpSocket {
                         None => fail!("Received request to resend packets since {} but none was found in send buffer!", Int::from_be(packet.header.ack_nr) + 1),
                         Some(position) => {
                             for _ in range(0u, position + 1) {
-                                let to_send = self.send_buffer.shift().unwrap();
+                                let to_send = self.send_buffer.remove(0).unwrap();
                                 debug!("resending: {}", to_send);
                                 self.socket.send_to(to_send.bytes().as_slice(), self.connected_to);
                             }
@@ -739,7 +739,7 @@ impl UtpSocket {
                 // Success, advance send window
                 while !self.send_buffer.is_empty() &&
                     Int::from_be(self.send_buffer[0].header.seq_nr) <= self.last_acked {
-                    self.send_buffer.shift();
+                    self.send_buffer.remove(0);
                 }
 
                 None
