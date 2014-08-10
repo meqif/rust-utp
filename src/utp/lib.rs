@@ -692,7 +692,10 @@ impl UtpSocket {
             let t = now_microseconds();
             packet.header.timestamp_microseconds = t.to_be();
             packet.header.timestamp_difference_microseconds = (t - self.last_acked_timestamp).to_be();
-            self.socket.send_to(packet.bytes().as_slice(), self.connected_to);
+            match self.socket.send_to(packet.bytes().as_slice(), self.connected_to) {
+                Ok(_) => {},
+                Err(e) => fail!("{}", e),
+            }
             debug!("sent {}", packet.header);
         }
     }
@@ -764,7 +767,10 @@ impl UtpSocket {
                             for _ in range(0u, position + 1) {
                                 let to_send = self.send_buffer.remove(0).unwrap();
                                 debug!("resending: {}", to_send);
-                                self.socket.send_to(to_send.bytes().as_slice(), self.connected_to);
+                                match self.socket.send_to(to_send.bytes().as_slice(), self.connected_to) {
+                                    Ok(_) => {},
+                                    Err(e) => fail!("{}", e),
+                                }
                             }
                         },
                     }
