@@ -391,24 +391,17 @@ impl UtpSocket {
         packet.set_type(ST_SYN);
         packet.header.connection_id = self.receiver_connection_id.to_be();
         packet.header.seq_nr = self.seq_nr.to_be();
-        packet.header.timestamp_microseconds = now_microseconds().to_be();
 
         // Send packet
-        let dst = self.connected_to;
-        let _result = self.socket.send_to(packet.bytes().as_slice(), dst);
-        debug!("sent {}", packet.header);
-
+        let mut buf = [0, ..BUF_SIZE];
+        let (len, addr) = try!(self.packet_send(&packet, buf));
         self.state = CS_SYN_SENT;
 
-        let mut buf = [0, ..BUF_SIZE];
-        let (_len, addr) = match self.socket.recv_from(buf) {
-            Ok(v) => v,
-            Err(e) => fail!("{}", e),
-        };
-        assert!(_len == HEADER_SIZE);
+        // Validate response
+        assert!(len == HEADER_SIZE);
         assert!(addr == self.connected_to);
 
-        let packet = UtpPacket::decode(buf.slice_to(_len));
+        let packet = UtpPacket::decode(buf.slice_to(len));
         if packet.get_type() != ST_STATE {
             return Err(IoError {
                 kind: ConnectionFailed,
@@ -416,14 +409,53 @@ impl UtpSocket {
                 detail: None,
             });
         }
+
         self.ack_nr = Int::from_be(packet.header.seq_nr);
-
-        debug!("connected to: {} {}", addr, self.connected_to);
-
         self.state = CS_CONNECTED;
         self.seq_nr += 1;
 
-        Ok(self)
+        debug!("connected to: {}", self.connected_to);
+
+        return Ok(self);
+    }
+
+    /// Send `packet` and write reply to `buf`.
+    ///
+    /// This method abstracts away the (send packet, receive acknowledgment)
+    /// cycle and deals with timeouts.
+    fn packet_send(&mut self, packet: &UtpPacket, buf: &mut [u8])
+                   -> IoResult<(uint, SocketAddr)> {
+        use std::io::{IoError, ConnectionFailed, TimedOut};
+
+        for _ in range(0u, 5) {
+            let dst = self.connected_to;
+            let mut packet = packet.clone();
+            packet.header.timestamp_microseconds = now_microseconds().to_be();
+
+            try!(self.socket.send_to(packet.bytes().as_slice(), dst));
+            debug!("sent {}", packet.header);
+
+            debug!("setting read timeout of {} ms", self.timeout);
+            self.socket.set_read_timeout(Some(self.timeout as u64));
+
+            let (len, addr) = match self.socket.recv_from(buf) {
+                Ok(v) => v,
+                Err(ref e) if e.kind == TimedOut => {
+                    debug!("recv_from timed out");
+                    self.timeout = self.timeout * 2;
+                    continue;
+                }
+                Err(e) => fail!("{}", e),
+            };
+
+            return Ok((len, addr));
+        }
+
+        return Err(IoError {
+            kind: TimedOut,
+            desc: "Connection timed out",
+            detail: None,
+        });
     }
 
     /// Gracefully close connection to peer.
