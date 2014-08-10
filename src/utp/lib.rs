@@ -425,7 +425,7 @@ impl UtpSocket {
     /// cycle and deals with timeouts.
     fn packet_send(&mut self, packet: &UtpPacket, buf: &mut [u8])
                    -> IoResult<(uint, SocketAddr)> {
-        use std::io::{IoError, ConnectionFailed, TimedOut};
+        use std::io::{IoError, TimedOut};
 
         for _ in range(0u, 5) {
             let dst = self.connected_to;
