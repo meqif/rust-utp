@@ -1,16 +1,21 @@
-//! Implementation of a Micro Transport Protocol library.
+//! Implementation of the Micro Transport Protocol.[^spec]
 //!
-//! http://www.bittorrent.org/beps/bep_0029.html
-//!
-//! TODO
-//! ----
-//!
-//! - congestion control
-//! - proper connection closing
-//!     - automatically send FIN (or should it be RST?) on `drop` if not already closed
-//! - setters and getters that hide header field endianness conversion
-//! - SACK extension
-//! - handle packet loss
+//! [^spec]: http://www.bittorrent.org/beps/bep_0029.html
+
+//   __________  ____  ____
+//  /_  __/ __ \/ __ \/ __ \
+//   / / / / / / / / / / / /
+//  / / / /_/ / /_/ / /_/ /
+// /_/  \____/_____/\____/
+//
+// - Lossy UDP socket for testing purposes: send and receive ops are wrappers
+// that stochastically drop or reorder packets.
+// - Congestion control (LEDBAT -- RFC6817)
+// - Sending FIN on drop
+// - SACK extension
+// - Setters and getters that hide header field endianness conversion
+// - Handle packet loss
+// - Path MTU discovery (RFC4821)
 
 #![crate_name = "utp"]
 
