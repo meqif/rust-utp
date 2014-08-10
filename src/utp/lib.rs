@@ -412,7 +412,7 @@ impl UtpSocket {
         if packet.get_type() != ST_STATE {
             return Err(IoError {
                 kind: ConnectionFailed,
-                desc: "The remote peer sent an incorrect reply",
+                desc: "The remote peer sent an invalid reply",
                 detail: None,
             });
         }
