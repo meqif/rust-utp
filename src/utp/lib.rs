@@ -764,8 +764,8 @@ impl UtpSocket {
                     match self.send_buffer.iter().position(|pkt| Int::from_be(pkt.header.seq_nr) == Int::from_be(packet.header.ack_nr) + 1) {
                         None => fail!("Received request to resend packets since {} but none was found in send buffer!", Int::from_be(packet.header.ack_nr) + 1),
                         Some(position) => {
-                            for _ in range(0u, position + 1) {
-                                let to_send = self.send_buffer.remove(0).unwrap();
+                            for i in range(0u, position + 1) {
+                                let ref to_send = self.send_buffer[i];
                                 debug!("resending: {}", to_send);
                                 match self.socket.send_to(to_send.bytes().as_slice(), self.connected_to) {
                                     Ok(_) => {},
