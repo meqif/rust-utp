@@ -745,6 +745,42 @@ impl UtpSocket {
                     self.duplicate_ack_count = 1;
                 }
 
+                // Process extensions, if any
+                for extension in packet.extensions.iter() {
+                    if extension.ty == SelectiveAckExtension {
+                        let mut idx = 0u;
+                        for byte in extension.data.iter() {
+                            for i in range(0u, 8) {
+                                let received = (byte >> i) & 0x1 == 1;
+                                debug!("{}", received);
+
+                                let seq_nr = Int::from_be(packet.header.ack_nr) + 2 + idx as u16;
+                                idx += 1;
+                                if received {
+                                    debug!("SACK: packet {} received", seq_nr);
+                                } else if seq_nr < self.seq_nr {
+                                    debug!("SACK: packet {} lost", seq_nr);
+                                    match self.send_buffer.iter().position(|pkt| Int::from_be(pkt.header.seq_nr) == seq_nr) {
+                                        None => fail!("Packet {} not found", seq_nr),
+                                        Some(v) => {
+                                            let to_send = &self.send_buffer[v];
+                                            match self.socket.send_to(to_send.bytes().as_slice(), self.connected_to) {
+                                                Ok(_) => {},
+                                                Err(e) => fail!("{}", e),
+                                            }
+                                            debug!("sent {}", to_send);
+                                        }
+                                    }
+                                }
+                            } else {
+                                break;
+                            }
+                        }
+                    } else {
+                        fail!("Unknown extension");
+                    }
+                }
+
                 // Three duplicate ACKs, must resend packets since `ack_nr + 1`
                 // TODO: checking if the send buffer isn't empty isn't a
                 // foolproof way to differentiate between triple-ACK and three
