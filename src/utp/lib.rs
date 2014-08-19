@@ -271,7 +271,7 @@ impl UtpPacket {
         let header = UtpPacketHeader::decode(buf);
 
         let (extensions, payload) = if header.extension == SelectiveAckExtension as u8 {
-            assert!(buf[HEADER_SIZE] == SelectiveAckExtension as u8);
+            // Ignoring next extension type at buf[HEADER_SIZE]
             let len = buf[HEADER_SIZE + 1] as uint;
             let extension_start = HEADER_SIZE + 2;
             let extension = UtpExtension {
