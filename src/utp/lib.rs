@@ -256,7 +256,7 @@ impl UtpPacket {
     }
 
     fn len(&self) -> uint {
-        let ext_len = self.extensions.iter().fold(0, |acc, ext| acc + ext.len());
+        let ext_len = self.extensions.iter().fold(0, |acc, ext| acc + ext.len() + 1);
         self.header.len() + self.payload.len() + ext_len
     }
 
@@ -986,8 +986,8 @@ mod test {
         assert!(packet.extensions.len() == 1);
         assert!(packet.extensions[0].ty == SelectiveAckExtension);
         assert!(packet.extensions[0].data == vec!(0,0,0,0));
-        assert!(packet.extensions[0].len() == 2 + packet.extensions[0].data.len());
-        assert!(packet.extensions[0].len() == 6);
+        assert!(packet.extensions[0].len() == 1 + packet.extensions[0].data.len());
+        assert!(packet.extensions[0].len() == 5);
     }
 
     #[test]
