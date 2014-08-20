@@ -84,11 +84,7 @@ impl UtpExtension {
     }
 
     fn to_bytes(&self) -> Vec<u8> {
-        let mut result = Vec::with_capacity(self.len());
-        result.push(self.ty as u8);
-        result.push(self.len() as u8);
-        result.push_all(self.data.as_slice());
-        result
+        (vec!(self.data.len() as u8)).append(self.data.as_slice())
     }
 }
 
