@@ -80,7 +80,7 @@ struct UtpExtension {
 
 impl UtpExtension {
     fn len(&self) -> uint {
-        2 + self.data.len()
+        1 + self.data.len()
     }
 
     fn to_bytes(&self) -> Vec<u8> {
@@ -248,6 +248,7 @@ impl UtpPacket {
         let mut buf = Vec::with_capacity(self.len());
         buf.push_all(self.header.bytes());
         for extension in self.extensions.iter() {
+            buf.push(0u8); // next extension id
             buf.push_all(extension.to_bytes().as_slice());
         }
         buf.push_all(self.payload.as_slice());
