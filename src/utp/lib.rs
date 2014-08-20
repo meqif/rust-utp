@@ -1846,4 +1846,56 @@ mod test {
             Err(e) => fail!("{}", e),
         }
     }
+
+    #[test]
+    fn test_selective_ack_response() {
+        use std::io::test::next_test_ip4;
+        use super::UtpStream;
+
+        let serverAddr = next_test_ip4();
+        let len = 1024 * 10;
+        let data = Vec::from_fn(len, |idx| idx as u8);
+        let to_send = data.clone();
+
+        // Client
+        spawn(proc() {
+            let mut client = iotry!(UtpStream::connect(serverAddr));
+
+            // Stream.write
+            iotry!(client.write(to_send.as_slice()));
+            iotry!(client.close());
+        });
+
+        // Server
+        let mut server = iotry!(UtpSocket::bind(serverAddr));
+
+        let mut buf = [0, ..BUF_SIZE];
+
+        // Connect
+        iotry!(server.recv_from(buf));
+
+        // Discard packets
+        iotry!(server.socket.recv_from(buf));
+        iotry!(server.socket.recv_from(buf));
+        iotry!(server.socket.recv_from(buf));
+
+        // Generate SACK
+        let mut packet = UtpPacket::new();
+        packet.header.seq_nr = server.seq_nr.to_be();
+        packet.header.ack_nr = (server.ack_nr - 1).to_be();
+        packet.header.connection_id = server.sender_connection_id.to_be();
+        packet.header.timestamp_microseconds = super::now_microseconds().to_be();
+        packet.set_type(ST_STATE);
+        packet.set_sack(Some(vec!(12, 0, 0, 0)));
+
+        // Send SACK
+        iotry!(server.socket.send_to(packet.bytes().as_slice(), server.connected_to.clone()));
+
+        // Expect to receive "missing" packets
+        let mut stream = UtpStream { socket: server };
+        let read = iotry!(stream.read_to_end());
+        assert!(!read.is_empty());
+        expect_eq!(read.len(), data.len());
+        expect_eq!(read, data);
+    }
 }
