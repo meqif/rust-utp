@@ -57,6 +57,39 @@ fn now_microseconds() -> u32 {
     (t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32
 }
 
+struct BitIterator {
+    object: Vec<u8>,
+    current_byte: uint,
+    current_bit: uint,
+}
+
+impl BitIterator {
+    fn new(obj: Vec<u8>) -> BitIterator {
+        BitIterator {
+            object: obj,
+            current_byte: 0,
+            current_bit: 0,
+        }
+    }
+}
+
+impl Iterator<u8> for BitIterator {
+    fn next(&mut self) -> Option<u8> {
+        let result = self.object[self.current_byte] >> self.current_bit & 0x1;
+
+        if self.current_bit + 1 == std::u8::BITS {
+            self.current_byte += 1;
+        }
+        self.current_bit = (self.current_bit + 1) % std::u8::BITS;
+
+        if self.current_byte == self.object.len() {
+            return None;
+        } else {
+            return Some(result);
+        }
+    }
+}
+
 #[allow(dead_code,non_camel_case_types)]
 #[deriving(PartialEq,Eq,Show)]
 enum UtpPacketType {
@@ -749,28 +782,22 @@ impl UtpSocket {
                 // Process extensions, if any
                 for extension in packet.extensions.iter() {
                     if extension.ty == SelectiveAckExtension {
-                        let mut idx = 0u;
-                        for byte in extension.data.iter() {
-                            for i in range(0u, 8) {
-                                let received = (byte >> i) & 0x1 == 1;
-                                debug!("{}", received);
-
-                                let seq_nr = Int::from_be(packet.header.ack_nr) + 2 + idx as u16;
-                                idx += 1;
-                                if received {
-                                    debug!("SACK: packet {} received", seq_nr);
-                                } else if seq_nr < self.seq_nr {
-                                    debug!("SACK: packet {} lost", seq_nr);
-                                    match self.send_buffer.iter().position(|pkt| Int::from_be(pkt.header.seq_nr) == seq_nr) {
-                                        None => fail!("Packet {} not found", seq_nr),
-                                        Some(v) => {
-                                            let to_send = &self.send_buffer[v];
-                                            match self.socket.send_to(to_send.bytes().as_slice(), self.connected_to) {
-                                                Ok(_) => {},
-                                                Err(e) => fail!("{}", e),
-                                            }
-                                            debug!("sent {}", to_send);
+                        let bits = BitIterator::new(extension.data.clone());
+                        for (idx, received) in bits.map(|bit| bit == 1).enumerate() {
+                            let seq_nr = Int::from_be(packet.header.ack_nr) + 2 + idx as u16;
+                            if received {
+                                debug!("SACK: packet {} received", seq_nr);
+                            } else if seq_nr < self.seq_nr {
+                                debug!("SACK: packet {} lost", seq_nr);
+                                match self.send_buffer.iter().position(|pkt| Int::from_be(pkt.header.seq_nr) == seq_nr) {
+                                    None => fail!("Packet {} not found", seq_nr),
+                                    Some(v) => {
+                                        let to_send = &self.send_buffer[v];
+                                        match self.socket.send_to(to_send.bytes().as_slice(), self.connected_to) {
+                                            Ok(_) => {},
+                                            Err(e) => fail!("{}", e),
                                         }
+                                        debug!("sent {}", to_send);
                                     }
                                 }
                             } else {
