@@ -591,7 +591,7 @@ impl UtpSocket {
             read = 0;
         }
 
-        match self.handle_packet(packet.clone()) {
+        match self.handle_packet(packet) {
             Some(pkt) => {
                 let pkt = pkt.wnd_size(BUF_SIZE as u32);
                 try!(self.socket.send_to(pkt.bytes().as_slice(), src));
@@ -680,8 +680,8 @@ impl UtpSocket {
             packet.header.connection_id = self.sender_connection_id.to_be();
 
             debug!("Pushing packet into send buffer: {}", packet);
-            self.send_buffer.push(packet.clone());
             try!(self.socket.send_to(packet.bytes().as_slice(), dst));
+            self.send_buffer.push(packet);
             self.seq_nr += 1;
         }
 
