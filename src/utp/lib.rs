@@ -242,7 +242,8 @@ impl UtpPacket {
     fn wnd_size(&self, new_wnd_size: u32) -> UtpPacket {
         UtpPacket {
             header: self.header.wnd_size(new_wnd_size),
-            .. UtpPacket::new()
+            extensions: self.extensions.clone(),
+            payload: self.payload.clone(),
         }
     }
 
