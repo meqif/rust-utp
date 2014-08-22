@@ -12,7 +12,6 @@
 // that stochastically drop or reorder packets.
 // - Congestion control (LEDBAT -- RFC6817)
 // - Sending FIN on drop
-// - SACK extension
 // - Setters and getters that hide header field endianness conversion
 // - Handle packet loss
 // - Path MTU discovery (RFC4821)
