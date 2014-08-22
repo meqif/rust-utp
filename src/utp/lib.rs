@@ -822,6 +822,15 @@ impl UtpSocket {
                 for extension in packet.extensions.iter() {
                     if extension.ty == SelectiveAckExtension {
                         let bits = BitIterator::new(extension.data.clone());
+                        // If three or more packets are acknowledged past the implicit missing one,
+                        // assume it was lost.
+                        if bits.filter(|&bit| bit == 1).count() >= 3 {
+                            let packet = self.send_buffer.iter().find(|pkt| Int::from_be(pkt.header.seq_nr) == Int::from_be(packet.header.ack_nr) + 1).unwrap();
+                            debug!("sending {}", packet);
+                            self.socket.send_to(packet.bytes().as_slice(), self.connected_to);
+                        }
+
+                        let bits = BitIterator::new(extension.data.clone());
                         for (idx, received) in bits.map(|bit| bit == 1).enumerate() {
                             let seq_nr = Int::from_be(packet.header.ack_nr) + 2 + idx as u16;
                             if received {
