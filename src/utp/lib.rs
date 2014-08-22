@@ -956,11 +956,12 @@ impl Writer for UtpStream {
 
 #[cfg(test)]
 mod test {
-    use super::{UtpSocket, UtpPacket};
+    use super::{UtpSocket, UtpPacket, UtpStream};
     use super::{ST_STATE, ST_FIN, ST_DATA, ST_RESET, ST_SYN};
     use super::{BUF_SIZE, HEADER_SIZE};
     use super::{CS_CONNECTED, CS_NEW, CS_CLOSED, CS_EOF};
     use std::rand::random;
+    use std::io::test::next_test_ip4;
 
     macro_rules! expect_eq(
         ($left:expr, $right:expr) => (
@@ -1065,8 +1066,6 @@ mod test {
 
     #[test]
     fn test_socket_ipv4() {
-        use std::io::test::next_test_ip4;
-
         let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
 
         let client = iotry!(UtpSocket::bind(clientAddr));
@@ -1099,7 +1098,6 @@ mod test {
 
     #[test]
     fn test_recvfrom_on_closed_socket() {
-        use std::io::test::next_test_ip4;
         use std::io::{Closed, EndOfFile};
 
         let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
@@ -1149,7 +1147,6 @@ mod test {
 
     #[test]
     fn test_sendto_on_closed_socket() {
-        use std::io::test::next_test_ip4;
         use std::io::Closed;
 
         let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
@@ -1188,8 +1185,6 @@ mod test {
 
     #[test]
     fn test_acks_on_socket() {
-        use std::io::test::next_test_ip4;
-
         let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
         let (tx, rx) = channel();
 
@@ -1226,8 +1221,6 @@ mod test {
 
     #[test]
     fn test_handle_packet() {
-        use std::io::test::next_test_ip4;
-
         //fn test_connection_setup() {
         let initial_connection_id: u16 = random();
         let sender_connection_id = initial_connection_id + 1;
@@ -1323,8 +1316,6 @@ mod test {
 
     #[test]
     fn test_response_to_keepalive_ack() {
-        use std::io::test::next_test_ip4;
-
         // Boilerplate test setup
         let initial_connection_id: u16 = random();
         let serverAddr = next_test_ip4();
@@ -1360,8 +1351,6 @@ mod test {
 
     #[test]
     fn test_response_to_wrong_connection_id() {
-        use std::io::test::next_test_ip4;
-
         // Boilerplate test setup
         let initial_connection_id: u16 = random();
         let serverAddr = next_test_ip4();
@@ -1393,9 +1382,6 @@ mod test {
 
     #[test]
     fn test_utp_stream() {
-        use super::UtpStream;
-        use std::io::test::next_test_ip4;
-
         let serverAddr = next_test_ip4();
         let mut server = iotry!(UtpStream::bind(serverAddr));
 
@@ -1409,9 +1395,6 @@ mod test {
 
     #[test]
     fn test_utp_stream_small_data() {
-        use super::UtpStream;
-        use std::io::test::next_test_ip4;
-
         // Fits in a packet
         static len: uint = 1024;
         let data = Vec::from_fn(len, |idx| idx as u8);
@@ -1435,9 +1418,6 @@ mod test {
 
     #[test]
     fn test_utp_stream_large_data() {
-        use super::UtpStream;
-        use std::io::test::next_test_ip4;
-
         // Has to be sent over several packets
         static len: uint = 1024 * 1024;
         let data = Vec::from_fn(len, |idx| idx as u8);
@@ -1461,8 +1441,6 @@ mod test {
 
     #[test]
     fn test_utp_stream_successive_reads() {
-        use super::UtpStream;
-        use std::io::test::next_test_ip4;
         use std::io::Closed;
 
         static len: uint = 1024;
@@ -1490,8 +1468,6 @@ mod test {
 
     #[test]
     fn test_unordered_packets() {
-        use std::io::test::next_test_ip4;
-
         // Boilerplate test setup
         let initial_connection_id: u16 = random();
         let serverAddr = next_test_ip4();
@@ -1541,9 +1517,6 @@ mod test {
 
     #[test]
     fn test_socket_unordered_packets() {
-        use std::io::test::next_test_ip4;
-        use super::UtpStream;
-
         let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
 
         let client = iotry!(UtpSocket::bind(clientAddr));
@@ -1615,9 +1588,7 @@ mod test {
 
     #[test]
     fn test_socket_should_not_buffer_syn_packets() {
-        use std::io::test::next_test_ip4;
         use std::io::net::udp::UdpSocket;
-        use super::UtpSocket;
 
         let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
         let server = iotry!(UtpSocket::bind(serverAddr));
@@ -1652,8 +1623,6 @@ mod test {
 
     #[test]
     fn test_response_to_triple_ack() {
-        use std::io::test::next_test_ip4;
-
         let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
         let mut server = iotry!(UtpSocket::bind(serverAddr));
         let client = iotry!(UtpSocket::bind(clientAddr));
@@ -1718,8 +1687,6 @@ mod test {
 
     #[test]
     fn test_socket_timeout_request() {
-        use std::io::test::next_test_ip4;
-
         let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
 
         let client = iotry!(UtpSocket::bind(clientAddr));
@@ -1771,8 +1738,6 @@ mod test {
 
     #[test]
     fn test_sorted_buffer_insertion() {
-        use std::io::test::next_test_ip4;
-
         let serverAddr = next_test_ip4();
         let mut socket = iotry!(UtpSocket::bind(serverAddr));
 
@@ -1812,9 +1777,6 @@ mod test {
 
     #[test]
     fn test_duplicate_packet_handling() {
-        use std::io::test::next_test_ip4;
-        use super::UtpStream;
-
         let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
 
         let client = iotry!(UtpSocket::bind(clientAddr));
@@ -1878,9 +1840,6 @@ mod test {
 
     #[test]
     fn test_selective_ack_response() {
-        use std::io::test::next_test_ip4;
-        use super::UtpStream;
-
         let serverAddr = next_test_ip4();
         let len = 1024 * 10;
         let data = Vec::from_fn(len, |idx| idx as u8);
