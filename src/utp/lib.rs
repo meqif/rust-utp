@@ -1575,7 +1575,7 @@ mod test {
             let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
             packet.set_type(ST_FIN);
             packet.header.connection_id = client.sender_connection_id.to_be();
-            packet.header.seq_nr = (client.seq_nr + 2).to_be();
+            packet.header.seq_nr = (client.seq_nr + i).to_be();
             packet.header.ack_nr = client.ack_nr.to_be();
             window.push(packet);
 
