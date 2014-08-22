@@ -569,19 +569,6 @@ impl UtpSocket {
             self.connected_to = src;
         }
 
-        // Check if the packet is out of order (that is, it's sequence number
-        // does not immediately follow the ACK number)
-        if packet.get_type() != ST_STATE && packet.get_type() != ST_SYN
-            && self.ack_nr + 1 < Int::from_be(packet.header.seq_nr) {
-            debug!("current ack_nr ({}) is behind received packet seq_nr ({})",
-                   self.ack_nr, Int::from_be(packet.header.seq_nr));
-
-            // Add to buffer but do not acknowledge until all packets between
-            // ack_nr + 1 and curr_packet.seq_nr - 1 are received
-            self.insert_into_buffer(packet);
-            return Ok((0, self.connected_to));
-        }
-
         // Copy received payload to output buffer if packet isn't a duplicate
         let mut read = packet.payload.len();
         if self.ack_nr < Int::from_be(packet.header.seq_nr) {
@@ -589,6 +576,10 @@ impl UtpSocket {
                 buf[i] = b[i + HEADER_SIZE];
             }
         } else {
+            read = 0;
+        }
+
+        if self.ack_nr + 1 < Int::from_be(packet.header.seq_nr) {
             read = 0;
         }
 
@@ -751,7 +742,46 @@ impl UtpSocket {
 
                 Some(self.prepare_reply(&packet.header, ST_STATE))
             }
-            ST_DATA => Some(self.prepare_reply(&packet.header, ST_STATE)),
+            ST_DATA => {
+                let mut reply = self.prepare_reply(&packet.header, ST_STATE);
+
+                if self.ack_nr + 1 < Int::from_be(packet.header.seq_nr) {
+                    debug!("current ack_nr ({}) is behind received packet seq_nr ({})",
+                           self.ack_nr, Int::from_be(packet.header.seq_nr));
+                    self.insert_into_buffer(packet.clone());
+
+                    // Set SACK extension payload if the packet is not in order
+                    let mut stashed = self.incoming_buffer.iter()
+                        .map(|pkt| Int::from_be(pkt.header.seq_nr))
+                        .filter(|&seq_nr| seq_nr > self.ack_nr);
+
+                    let mut sack = Vec::new();
+                    for seq_nr in stashed {
+                        let diff = seq_nr - self.ack_nr - 2;
+                        let byte = (diff / 8) as uint;
+                        let bit = (diff % 8) as uint;
+
+                        if byte >= sack.len() {
+                            sack.push(0u8);
+                        }
+
+                        let mut bitarray = sack.pop().unwrap();
+                        bitarray |= 1 << bit;
+                        sack.push(bitarray);
+                    }
+
+                    // Make sure the amount of elements in the SACK vector is a
+                    // multiple of 4
+                    if sack.len() % 4 != 0 {
+                        let len = sack.len();
+                        sack.grow((len / 4 + 1) * 4 - len, &0);
+                    }
+
+                    reply.set_sack(Some(sack));
+                }
+
+                Some(reply)
+            },
             ST_FIN => {
                 self.state = CS_FIN_RECEIVED;
                 // TODO: check if no packets are missing
