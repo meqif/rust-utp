@@ -238,6 +238,7 @@ impl UtpPacket {
                     data: bv,
                 };
                 self.extensions.push(extension);
+                self.header.extension |= SelectiveAckExtension as u8;
             }
         }
     }
