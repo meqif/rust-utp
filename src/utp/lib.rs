@@ -582,7 +582,7 @@ impl UtpSocket {
         }
 
         // Copy received payload to output buffer if packet isn't a duplicate
-        let mut read = read - HEADER_SIZE;
+        let mut read = packet.payload.len();
         if self.ack_nr < Int::from_be(packet.header.seq_nr) {
             for i in range(0u, min(buf.len(), read)) {
                 buf[i] = b[i + HEADER_SIZE];
