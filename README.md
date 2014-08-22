@@ -14,7 +14,7 @@ and lost packet handling, as well as the Selective ACK extension.
     - [ ] automatically send FIN (or should it be RST?) on `drop` if not already closed
 - [x] sending RST on mismatch
 - [ ] setters and getters that hide header field endianness conversion
-- [ ] SACK extension
+- [x] SACK extension
 - [ ] handle packet loss
     - [x] send triple-ACK to re-request lost packet (fast resend request)
     - [x] rewind send window and resend in reply to triple-ACK (fast resend)

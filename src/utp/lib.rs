@@ -12,7 +12,6 @@
 // that stochastically drop or reorder packets.
 // - Congestion control (LEDBAT -- RFC6817)
 // - Sending FIN on drop
-// - SACK extension
 // - Setters and getters that hide header field endianness conversion
 // - Handle packet loss
 // - Path MTU discovery (RFC4821)
@@ -569,19 +568,6 @@ impl UtpSocket {
             self.connected_to = src;
         }
 
-        // Check if the packet is out of order (that is, it's sequence number
-        // does not immediately follow the ACK number)
-        if packet.get_type() != ST_STATE && packet.get_type() != ST_SYN
-            && self.ack_nr + 1 < Int::from_be(packet.header.seq_nr) {
-            debug!("current ack_nr ({}) is behind received packet seq_nr ({})",
-                   self.ack_nr, Int::from_be(packet.header.seq_nr));
-
-            // Add to buffer but do not acknowledge until all packets between
-            // ack_nr + 1 and curr_packet.seq_nr - 1 are received
-            self.insert_into_buffer(packet);
-            return Ok((0, self.connected_to));
-        }
-
         // Copy received payload to output buffer if packet isn't a duplicate
         let mut read = packet.payload.len();
         if self.ack_nr < Int::from_be(packet.header.seq_nr) {
@@ -589,6 +575,10 @@ impl UtpSocket {
                 buf[i] = b[i + HEADER_SIZE];
             }
         } else {
+            read = 0;
+        }
+
+        if self.ack_nr + 1 < Int::from_be(packet.header.seq_nr) {
             read = 0;
         }
 
@@ -751,7 +741,46 @@ impl UtpSocket {
 
                 Some(self.prepare_reply(&packet.header, ST_STATE))
             }
-            ST_DATA => Some(self.prepare_reply(&packet.header, ST_STATE)),
+            ST_DATA => {
+                let mut reply = self.prepare_reply(&packet.header, ST_STATE);
+
+                if self.ack_nr + 1 < Int::from_be(packet.header.seq_nr) {
+                    debug!("current ack_nr ({}) is behind received packet seq_nr ({})",
+                           self.ack_nr, Int::from_be(packet.header.seq_nr));
+                    self.insert_into_buffer(packet.clone());
+
+                    // Set SACK extension payload if the packet is not in order
+                    let mut stashed = self.incoming_buffer.iter()
+                        .map(|pkt| Int::from_be(pkt.header.seq_nr))
+                        .filter(|&seq_nr| seq_nr > self.ack_nr);
+
+                    let mut sack = Vec::new();
+                    for seq_nr in stashed {
+                        let diff = seq_nr - self.ack_nr - 2;
+                        let byte = (diff / 8) as uint;
+                        let bit = (diff % 8) as uint;
+
+                        if byte >= sack.len() {
+                            sack.push(0u8);
+                        }
+
+                        let mut bitarray = sack.pop().unwrap();
+                        bitarray |= 1 << bit;
+                        sack.push(bitarray);
+                    }
+
+                    // Make sure the amount of elements in the SACK vector is a
+                    // multiple of 4
+                    if sack.len() % 4 != 0 {
+                        let len = sack.len();
+                        sack.grow((len / 4 + 1) * 4 - len, &0);
+                    }
+
+                    reply.set_sack(Some(sack));
+                }
+
+                Some(reply)
+            },
             ST_FIN => {
                 self.state = CS_FIN_RECEIVED;
                 // TODO: check if no packets are missing
@@ -1885,5 +1914,51 @@ mod test {
         assert!(!read.is_empty());
         expect_eq!(read.len(), data.len());
         expect_eq!(read, data);
+    }
+
+    #[test]
+    fn test_correct_packet_loss() {
+        let (clientAddr, serverAddr) = (next_test_ip4(), next_test_ip4());
+
+        let mut server = iotry!(UtpStream::bind(serverAddr));
+        let client = iotry!(UtpSocket::bind(clientAddr));
+        let len = 1024 * 10;
+        let data = Vec::from_fn(len, |idx| idx as u8);
+        let to_send = data.clone();
+
+        spawn(proc() {
+            let mut client = iotry!(client.connect(serverAddr));
+
+            // Send everything except the odd chunks
+            let chunks = to_send.as_slice().chunks(BUF_SIZE);
+            let dst = client.connected_to;
+            for (index, chunk) in chunks.enumerate() {
+                let mut packet = UtpPacket::new();
+                packet.header.seq_nr = client.seq_nr.to_be();
+                packet.header.ack_nr = client.ack_nr.to_be();
+                packet.header.connection_id = client.sender_connection_id.to_be();
+                packet.header.timestamp_microseconds = super::now_microseconds().to_be();
+                packet.payload = Vec::from_slice(chunk);
+                packet.set_type(ST_DATA);
+
+                if index % 2 == 0 {
+                    iotry!(client.socket.send_to(packet.bytes().as_slice(), dst));
+                }
+
+                client.send_buffer.push(packet);
+                client.seq_nr += 1;
+            }
+
+            let mut buf = [0, ..BUF_SIZE];
+            while !client.send_buffer.is_empty() {
+                iotry!(client.recv_from(buf));
+            }
+
+            iotry!(client.close());
+        });
+
+        let read = iotry!(server.read_to_end());
+        assert_eq!(read.len(), data.len());
+        assert_eq!(read, data);
     }
 }
