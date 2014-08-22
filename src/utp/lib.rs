@@ -662,6 +662,15 @@ impl UtpSocket {
         }
 
         for chunk in buf.chunks(BUF_SIZE) {
+            // FIXME: this is an extremely primitive pacing mechanism
+            while self.send_buffer.len() > 10 {
+                if self.duplicate_ack_count == 3 {
+                    self.socket.send_to(self.send_buffer[0].bytes().as_slice(), self.connected_to.clone());
+                }
+                let mut buf = [0, ..BUF_SIZE];
+                try!(self.recv_from(buf));
+            }
+
             let mut packet = UtpPacket::new();
             packet.set_type(ST_DATA);
             packet.payload = Vec::from_slice(chunk);
