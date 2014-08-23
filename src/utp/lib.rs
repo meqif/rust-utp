@@ -442,7 +442,7 @@ pub struct UtpSocket {
     timeout: int,
 
     pending_data: DList<u8>,
-    // max_window: uint,
+    max_window: uint,
     curr_window: uint,
 }
 
@@ -471,6 +471,7 @@ impl UtpSocket {
                 rtt_variance: 0,
                 timeout: 1000,
                 pending_data: DList::new(),
+                max_window: 0,
                 curr_window: 0,
             }),
             Err(e) => Err(e)
@@ -804,12 +805,7 @@ impl UtpSocket {
     fn send(&mut self) {
         let dst = self.connected_to;
         loop {
-            // FIXME: this is an extremely primitive pacing mechanism
-            while self.send_window.len() > 10 {
-            // while self.curr_window > self.max_window {
-                if self.duplicate_ack_count == 3 {
-                    self.socket.send_to(self.send_window[0].bytes().as_slice(), dst);
-                }
+            while self.curr_window > self.max_window {
                 let mut buf = [0, ..BUF_SIZE];
                 self.recv_from(buf);
             }
@@ -874,6 +870,9 @@ impl UtpSocket {
         if self.ack_nr + 1 == packet.seq_nr() {
             self.ack_nr = packet.seq_nr();
         }
+
+        self.max_window = Int::from_be(packet.header.wnd_size) as uint;
+        debug!("self.max_window: {}", self.max_window);
 
         match packet.header.get_type() {
             ST_SYN => { // Respond with an ACK and populate own fields
@@ -1082,6 +1081,7 @@ impl Clone for UtpSocket {
             rtt_variance: 0,
             timeout: 500,
             pending_data: DList::new(),
+            max_window: 0,
             curr_window: 0,
         }
     }
