@@ -11,7 +11,6 @@
 // - Lossy UDP socket for testing purposes: send and receive ops are wrappers
 // that stochastically drop or reorder packets.
 // - Congestion control (LEDBAT -- RFC6817)
-// - Sending FIN on drop
 // - Setters and getters that hide header field endianness conversion
 // - Handle packet loss
 // - Path MTU discovery (RFC4821)
@@ -955,6 +954,15 @@ impl Clone for UtpSocket {
     }
 }
 
+impl Drop for UtpSocket {
+    fn drop(&mut self) {
+        match self.close() {
+            Ok(_) => {},
+            Err(e) => fail!("{}", e),
+        }
+    }
+}
+
 /// Stream interface for UtpSocket.
 pub struct UtpStream {
     socket: UtpSocket,
@@ -1012,6 +1020,15 @@ impl Writer for UtpStream {
     fn write(&mut self, buf: &[u8]) -> IoResult<()> {
         let dst = self.socket.connected_to;
         self.socket.send_to(buf, dst)
+    }
+}
+
+impl Drop for UtpStream {
+    fn drop(&mut self) {
+        match self.close() {
+            Ok(_) => {},
+            Err(e) => fail!("{}", e),
+        }
     }
 }
 
@@ -1590,9 +1607,9 @@ mod test {
         assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
 
         spawn(proc() {
-            let client = iotry!(client.connect(serverAddr));
+            let mut client = iotry!(client.connect(serverAddr));
             assert!(client.state == CS_CONNECTED);
-            let mut s = client.socket;
+            let mut s = client.socket.clone();
             let mut window: Vec<UtpPacket> = Vec::new();
 
             let mut i = 0;
@@ -1603,7 +1620,8 @@ mod test {
                 packet.header.seq_nr = (client.seq_nr + i).to_be();
                 packet.header.ack_nr = client.ack_nr.to_be();
                 packet.payload = Vec::from_slice(data);
-                window.push(packet);
+                window.push(packet.clone());
+                client.send_buffer.push(packet.clone());
                 i += 1;
             }
 
@@ -1671,6 +1689,17 @@ mod test {
                 Err(e) => fail!("{}", e),
             };
             expect_eq!(packet.header.ack_nr, seq_nr.to_be());
+
+            let mut buf = [0, ..BUF_SIZE];
+            iotry!(client.recv_from(buf));
+            let packet = UtpPacket::decode(buf);
+            debug!("received {}", packet);
+            let mut reply = UtpPacket::new();
+            reply.header.seq_nr = (Int::from_be(UtpPacket::decode(test_syn_raw).header.seq_nr) + 1).to_be();
+            reply.header.ack_nr = packet.header.seq_nr;
+            reply.header.connection_id = packet.header.connection_id;
+            reply.set_type(ST_STATE);
+            iotry!(client.send_to(reply.bytes().as_slice(), serverAddr));
             drop(client);
         });
 

@@ -8,10 +8,10 @@ and lost packet handling, as well as the Selective ACK extension.
 ## To implement
 
 - [ ] congestion control
-- [ ] proper connection closing
+- [x] proper connection closing
     - [x] handle both RST and FIN
     - [x] send FIN on close
-    - [ ] automatically send FIN (or should it be RST?) on `drop` if not already closed
+    - [x] automatically send FIN on `drop` if not already closed
 - [x] sending RST on mismatch
 - [ ] setters and getters that hide header field endianness conversion
 - [x] SACK extension
