@@ -504,16 +504,17 @@ impl UtpSocket {
         packet.set_type(ST_FIN);
 
         // Send FIN
-        try!(self.packet_send(&packet, buf));
+        try!(self.socket.send_to(packet.bytes().as_slice(), self.connected_to));
         self.state = CS_FIN_SENT;
 
         // Receive JAKE
-        let resp = UtpPacket::decode(buf);
-        debug!("received {}", resp);
-        assert!(resp.get_type() == ST_STATE);
-
-        // Set socket state
-        self.state = CS_CLOSED;
+        while self.state != CS_CLOSED {
+            match self.recv_from(buf) {
+                Ok(_) => {},
+                Err(ref e) if e.kind == std::io::EndOfFile => self.state = CS_CLOSED,
+                Err(e) => fail!("{}", e),
+            };
+        }
 
         Ok(())
     }
@@ -889,6 +890,11 @@ impl UtpSocket {
                 while !self.send_buffer.is_empty() &&
                     Int::from_be(self.send_buffer[0].header.seq_nr) <= self.last_acked {
                     self.send_buffer.remove(0);
+                }
+
+                if self.state == CS_FIN_SENT &&
+                    Int::from_be(packet.header.ack_nr) == self.seq_nr {
+                    self.state = CS_CLOSED;
                 }
 
                 None
