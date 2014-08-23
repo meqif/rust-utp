@@ -1109,6 +1109,32 @@ mod test {
     }
 
     #[test]
+    fn test_decode_packet_with_unknown_extensions() {
+        use super::SelectiveAckExtension;
+
+        let buf = [0x21, 0x01, 0x41, 0xa7, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                   0x00, 0x00, 0x00, 0x00, 0x05, 0xdc, 0xab, 0x53, 0x3a, 0xf5,
+                   0xff, 0x04, 0x00, 0x00, 0x00, 0x00, // Imaginary extension
+                   0x00, 0x04, 0x00, 0x00, 0x00, 0x00];
+        let packet = UtpPacket::decode(buf);
+        assert_eq!(packet.header.get_version(), 1);
+        assert_eq!(packet.header.get_type(), ST_STATE);
+        assert_eq!(packet.header.extension, 1);
+        assert_eq!(Int::from_be(packet.header.connection_id), 16807);
+        assert_eq!(Int::from_be(packet.header.timestamp_microseconds), 0);
+        assert_eq!(Int::from_be(packet.header.timestamp_difference_microseconds), 0);
+        assert_eq!(Int::from_be(packet.header.wnd_size), 1500);
+        assert_eq!(Int::from_be(packet.header.seq_nr), 43859);
+        assert_eq!(Int::from_be(packet.header.ack_nr), 15093);
+        assert!(packet.payload.is_empty());
+        assert!(packet.extensions.len() == 1);
+        assert!(packet.extensions[0].ty == SelectiveAckExtension);
+        assert!(packet.extensions[0].data == vec!(0,0,0,0));
+        assert!(packet.extensions[0].len() == 1 + packet.extensions[0].data.len());
+        assert!(packet.extensions[0].len() == 5);
+    }
+
+    #[test]
     fn test_packet_encode() {
         let payload = Vec::from_slice("Hello\n".as_bytes());
         let (timestamp, timestamp_diff): (u32, u32) = (15270793, 1707040186);
