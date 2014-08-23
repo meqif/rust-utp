@@ -487,6 +487,15 @@ impl UtpSocket {
     /// flight.
     #[unstable]
     pub fn close(&mut self) -> IoResult<()> {
+        // Wait for acknowledgment on pending sent packets
+        let mut buf = [0u8, ..BUF_SIZE];
+        while !self.send_buffer.is_empty() {
+            match self.recv_from(buf) {
+                Ok(_) => {},
+                Err(e) => fail!("{}", e),
+            }
+        }
+
         let mut packet = UtpPacket::new();
         packet.header.connection_id = self.sender_connection_id.to_be();
         packet.header.seq_nr = self.seq_nr.to_be();
@@ -495,7 +504,6 @@ impl UtpSocket {
         packet.set_type(ST_FIN);
 
         // Send FIN
-        let mut buf = [0u8, ..BUF_SIZE];
         try!(self.packet_send(&packet, buf));
         self.state = CS_FIN_SENT;
 
@@ -1965,11 +1973,6 @@ mod test {
 
                 client.send_buffer.push(packet);
                 client.seq_nr += 1;
-            }
-
-            let mut buf = [0, ..BUF_SIZE];
-            while !client.send_buffer.is_empty() {
-                iotry!(client.recv_from(buf));
             }
 
             iotry!(client.close());
