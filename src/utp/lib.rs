@@ -55,6 +55,8 @@ fn now_microseconds() -> u32 {
     (t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32
 }
 
+/// Lazy iterator over bits of a vector of bytes, starting with the LSB
+/// (least-significat bit) of the first element of the vector.
 struct BitIterator {
     object: Vec<u8>,
     current_byte: uint,
