@@ -2,8 +2,10 @@
 
 A [Micro Transport Protocol](http://www.bittorrent.org/beps/bep_0029.html) library implemented in Rust.
 
-Currently only the bare minimum is implemented, lacking both congestion control
-and lost packet handling, as well as the Selective ACK extension.
+The current implementation is somewhat incomplete, lacking both congestion
+control and full packet loss handling (though some cases are handled). However,
+it does support the Selective Acknowledgment extension, handles unordered and
+duplicate packets and presents a stream interface (`UtpStream`).
 
 ## To implement
 
