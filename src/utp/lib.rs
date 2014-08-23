@@ -294,19 +294,35 @@ impl UtpPacket {
     fn decode(buf: &[u8]) -> UtpPacket {
         let header = UtpPacketHeader::decode(buf);
 
-        let (extensions, payload) = if header.extension == SelectiveAckExtension as u8 {
+        let mut extensions = Vec::new();
+        let mut idx = HEADER_SIZE;
+        let mut kind = header.extension;
+
+        // Consume known extensions and skip over unknown ones
+        while idx < buf.len() && kind != 0 {
             // Ignoring next extension type at buf[HEADER_SIZE]
-            let len = buf[HEADER_SIZE + 1] as uint;
-            let extension_start = HEADER_SIZE + 2;
+            let len = buf[idx + 1] as uint;
+            let extension_start = idx + 2;
             let payload_start = extension_start + len;
-            let extension = UtpExtension {
-                ty: SelectiveAckExtension,
-                data: Vec::from_slice(buf.slice(extension_start, payload_start)),
-            };
-            (vec!(extension), Vec::from_slice(buf.slice_from(payload_start)))
+
+            if kind == SelectiveAckExtension as u8 { // or more generally, a known kind
+                let extension = UtpExtension {
+                    ty: SelectiveAckExtension,
+                    data: Vec::from_slice(buf.slice(extension_start, payload_start)),
+                };
+                extensions.push(extension);
+            }
+
+            kind = buf[idx];
+            idx += payload_start;
+        }
+
+        let mut payload;
+        if idx < buf.len() {
+            payload = Vec::from_slice(buf.slice_from(idx));
         } else {
-            (Vec::new(), Vec::from_slice(buf.slice_from(HEADER_SIZE)))
-        };
+            payload = Vec::new();
+        }
 
         UtpPacket {
             header: header,
