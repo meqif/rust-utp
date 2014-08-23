@@ -442,6 +442,8 @@ pub struct UtpSocket {
     timeout: int,
 
     pending_data: DList<u8>,
+    // max_window: uint,
+    curr_window: uint,
 }
 
 impl UtpSocket {
@@ -469,6 +471,7 @@ impl UtpSocket {
                 rtt_variance: 0,
                 timeout: 1000,
                 pending_data: DList::new(),
+                curr_window: 0,
             }),
             Err(e) => Err(e)
         }
@@ -821,6 +824,7 @@ impl UtpSocket {
                 Err(ref e) => fail!("{}", e),
             }
             debug!("sent {}", packet);
+            self.curr_window += packet.len();
             self.send_window.push(packet);
         }
     }
@@ -1014,8 +1018,10 @@ impl UtpSocket {
                 // Success, advance send window
                 while !self.send_window.is_empty() &&
                     self.send_window[0].seq_nr() <= self.last_acked {
-                    self.send_window.remove(0);
+                    let packet = self.send_window.remove(0).unwrap();
+                    self.curr_window -= packet.len();
                 }
+                debug!("self.curr_window: {}", self.curr_window);
 
                 if self.state == CS_FIN_SENT &&
                     packet.ack_nr() == self.seq_nr {
@@ -1076,6 +1082,7 @@ impl Clone for UtpSocket {
             rtt_variance: 0,
             timeout: 500,
             pending_data: DList::new(),
+            curr_window: 0,
         }
     }
 }
