@@ -306,11 +306,12 @@ impl UtpPacket {
             // Ignoring next extension type at buf[HEADER_SIZE]
             let len = buf[HEADER_SIZE + 1] as uint;
             let extension_start = HEADER_SIZE + 2;
+            let payload_start = extension_start + len;
             let extension = UtpExtension {
                 ty: SelectiveAckExtension,
-                data: Vec::from_slice(buf.slice(extension_start, extension_start + len)),
+                data: Vec::from_slice(buf.slice(extension_start, payload_start)),
             };
-            (vec!(extension), Vec::from_slice(buf.slice_from(extension_start + len)))
+            (vec!(extension), Vec::from_slice(buf.slice_from(payload_start)))
         } else {
             (Vec::new(), Vec::from_slice(buf.slice_from(HEADER_SIZE)))
         };
