@@ -57,19 +57,11 @@ fn now_microseconds() -> u32 {
 
 /// Lazy iterator over bits of a vector of bytes, starting with the LSB
 /// (least-significat bit) of the first element of the vector.
-struct BitIterator {
-    object: Vec<u8>,
-    current_byte: uint,
-    current_bit: uint,
-}
+struct BitIterator { object: Vec<u8>, current_byte: uint, current_bit: uint }
 
 impl BitIterator {
     fn new(obj: Vec<u8>) -> BitIterator {
-        BitIterator {
-            object: obj,
-            current_byte: 0,
-            current_bit: 0,
-        }
+        BitIterator { object: obj, current_byte: 0, current_bit: 0 }
     }
 }
 
