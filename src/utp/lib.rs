@@ -856,15 +856,14 @@ impl UtpSocket {
                                 debug!("SACK: packet {} received", seq_nr);
                             } else if seq_nr < self.seq_nr {
                                 debug!("SACK: packet {} lost", seq_nr);
-                                match self.send_buffer.iter().position(|pkt| Int::from_be(pkt.header.seq_nr) == seq_nr) {
+                                match self.send_buffer.iter().find(|pkt| Int::from_be(pkt.header.seq_nr) == seq_nr) {
                                     None => fail!("Packet {} not found", seq_nr),
-                                    Some(v) => {
-                                        let to_send = &self.send_buffer[v];
-                                        match self.socket.send_to(to_send.bytes().as_slice(), self.connected_to) {
+                                    Some(packet) => {
+                                        match self.socket.send_to(packet.bytes().as_slice(), self.connected_to) {
                                             Ok(_) => {},
                                             Err(e) => fail!("{}", e),
                                         }
-                                        debug!("sent {}", to_send);
+                                        debug!("sent {}", packet);
                                     }
                                 }
                             } else {
@@ -881,18 +880,12 @@ impl UtpSocket {
                 // foolproof way to differentiate between triple-ACK and three
                 // keep alives spread in time
                 if !self.send_buffer.is_empty() && self.duplicate_ack_count == 3 {
-                    match self.send_buffer.iter().position(|pkt| Int::from_be(pkt.header.seq_nr) == Int::from_be(packet.header.ack_nr) + 1) {
-                        None => fail!("Received request to resend packets since {} but none was found in send buffer!", Int::from_be(packet.header.ack_nr) + 1),
-                        Some(position) => {
-                            for i in range(0u, position + 1) {
-                                let ref to_send = self.send_buffer[i];
-                                debug!("resending: {}", to_send);
-                                match self.socket.send_to(to_send.bytes().as_slice(), self.connected_to) {
-                                    Ok(_) => {},
-                                    Err(e) => fail!("{}", e),
-                                }
-                            }
-                        },
+                    for packet in self.send_buffer.iter().take_while(|pkt| Int::from_be(pkt.header.seq_nr) <= Int::from_be(packet.header.ack_nr) + 1) {
+                        debug!("resending: {}", packet);
+                        match self.socket.send_to(packet.bytes().as_slice(), self.connected_to) {
+                            Ok(_) => {},
+                            Err(e) => fail!("{}", e),
+                        }
                     }
                 }
 
