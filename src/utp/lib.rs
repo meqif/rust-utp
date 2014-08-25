@@ -684,15 +684,6 @@ impl UtpSocket {
         }
 
         for chunk in buf.chunks(BUF_SIZE) {
-            // FIXME: this is an extremely primitive pacing mechanism
-            while self.send_window.len() > 10 {
-                if self.duplicate_ack_count == 3 {
-                    self.socket.send_to(self.send_window[0].bytes().as_slice(), self.connected_to.clone());
-                }
-                let mut buf = [0, ..BUF_SIZE];
-                try!(self.recv_from(buf));
-            }
-
             let mut packet = UtpPacket::new();
             packet.set_type(ST_DATA);
             packet.payload = Vec::from_slice(chunk);
@@ -701,11 +692,12 @@ impl UtpSocket {
             packet.header.ack_nr = self.ack_nr.to_be();
             packet.header.connection_id = self.sender_connection_id.to_be();
 
-            debug!("Pushing packet into send buffer: {}", packet);
-            try!(self.socket.send_to(packet.bytes().as_slice(), dst));
-            self.send_window.push(packet);
+            self.unsent_queue.push(packet);
             self.seq_nr += 1;
         }
+
+        // Flush unsent packet queue
+        self.send();
 
         // Consume acknowledgements until latest packet
         let mut buf = [0, ..BUF_SIZE];
