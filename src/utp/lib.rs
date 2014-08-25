@@ -385,6 +385,8 @@ pub struct UtpSocket {
     rtt: int,
     rtt_variance: int,
     timeout: int,
+
+    pending_data: DList<u8>,
 }
 
 impl UtpSocket {
@@ -411,6 +413,7 @@ impl UtpSocket {
                 rtt: 0,
                 rtt_variance: 0,
                 timeout: 1000,
+                pending_data: DList::new(),
             }),
             Err(e) => Err(e)
         }
@@ -559,11 +562,13 @@ impl UtpSocket {
             });
         }
 
-        self.recv(buf)
+        match self.flush_incoming_buffer(buf, 0) {
+            0 => self.recv(buf),
+            read => Ok((read, self.connected_to)),
+        }
     }
 
     fn recv(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
-        use std::cmp::min;
         use std::io::{IoError, TimedOut, ConnectionReset};
 
         let mut b = [0, ..BUF_SIZE + HEADER_SIZE];
@@ -597,18 +602,10 @@ impl UtpSocket {
             self.connected_to = src;
         }
 
-        // Copy received payload to output buffer if packet isn't a duplicate
-        let mut read = packet.payload.len();
-        if self.ack_nr < Int::from_be(packet.header.seq_nr) {
-            for i in range(0u, min(buf.len(), read)) {
-                buf[i] = b[i + HEADER_SIZE];
-            }
-        } else {
-            read = 0;
-        }
-
-        if self.ack_nr + 1 < Int::from_be(packet.header.seq_nr) {
-            read = 0;
+        if packet.get_type() == ST_DATA &&
+            self.ack_nr < Int::from_be(packet.header.seq_nr)
+        {
+            self.insert_into_buffer(packet.clone());
         }
 
         match self.handle_packet(packet) {
@@ -621,7 +618,7 @@ impl UtpSocket {
         };
 
         // Flush incoming buffer if possible
-        let read = self.flush_incoming_buffer(buf, read);
+        let read = self.flush_incoming_buffer(buf, 0);
 
         Ok((read, src))
     }
@@ -653,15 +650,50 @@ impl UtpSocket {
     /// Returns the last written index.
     fn flush_incoming_buffer(&mut self, buf: &mut [u8], start: uint) -> uint {
         let mut idx = start;
-        while !self.incoming_buffer.is_empty() &&
-            self.ack_nr + 1 == Int::from_be(self.incoming_buffer[0].header.seq_nr) {
-            let packet = self.incoming_buffer.remove(0).unwrap();
-            debug!("Removing packet from buffer: {}", packet);
 
-            for i in range(0u, packet.payload.len()) {
-                buf[idx] = packet.payload[i];
+        if !self.pending_data.is_empty() {
+            loop {
+                if idx < buf.len() {
+                    match self.pending_data.pop_front() {
+                        None => {
+                            let packet = self.incoming_buffer.remove(0).unwrap();
+                            debug!("Removing packet from buffer: {}", packet);
+                            self.ack_nr = Int::from_be(packet.header.seq_nr);
+                            return idx;
+                        },
+                        Some(v) => {
+                            buf[idx] = v;
+                            idx += 1;
+                        }
+                    }
+                } else {
+                    if self.pending_data.is_empty() && idx > start {
+                        let packet = self.incoming_buffer.remove(0).unwrap();
+                        debug!("Removing packet from buffer: {}", packet);
+                        self.ack_nr = Int::from_be(packet.header.seq_nr);
+                    }
+                    return idx;
+                }
+            }
+        }
+
+        while !self.incoming_buffer.is_empty() &&
+            (self.ack_nr == Int::from_be(self.incoming_buffer[0].header.seq_nr) ||
+            self.ack_nr + 1 == Int::from_be(self.incoming_buffer[0].header.seq_nr)) {
+
+            for i in range(0u, self.incoming_buffer[0].payload.len()) {
+                if idx < buf.len() {
+                    buf[idx] = self.incoming_buffer[0].payload[i];
+                } else {
+                    self.pending_data.push(self.incoming_buffer[0].payload[i]);
+                }
                 idx += 1;
             }
+            if idx >= buf.len() {
+                return buf.len();
+            }
+            let packet = self.incoming_buffer.remove(0).unwrap();
+            debug!("Removing packet from buffer: {}", packet);
             self.ack_nr = Int::from_be(packet.header.seq_nr);
         }
 
@@ -842,10 +874,18 @@ impl UtpSocket {
             },
             ST_FIN => {
                 self.state = CS_FIN_RECEIVED;
-                // TODO: check if no packets are missing
-                // If all packets are received
-                self.state = CS_EOF;
-                Some(self.prepare_reply(&packet.header, ST_STATE))
+
+                // If all packets are received and handled
+                if self.pending_data.is_empty() &&
+                    self.incoming_buffer.is_empty() &&
+                    self.ack_nr == Int::from_be(packet.header.seq_nr)
+                {
+                    self.state = CS_EOF;
+                    Some(self.prepare_reply(&packet.header, ST_STATE))
+                } else {
+                    debug!("FIN received but there are missing packets");
+                    None
+                }
             }
             ST_STATE => {
                 let packet_rtt = Int::from_be(packet.header.timestamp_difference_microseconds) as int;
@@ -986,6 +1026,7 @@ impl Clone for UtpSocket {
             rtt: 0,
             rtt_variance: 0,
             timeout: 500,
+            pending_data: DList::new(),
         }
     }
 }
