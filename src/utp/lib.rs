@@ -33,6 +33,7 @@ use std::io::IoResult;
 use std::mem::transmute;
 use std::rand::random;
 use std::fmt;
+use std::collections::{DList, Deque};
 
 static HEADER_SIZE: uint = 20;
 // For simplicity's sake, let us assume no packet will ever exceed the
@@ -375,6 +376,7 @@ pub struct UtpSocket {
     incoming_buffer: Vec<UtpPacket>,
     // Sent but not yet acknowledged packets
     send_window: Vec<UtpPacket>,
+    unsent_queue: DList<UtpPacket>,
     duplicate_ack_count: uint,
     last_acked: u16,
     last_acked_timestamp: u32,
@@ -401,6 +403,7 @@ impl UtpSocket {
                 state: CS_NEW,
                 incoming_buffer: Vec::new(),
                 send_window: Vec::new(),
+                unsent_queue: DList::new(),
                 duplicate_ack_count: 0,
                 last_acked: 0,
                 last_acked_timestamp: 0,
@@ -713,6 +716,35 @@ impl UtpSocket {
         Ok(())
     }
 
+    /// Send every packet in the unsent packet queue.
+    fn send(&mut self) {
+        let dst = self.connected_to;
+        loop {
+            // FIXME: this is an extremely primitive pacing mechanism
+            while self.send_window.len() > 10 {
+            // while self.curr_window > self.max_window {
+                if self.duplicate_ack_count == 3 {
+                    self.socket.send_to(self.send_window[0].bytes().as_slice(), dst);
+                }
+                let mut buf = [0, ..BUF_SIZE];
+                self.recv_from(buf);
+            }
+
+            let packet = match self.unsent_queue.pop_front() {
+                None => break,
+                Some(packet) => packet,
+            };
+
+            match self.socket.send_to(packet.bytes().as_slice(), dst) {
+                Ok(_) => {},
+                Err(ref e) => fail!("{}", e),
+            }
+            debug!("sent {}", packet);
+            self.send_window.push(packet);
+        }
+    }
+
+
     #[allow(missing_doc)]
     #[deprecated = "renamed to `send_to`"]
     pub fn sendto(&mut self, buf: &[u8], dst: SocketAddr) -> IoResult<()> {
@@ -948,6 +980,7 @@ impl Clone for UtpSocket {
             state: self.state,
             incoming_buffer: Vec::new(),
             send_window: Vec::new(),
+            unsent_queue: DList::new(),
             duplicate_ack_count: 0,
             last_acked: 0,
             last_acked_timestamp: 0,
