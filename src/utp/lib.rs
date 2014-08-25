@@ -540,8 +540,7 @@ impl UtpSocket {
     /// inflight packets are consumed. Subsequent calls return CS_CLOSED.
     #[unstable]
     pub fn recv_from(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
-        use std::cmp::min;
-        use std::io::{IoError, EndOfFile, Closed, TimedOut, ConnectionReset};
+        use std::io::{IoError, EndOfFile, Closed};
 
         if self.state == CS_EOF {
             self.state = CS_CLOSED;
@@ -559,6 +558,13 @@ impl UtpSocket {
                 detail: None,
             });
         }
+
+        self.recv(buf)
+    }
+
+    fn recv(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
+        use std::cmp::min;
+        use std::io::{IoError, TimedOut, ConnectionReset};
 
         let mut b = [0, ..BUF_SIZE + HEADER_SIZE];
         debug!("setting read timeout of {} ms", self.timeout);
