@@ -374,7 +374,7 @@ pub struct UtpSocket {
     // Received but not acknowledged packets
     incoming_buffer: Vec<UtpPacket>,
     // Sent but not yet acknowledged packets
-    send_buffer: Vec<UtpPacket>,
+    send_window: Vec<UtpPacket>,
     duplicate_ack_count: uint,
     last_acked: u16,
     last_acked_timestamp: u32,
@@ -400,7 +400,7 @@ impl UtpSocket {
                 ack_nr: 0,
                 state: CS_NEW,
                 incoming_buffer: Vec::new(),
-                send_buffer: Vec::new(),
+                send_window: Vec::new(),
                 duplicate_ack_count: 0,
                 last_acked: 0,
                 last_acked_timestamp: 0,
@@ -499,7 +499,7 @@ impl UtpSocket {
     pub fn close(&mut self) -> IoResult<()> {
         // Wait for acknowledgment on pending sent packets
         let mut buf = [0u8, ..BUF_SIZE];
-        while !self.send_buffer.is_empty() {
+        while !self.send_window.is_empty() {
             match self.recv_from(buf) {
                 Ok(_) => {},
                 Err(e) => fail!("{}", e),
@@ -682,9 +682,9 @@ impl UtpSocket {
 
         for chunk in buf.chunks(BUF_SIZE) {
             // FIXME: this is an extremely primitive pacing mechanism
-            while self.send_buffer.len() > 10 {
+            while self.send_window.len() > 10 {
                 if self.duplicate_ack_count == 3 {
-                    self.socket.send_to(self.send_buffer[0].bytes().as_slice(), self.connected_to.clone());
+                    self.socket.send_to(self.send_window[0].bytes().as_slice(), self.connected_to.clone());
                 }
                 let mut buf = [0, ..BUF_SIZE];
                 try!(self.recv_from(buf));
@@ -700,7 +700,7 @@ impl UtpSocket {
 
             debug!("Pushing packet into send buffer: {}", packet);
             try!(self.socket.send_to(packet.bytes().as_slice(), dst));
-            self.send_buffer.push(packet);
+            self.send_window.push(packet);
             self.seq_nr += 1;
         }
 
@@ -844,7 +844,7 @@ impl UtpSocket {
                         // If three or more packets are acknowledged past the implicit missing one,
                         // assume it was lost.
                         if bits.filter(|&bit| bit == 1).count() >= 3 {
-                            let packet = self.send_buffer.iter().find(|pkt| Int::from_be(pkt.header.seq_nr) == Int::from_be(packet.header.ack_nr) + 1).unwrap();
+                            let packet = self.send_window.iter().find(|pkt| Int::from_be(pkt.header.seq_nr) == Int::from_be(packet.header.ack_nr) + 1).unwrap();
                             debug!("sending {}", packet);
                             self.socket.send_to(packet.bytes().as_slice(), self.connected_to);
                         }
@@ -856,7 +856,7 @@ impl UtpSocket {
                                 debug!("SACK: packet {} received", seq_nr);
                             } else if seq_nr < self.seq_nr {
                                 debug!("SACK: packet {} lost", seq_nr);
-                                match self.send_buffer.iter().find(|pkt| Int::from_be(pkt.header.seq_nr) == seq_nr) {
+                                match self.send_window.iter().find(|pkt| Int::from_be(pkt.header.seq_nr) == seq_nr) {
                                     None => fail!("Packet {} not found", seq_nr),
                                     Some(packet) => {
                                         match self.socket.send_to(packet.bytes().as_slice(), self.connected_to) {
@@ -879,8 +879,8 @@ impl UtpSocket {
                 // TODO: checking if the send buffer isn't empty isn't a
                 // foolproof way to differentiate between triple-ACK and three
                 // keep alives spread in time
-                if !self.send_buffer.is_empty() && self.duplicate_ack_count == 3 {
-                    for packet in self.send_buffer.iter().take_while(|pkt| Int::from_be(pkt.header.seq_nr) <= Int::from_be(packet.header.ack_nr) + 1) {
+                if !self.send_window.is_empty() && self.duplicate_ack_count == 3 {
+                    for packet in self.send_window.iter().take_while(|pkt| Int::from_be(pkt.header.seq_nr) <= Int::from_be(packet.header.ack_nr) + 1) {
                         debug!("resending: {}", packet);
                         match self.socket.send_to(packet.bytes().as_slice(), self.connected_to) {
                             Ok(_) => {},
@@ -890,9 +890,9 @@ impl UtpSocket {
                 }
 
                 // Success, advance send window
-                while !self.send_buffer.is_empty() &&
-                    Int::from_be(self.send_buffer[0].header.seq_nr) <= self.last_acked {
-                    self.send_buffer.remove(0);
+                while !self.send_window.is_empty() &&
+                    Int::from_be(self.send_window[0].header.seq_nr) <= self.last_acked {
+                    self.send_window.remove(0);
                 }
 
                 if self.state == CS_FIN_SENT &&
@@ -947,7 +947,7 @@ impl Clone for UtpSocket {
             ack_nr: self.ack_nr,
             state: self.state,
             incoming_buffer: Vec::new(),
-            send_buffer: Vec::new(),
+            send_window: Vec::new(),
             duplicate_ack_count: 0,
             last_acked: 0,
             last_acked_timestamp: 0,
@@ -1651,7 +1651,7 @@ mod test {
                 packet.header.ack_nr = client.ack_nr.to_be();
                 packet.payload = Vec::from_slice(data);
                 window.push(packet.clone());
-                client.send_buffer.push(packet.clone());
+                client.send_window.push(packet.clone());
                 i += 1;
             }
 
@@ -2036,7 +2036,7 @@ mod test {
                     iotry!(client.socket.send_to(packet.bytes().as_slice(), dst));
                 }
 
-                client.send_buffer.push(packet);
+                client.send_window.push(packet);
                 client.seq_nr += 1;
             }
 
