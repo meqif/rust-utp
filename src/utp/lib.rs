@@ -293,6 +293,32 @@ impl UtpPacket {
         return buf;
     }
 
+    // Faster, unsafe brother of `bytes`.
+    fn to_bytes(&self) -> Vec<u8> {
+        use std::ptr;
+
+        let mut buf = Vec::with_capacity(self.len());
+        unsafe {
+            buf.set_len(self.len());
+
+            let header = self.header.bytes();
+            ptr::copy_nonoverlapping_memory(buf.as_mut_ptr(), header.as_ptr(), header.len());
+
+            let mut idx = HEADER_SIZE;
+            for extension in self.extensions.iter() {
+                // buf[idx] = 0u8;
+                let x = buf.as_mut_ptr().offset(idx as int + 1);
+                ptr::copy_nonoverlapping_memory(x, extension.data.as_ptr(), extension.len());
+                idx += 1 + extension.len();
+            }
+
+            let x = buf.as_mut_ptr().offset(idx as int);
+            ptr::copy_nonoverlapping_memory(x, self.payload.as_ptr(), self.payload.len());
+        }
+        assert!(!buf.is_empty());
+        return buf;
+    }
+
     fn len(&self) -> uint {
         let ext_len = self.extensions.iter().fold(0, |acc, ext| acc + ext.len() + 1);
         self.header.len() + self.payload.len() + ext_len
@@ -735,11 +761,15 @@ impl UtpSocket {
         for chunk in buf.chunks(BUF_SIZE) {
             let mut packet = UtpPacket::new();
             packet.set_type(ST_DATA);
-            packet.payload = Vec::from_slice(chunk);
             packet.header.timestamp_microseconds = now_microseconds().to_be();
             packet.header.seq_nr = self.seq_nr.to_be();
             packet.header.ack_nr = self.ack_nr.to_be();
             packet.header.connection_id = self.sender_connection_id.to_be();
+            packet.payload = Vec::with_capacity(chunk.len());
+            unsafe {
+                std::ptr::copy_nonoverlapping_memory(packet.payload.as_mut_ptr(), chunk.as_ptr(), chunk.len());
+                packet.payload.set_len(chunk.len());
+            }
 
             self.unsent_queue.push(packet);
             self.seq_nr += 1;
@@ -776,7 +806,7 @@ impl UtpSocket {
                 Some(packet) => packet,
             };
 
-            match self.socket.send_to(packet.bytes().as_slice(), dst) {
+            match self.socket.send_to(packet.to_bytes().as_slice(), dst) {
                 Ok(_) => {},
                 Err(ref e) => fail!("{}", e),
             }
