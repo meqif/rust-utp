@@ -928,7 +928,7 @@ impl UtpSocket {
                             } else if seq_nr < self.seq_nr {
                                 debug!("SACK: packet {} lost", seq_nr);
                                 match self.send_window.iter().find(|pkt| Int::from_be(pkt.header.seq_nr) == seq_nr) {
-                                    None => fail!("Packet {} not found", seq_nr),
+                                    None => debug!("Packet {} not found", seq_nr),
                                     Some(packet) => {
                                         match self.socket.send_to(packet.bytes().as_slice(), self.connected_to) {
                                             Ok(_) => {},
