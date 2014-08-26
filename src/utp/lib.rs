@@ -233,6 +233,11 @@ impl UtpPacket {
         self.header.get_type()
     }
 
+    #[inline(always)]
+    fn seq_nr(&self) -> u16 {
+        Int::from_be(self.header.seq_nr)
+    }
+
     fn wnd_size(&self, new_wnd_size: u32) -> UtpPacket {
         UtpPacket {
             header: self.header.wnd_size(new_wnd_size),
@@ -450,7 +455,7 @@ impl UtpSocket {
             });
         }
 
-        self.ack_nr = Int::from_be(packet.header.seq_nr);
+        self.ack_nr = packet.seq_nr();
         self.state = CS_CONNECTED;
         self.seq_nr += 1;
 
@@ -603,7 +608,7 @@ impl UtpSocket {
         }
 
         if packet.get_type() == ST_DATA &&
-            self.ack_nr < Int::from_be(packet.header.seq_nr)
+            self.ack_nr < packet.seq_nr()
         {
             self.insert_into_buffer(packet.clone());
         }
@@ -658,7 +663,7 @@ impl UtpSocket {
                         None => {
                             let packet = self.incoming_buffer.remove(0).unwrap();
                             debug!("Removing packet from buffer: {}", packet);
-                            self.ack_nr = Int::from_be(packet.header.seq_nr);
+                            self.ack_nr = packet.seq_nr();
                             return idx;
                         },
                         Some(v) => {
@@ -670,7 +675,7 @@ impl UtpSocket {
                     if self.pending_data.is_empty() && idx > start {
                         let packet = self.incoming_buffer.remove(0).unwrap();
                         debug!("Removing packet from buffer: {}", packet);
-                        self.ack_nr = Int::from_be(packet.header.seq_nr);
+                        self.ack_nr = packet.seq_nr();
                     }
                     return idx;
                 }
@@ -678,8 +683,8 @@ impl UtpSocket {
         }
 
         while !self.incoming_buffer.is_empty() &&
-            (self.ack_nr == Int::from_be(self.incoming_buffer[0].header.seq_nr) ||
-            self.ack_nr + 1 == Int::from_be(self.incoming_buffer[0].header.seq_nr)) {
+            (self.ack_nr == self.incoming_buffer[0].seq_nr() ||
+            self.ack_nr + 1 == self.incoming_buffer[0].seq_nr()) {
 
             for i in range(0u, self.incoming_buffer[0].payload.len()) {
                 if idx < buf.len() {
@@ -694,7 +699,7 @@ impl UtpSocket {
             }
             let packet = self.incoming_buffer.remove(0).unwrap();
             debug!("Removing packet from buffer: {}", packet);
-            self.ack_nr = Int::from_be(packet.header.seq_nr);
+            self.ack_nr = packet.seq_nr();
         }
 
         return idx;
@@ -817,14 +822,14 @@ impl UtpSocket {
         }
 
         // Acknowledge only if the packet strictly follows the previous one
-        if self.ack_nr + 1 == Int::from_be(packet.header.seq_nr) {
-            self.ack_nr = Int::from_be(packet.header.seq_nr);
+        if self.ack_nr + 1 == packet.seq_nr() {
+            self.ack_nr = packet.seq_nr();
         }
 
         match packet.header.get_type() {
             ST_SYN => { // Respond with an ACK and populate own fields
                 // Update socket information for new connections
-                self.ack_nr = Int::from_be(packet.header.seq_nr);
+                self.ack_nr = packet.seq_nr();
                 self.seq_nr = random();
                 self.receiver_connection_id = Int::from_be(packet.header.connection_id) + 1;
                 self.sender_connection_id = Int::from_be(packet.header.connection_id);
@@ -835,14 +840,14 @@ impl UtpSocket {
             ST_DATA => {
                 let mut reply = self.prepare_reply(&packet.header, ST_STATE);
 
-                if self.ack_nr + 1 < Int::from_be(packet.header.seq_nr) {
+                if self.ack_nr + 1 < packet.seq_nr() {
                     debug!("current ack_nr ({}) is behind received packet seq_nr ({})",
-                           self.ack_nr, Int::from_be(packet.header.seq_nr));
+                           self.ack_nr, packet.seq_nr());
                     self.insert_into_buffer(packet.clone());
 
                     // Set SACK extension payload if the packet is not in order
                     let mut stashed = self.incoming_buffer.iter()
-                        .map(|pkt| Int::from_be(pkt.header.seq_nr))
+                        .map(|pkt| pkt.seq_nr())
                         .filter(|&seq_nr| seq_nr > self.ack_nr);
 
                     let mut sack = Vec::new();
@@ -878,7 +883,7 @@ impl UtpSocket {
                 // If all packets are received and handled
                 if self.pending_data.is_empty() &&
                     self.incoming_buffer.is_empty() &&
-                    self.ack_nr == Int::from_be(packet.header.seq_nr)
+                    self.ack_nr == packet.seq_nr()
                 {
                     self.state = CS_EOF;
                     Some(self.prepare_reply(&packet.header, ST_STATE))
@@ -915,7 +920,7 @@ impl UtpSocket {
                         // If three or more packets are acknowledged past the implicit missing one,
                         // assume it was lost.
                         if bits.filter(|&bit| bit == 1).count() >= 3 {
-                            let packet = self.send_window.iter().find(|pkt| Int::from_be(pkt.header.seq_nr) == Int::from_be(packet.header.ack_nr) + 1).unwrap();
+                            let packet = self.send_window.iter().find(|pkt| pkt.seq_nr() == Int::from_be(packet.header.ack_nr) + 1).unwrap();
                             debug!("sending {}", packet);
                             self.socket.send_to(packet.bytes().as_slice(), self.connected_to);
                         }
@@ -927,7 +932,7 @@ impl UtpSocket {
                                 debug!("SACK: packet {} received", seq_nr);
                             } else if seq_nr < self.seq_nr {
                                 debug!("SACK: packet {} lost", seq_nr);
-                                match self.send_window.iter().find(|pkt| Int::from_be(pkt.header.seq_nr) == seq_nr) {
+                                match self.send_window.iter().find(|pkt| pkt.seq_nr() == seq_nr) {
                                     None => debug!("Packet {} not found", seq_nr),
                                     Some(packet) => {
                                         match self.socket.send_to(packet.bytes().as_slice(), self.connected_to) {
@@ -951,7 +956,7 @@ impl UtpSocket {
                 // foolproof way to differentiate between triple-ACK and three
                 // keep alives spread in time
                 if !self.send_window.is_empty() && self.duplicate_ack_count == 3 {
-                    for packet in self.send_window.iter().take_while(|pkt| Int::from_be(pkt.header.seq_nr) <= Int::from_be(packet.header.ack_nr) + 1) {
+                    for packet in self.send_window.iter().take_while(|pkt| pkt.seq_nr() <= Int::from_be(packet.header.ack_nr) + 1) {
                         debug!("resending: {}", packet);
                         match self.socket.send_to(packet.bytes().as_slice(), self.connected_to) {
                             Ok(_) => {},
@@ -962,7 +967,7 @@ impl UtpSocket {
 
                 // Success, advance send window
                 while !self.send_window.is_empty() &&
-                    Int::from_be(self.send_window[0].header.seq_nr) <= self.last_acked {
+                    self.send_window[0].seq_nr() <= self.last_acked {
                     self.send_window.remove(0);
                 }
 
@@ -991,7 +996,7 @@ impl UtpSocket {
     fn insert_into_buffer(&mut self, packet: UtpPacket) {
         let mut i = 0;
         for pkt in self.incoming_buffer.iter() {
-            if Int::from_be(pkt.header.seq_nr) >= Int::from_be(packet.header.seq_nr) {
+            if pkt.seq_nr() >= packet.seq_nr() {
                 break;
             }
             i += 1;
@@ -1124,7 +1129,7 @@ mod test {
         assert_eq!(Int::from_be(pkt.header.timestamp_microseconds), 2570047530);
         assert_eq!(Int::from_be(pkt.header.timestamp_difference_microseconds), 2672436769);
         assert_eq!(Int::from_be(pkt.header.wnd_size), ::std::num::pow(2u32, 20));
-        assert_eq!(Int::from_be(pkt.header.seq_nr), 15090);
+        assert_eq!(pkt.seq_nr(), 15090);
         assert_eq!(Int::from_be(pkt.header.ack_nr), 27769);
         assert_eq!(pkt.len(), buf.len());
         assert!(pkt.payload.is_empty());
@@ -1145,7 +1150,7 @@ mod test {
         assert_eq!(Int::from_be(packet.header.timestamp_microseconds), 0);
         assert_eq!(Int::from_be(packet.header.timestamp_difference_microseconds), 0);
         assert_eq!(Int::from_be(packet.header.wnd_size), 1500);
-        assert_eq!(Int::from_be(packet.header.seq_nr), 43859);
+        assert_eq!(packet.seq_nr(), 43859);
         assert_eq!(Int::from_be(packet.header.ack_nr), 15093);
         assert_eq!(packet.len(), buf.len());
         assert!(packet.payload.is_empty());
@@ -1172,7 +1177,7 @@ mod test {
         assert_eq!(Int::from_be(packet.header.timestamp_microseconds), 0);
         assert_eq!(Int::from_be(packet.header.timestamp_difference_microseconds), 0);
         assert_eq!(Int::from_be(packet.header.wnd_size), 1500);
-        assert_eq!(Int::from_be(packet.header.seq_nr), 43859);
+        assert_eq!(packet.seq_nr(), 43859);
         assert_eq!(Int::from_be(packet.header.ack_nr), 15093);
         assert!(packet.payload.is_empty());
         assert!(packet.extensions.len() == 1);
@@ -1422,7 +1427,7 @@ mod test {
         let mut packet = UtpPacket::new();
         packet.set_type(ST_DATA);
         packet.header.connection_id = sender_connection_id.to_be();
-        packet.header.seq_nr = (Int::from_be(old_packet.header.seq_nr) + 1).to_be();
+        packet.header.seq_nr = (old_packet.seq_nr() + 1).to_be();
         packet.header.ack_nr = old_response.header.seq_nr;
         let sent = packet.header;
 
@@ -1444,7 +1449,7 @@ mod test {
 
         // Responses with no payload should not increase the sequence number
         assert!(response.payload.is_empty());
-        assert!(Int::from_be(response.header.seq_nr) == Int::from_be(old_response.header.seq_nr));
+        assert!(response.seq_nr() == old_response.seq_nr());
         // }
 
         //fn test_connection_teardown() {
@@ -1454,7 +1459,7 @@ mod test {
         let mut packet = UtpPacket::new();
         packet.set_type(ST_FIN);
         packet.header.connection_id = sender_connection_id.to_be();
-        packet.header.seq_nr = (Int::from_be(old_packet.header.seq_nr) + 1).to_be();
+        packet.header.seq_nr = (old_packet.seq_nr() + 1).to_be();
         packet.header.ack_nr = old_response.header.seq_nr;
         let sent = packet.header;
 
@@ -1466,7 +1471,7 @@ mod test {
         assert!(response.get_type() == ST_STATE);
 
         // FIN packets have no payload but the sequence number shouldn't increase
-        assert!(Int::from_be(sent.seq_nr) == Int::from_be(old_packet.header.seq_nr) + 1);
+        assert!(Int::from_be(sent.seq_nr) == old_packet.seq_nr() + 1);
 
         // Nor should the ACK packet's sequence number
         assert!(response.header.seq_nr == old_response.header.seq_nr);
@@ -1501,7 +1506,7 @@ mod test {
         let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
         packet.set_type(ST_STATE);
         packet.header.connection_id = initial_connection_id.to_be();
-        packet.header.seq_nr = (Int::from_be(old_packet.header.seq_nr) + 1).to_be();
+        packet.header.seq_nr = (old_packet.seq_nr() + 1).to_be();
         packet.header.ack_nr = old_response.header.seq_nr;
 
         let response = socket.handle_packet(packet.clone());
@@ -1655,7 +1660,7 @@ mod test {
         let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
         packet.set_type(ST_DATA);
         packet.header.connection_id = initial_connection_id.to_be();
-        packet.header.seq_nr = (Int::from_be(old_packet.header.seq_nr) + 1).to_be();
+        packet.header.seq_nr = (old_packet.seq_nr() + 1).to_be();
         packet.header.ack_nr = old_response.header.seq_nr;
         packet.payload = vec!(1,2,3);
         window.push(packet);
@@ -1663,7 +1668,7 @@ mod test {
         let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
         packet.set_type(ST_DATA);
         packet.header.connection_id = initial_connection_id.to_be();
-        packet.header.seq_nr = (Int::from_be(old_packet.header.seq_nr) + 2).to_be();
+        packet.header.seq_nr = (old_packet.seq_nr() + 2).to_be();
         packet.header.ack_nr = old_response.header.seq_nr;
         packet.payload = vec!(4,5,6);
         window.push(packet);
@@ -1762,7 +1767,7 @@ mod test {
         0x27, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x3a,
         0xf1, 0x00, 0x00];
         let test_syn_pkt = UtpPacket::decode(test_syn_raw);
-        let seq_nr = Int::from_be(test_syn_pkt.header.seq_nr);
+        let seq_nr = test_syn_pkt.seq_nr();
 
         spawn(proc() {
             let mut client = client;
@@ -1824,7 +1829,7 @@ mod test {
         let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
         packet.set_type(ST_STATE);
         packet.header.seq_nr = server.seq_nr.to_be();
-        packet.header.ack_nr = (Int::from_be(data_packet.header.seq_nr) - 1).to_be();
+        packet.header.ack_nr = (data_packet.seq_nr() - 1).to_be();
         packet.header.connection_id = server.sender_connection_id.to_be();
 
         for _ in range(0u, 3) {
@@ -1837,7 +1842,7 @@ mod test {
             Ok((read, _src)) => {
                 let packet = UtpPacket::decode(buf.slice_to(read));
                 assert_eq!(packet.get_type(), ST_DATA);
-                assert_eq!(Int::from_be(packet.header.seq_nr), Int::from_be(data_packet.header.seq_nr));
+                assert_eq!(packet.seq_nr(), data_packet.seq_nr());
                 assert!(packet.payload == data_packet.payload);
                 let response = server.handle_packet(packet).unwrap();
                 iotry!(server.socket.send_to(response.bytes().as_slice(), server.connected_to));
