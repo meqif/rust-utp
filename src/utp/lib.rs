@@ -2091,4 +2091,35 @@ mod test {
         assert_eq!(read.len(), data.len());
         assert_eq!(read, data);
     }
+
+    #[test]
+    fn test_tolerance_to_small_buffers() {
+        use std::io::EndOfFile;
+
+        let serverAddr = next_test_ip4();
+        let mut server = iotry!(UtpSocket::bind(serverAddr));
+        let len = 1024;
+        let data = Vec::from_fn(len, |idx| idx as u8);
+        let to_send = data.clone();
+
+        spawn(proc() {
+            let mut client = iotry!(UtpStream::connect(serverAddr));
+            iotry!(client.write(to_send.as_slice()));
+            iotry!(client.close());
+        });
+
+        let mut read = Vec::new();
+        while server.state != CS_CLOSED {
+            let mut small_buffer = [0, ..512];
+            match server.recv_from(small_buffer) {
+                Ok((0, _src)) => (),
+                Ok((len, _src)) => read.push_all(small_buffer.slice_to(len)),
+                Err(ref e) if e.kind == EndOfFile => break,
+                Err(e) => fail!("{}", e),
+            }
+        }
+
+        assert_eq!(read.len(), data.len());
+        assert_eq!(read, data);
+    }
 }
