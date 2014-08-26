@@ -761,11 +761,15 @@ impl UtpSocket {
         for chunk in buf.chunks(BUF_SIZE) {
             let mut packet = UtpPacket::new();
             packet.set_type(ST_DATA);
-            packet.payload = Vec::from_slice(chunk);
             packet.header.timestamp_microseconds = now_microseconds().to_be();
             packet.header.seq_nr = self.seq_nr.to_be();
             packet.header.ack_nr = self.ack_nr.to_be();
             packet.header.connection_id = self.sender_connection_id.to_be();
+            packet.payload = Vec::with_capacity(chunk.len());
+            unsafe {
+                std::ptr::copy_nonoverlapping_memory(packet.payload.as_mut_ptr(), chunk.as_ptr(), chunk.len());
+                packet.payload.set_len(chunk.len());
+            }
 
             self.unsent_queue.push(packet);
             self.seq_nr += 1;
