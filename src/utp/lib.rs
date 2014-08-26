@@ -238,6 +238,11 @@ impl UtpPacket {
         Int::from_be(self.header.seq_nr)
     }
 
+    #[inline(always)]
+    fn ack_nr(&self) -> u16 {
+        Int::from_be(self.header.ack_nr)
+    }
+
     fn wnd_size(&self, new_wnd_size: u32) -> UtpPacket {
         UtpPacket {
             header: self.header.wnd_size(new_wnd_size),
@@ -905,10 +910,10 @@ impl UtpSocket {
                 debug!("self.rtt: {}", self.rtt);
                 debug!("self.timeout: {}", self.timeout);
 
-                if Int::from_be(packet.header.ack_nr) == self.last_acked {
+                if packet.ack_nr() == self.last_acked {
                     self.duplicate_ack_count += 1;
                 } else {
-                    self.last_acked = Int::from_be(packet.header.ack_nr);
+                    self.last_acked = packet.ack_nr();
                     self.last_acked_timestamp = now_microseconds();
                     self.duplicate_ack_count = 1;
                 }
@@ -920,14 +925,14 @@ impl UtpSocket {
                         // If three or more packets are acknowledged past the implicit missing one,
                         // assume it was lost.
                         if bits.filter(|&bit| bit == 1).count() >= 3 {
-                            let packet = self.send_window.iter().find(|pkt| pkt.seq_nr() == Int::from_be(packet.header.ack_nr) + 1).unwrap();
+                            let packet = self.send_window.iter().find(|pkt| pkt.seq_nr() == packet.ack_nr() + 1).unwrap();
                             debug!("sending {}", packet);
                             self.socket.send_to(packet.bytes().as_slice(), self.connected_to);
                         }
 
                         let bits = BitIterator::new(extension.data.clone());
                         for (idx, received) in bits.map(|bit| bit == 1).enumerate() {
-                            let seq_nr = Int::from_be(packet.header.ack_nr) + 2 + idx as u16;
+                            let seq_nr = packet.ack_nr() + 2 + idx as u16;
                             if received {
                                 debug!("SACK: packet {} received", seq_nr);
                             } else if seq_nr < self.seq_nr {
@@ -956,7 +961,7 @@ impl UtpSocket {
                 // foolproof way to differentiate between triple-ACK and three
                 // keep alives spread in time
                 if !self.send_window.is_empty() && self.duplicate_ack_count == 3 {
-                    for packet in self.send_window.iter().take_while(|pkt| pkt.seq_nr() <= Int::from_be(packet.header.ack_nr) + 1) {
+                    for packet in self.send_window.iter().take_while(|pkt| pkt.seq_nr() <= packet.ack_nr() + 1) {
                         debug!("resending: {}", packet);
                         match self.socket.send_to(packet.bytes().as_slice(), self.connected_to) {
                             Ok(_) => {},
@@ -972,7 +977,7 @@ impl UtpSocket {
                 }
 
                 if self.state == CS_FIN_SENT &&
-                    Int::from_be(packet.header.ack_nr) == self.seq_nr {
+                    packet.ack_nr() == self.seq_nr {
                     self.state = CS_CLOSED;
                 }
 
@@ -1130,7 +1135,7 @@ mod test {
         assert_eq!(Int::from_be(pkt.header.timestamp_difference_microseconds), 2672436769);
         assert_eq!(Int::from_be(pkt.header.wnd_size), ::std::num::pow(2u32, 20));
         assert_eq!(pkt.seq_nr(), 15090);
-        assert_eq!(Int::from_be(pkt.header.ack_nr), 27769);
+        assert_eq!(pkt.ack_nr(), 27769);
         assert_eq!(pkt.len(), buf.len());
         assert!(pkt.payload.is_empty());
     }
@@ -1151,7 +1156,7 @@ mod test {
         assert_eq!(Int::from_be(packet.header.timestamp_difference_microseconds), 0);
         assert_eq!(Int::from_be(packet.header.wnd_size), 1500);
         assert_eq!(packet.seq_nr(), 43859);
-        assert_eq!(Int::from_be(packet.header.ack_nr), 15093);
+        assert_eq!(packet.ack_nr(), 15093);
         assert_eq!(packet.len(), buf.len());
         assert!(packet.payload.is_empty());
         assert!(packet.extensions.len() == 1);
@@ -1178,7 +1183,7 @@ mod test {
         assert_eq!(Int::from_be(packet.header.timestamp_difference_microseconds), 0);
         assert_eq!(Int::from_be(packet.header.wnd_size), 1500);
         assert_eq!(packet.seq_nr(), 43859);
-        assert_eq!(Int::from_be(packet.header.ack_nr), 15093);
+        assert_eq!(packet.ack_nr(), 15093);
         assert!(packet.payload.is_empty());
         assert!(packet.extensions.len() == 1);
         assert!(packet.extensions[0].ty == SelectiveAckExtension);
@@ -1445,7 +1450,7 @@ mod test {
         assert!(Int::from_be(response.header.connection_id) == Int::from_be(sent.connection_id) - 1);
 
         // Previous packets should be ack'ed
-        assert!(Int::from_be(response.header.ack_nr) == Int::from_be(sent.seq_nr));
+        assert!(response.ack_nr() == Int::from_be(sent.seq_nr));
 
         // Responses with no payload should not increase the sequence number
         assert!(response.payload.is_empty());
