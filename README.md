@@ -10,10 +10,10 @@ duplicate packets and presents a stream interface (`UtpStream`).
 ## To implement
 
 - [ ] congestion control
-- [x] proper connection closing
+- [ ] proper connection closing
     - [x] handle both RST and FIN
     - [x] send FIN on close
-    - [x] automatically send FIN on `drop` if not already closed
+    - [ ] automatically send FIN (or should it be RST?) on `drop` if not already closed
 - [x] sending RST on mismatch
 - [ ] setters and getters that hide header field endianness conversion
 - [x] SACK extension

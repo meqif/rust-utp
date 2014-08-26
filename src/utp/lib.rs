@@ -11,6 +11,7 @@
 // - Lossy UDP socket for testing purposes: send and receive ops are wrappers
 // that stochastically drop or reorder packets.
 // - Congestion control (LEDBAT -- RFC6817)
+// - Sending FIN on drop
 // - Setters and getters that hide header field endianness conversion
 // - Handle packet loss
 // - Path MTU discovery (RFC4821)
@@ -33,6 +34,7 @@ use std::io::IoResult;
 use std::mem::transmute;
 use std::rand::random;
 use std::fmt;
+use std::collections::{DList, Deque};
 
 static HEADER_SIZE: uint = 20;
 // For simplicity's sake, let us assume no packet will ever exceed the
@@ -374,7 +376,8 @@ pub struct UtpSocket {
     // Received but not acknowledged packets
     incoming_buffer: Vec<UtpPacket>,
     // Sent but not yet acknowledged packets
-    send_buffer: Vec<UtpPacket>,
+    send_window: Vec<UtpPacket>,
+    unsent_queue: DList<UtpPacket>,
     duplicate_ack_count: uint,
     last_acked: u16,
     last_acked_timestamp: u32,
@@ -382,6 +385,8 @@ pub struct UtpSocket {
     rtt: int,
     rtt_variance: int,
     timeout: int,
+
+    pending_data: DList<u8>,
 }
 
 impl UtpSocket {
@@ -400,13 +405,15 @@ impl UtpSocket {
                 ack_nr: 0,
                 state: CS_NEW,
                 incoming_buffer: Vec::new(),
-                send_buffer: Vec::new(),
+                send_window: Vec::new(),
+                unsent_queue: DList::new(),
                 duplicate_ack_count: 0,
                 last_acked: 0,
                 last_acked_timestamp: 0,
                 rtt: 0,
                 rtt_variance: 0,
                 timeout: 1000,
+                pending_data: DList::new(),
             }),
             Err(e) => Err(e)
         }
@@ -499,7 +506,7 @@ impl UtpSocket {
     pub fn close(&mut self) -> IoResult<()> {
         // Wait for acknowledgment on pending sent packets
         let mut buf = [0u8, ..BUF_SIZE];
-        while !self.send_buffer.is_empty() {
+        while !self.send_window.is_empty() {
             match self.recv_from(buf) {
                 Ok(_) => {},
                 Err(e) => fail!("{}", e),
@@ -536,8 +543,7 @@ impl UtpSocket {
     /// inflight packets are consumed. Subsequent calls return CS_CLOSED.
     #[unstable]
     pub fn recv_from(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
-        use std::cmp::min;
-        use std::io::{IoError, EndOfFile, Closed, TimedOut, ConnectionReset};
+        use std::io::{IoError, EndOfFile, Closed};
 
         if self.state == CS_EOF {
             self.state = CS_CLOSED;
@@ -555,6 +561,15 @@ impl UtpSocket {
                 detail: None,
             });
         }
+
+        match self.flush_incoming_buffer(buf, 0) {
+            0 => self.recv(buf),
+            read => Ok((read, self.connected_to)),
+        }
+    }
+
+    fn recv(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
+        use std::io::{IoError, TimedOut, ConnectionReset};
 
         let mut b = [0, ..BUF_SIZE + HEADER_SIZE];
         debug!("setting read timeout of {} ms", self.timeout);
@@ -587,18 +602,10 @@ impl UtpSocket {
             self.connected_to = src;
         }
 
-        // Copy received payload to output buffer if packet isn't a duplicate
-        let mut read = packet.payload.len();
-        if self.ack_nr < Int::from_be(packet.header.seq_nr) {
-            for i in range(0u, min(buf.len(), read)) {
-                buf[i] = b[i + HEADER_SIZE];
-            }
-        } else {
-            read = 0;
-        }
-
-        if self.ack_nr + 1 < Int::from_be(packet.header.seq_nr) {
-            read = 0;
+        if packet.get_type() == ST_DATA &&
+            self.ack_nr < Int::from_be(packet.header.seq_nr)
+        {
+            self.insert_into_buffer(packet.clone());
         }
 
         match self.handle_packet(packet) {
@@ -611,7 +618,7 @@ impl UtpSocket {
         };
 
         // Flush incoming buffer if possible
-        let read = self.flush_incoming_buffer(buf, read);
+        let read = self.flush_incoming_buffer(buf, 0);
 
         Ok((read, src))
     }
@@ -643,15 +650,50 @@ impl UtpSocket {
     /// Returns the last written index.
     fn flush_incoming_buffer(&mut self, buf: &mut [u8], start: uint) -> uint {
         let mut idx = start;
-        while !self.incoming_buffer.is_empty() &&
-            self.ack_nr + 1 == Int::from_be(self.incoming_buffer[0].header.seq_nr) {
-            let packet = self.incoming_buffer.remove(0).unwrap();
-            debug!("Removing packet from buffer: {}", packet);
 
-            for i in range(0u, packet.payload.len()) {
-                buf[idx] = packet.payload[i];
+        if !self.pending_data.is_empty() {
+            loop {
+                if idx < buf.len() {
+                    match self.pending_data.pop_front() {
+                        None => {
+                            let packet = self.incoming_buffer.remove(0).unwrap();
+                            debug!("Removing packet from buffer: {}", packet);
+                            self.ack_nr = Int::from_be(packet.header.seq_nr);
+                            return idx;
+                        },
+                        Some(v) => {
+                            buf[idx] = v;
+                            idx += 1;
+                        }
+                    }
+                } else {
+                    if self.pending_data.is_empty() && idx > start {
+                        let packet = self.incoming_buffer.remove(0).unwrap();
+                        debug!("Removing packet from buffer: {}", packet);
+                        self.ack_nr = Int::from_be(packet.header.seq_nr);
+                    }
+                    return idx;
+                }
+            }
+        }
+
+        while !self.incoming_buffer.is_empty() &&
+            (self.ack_nr == Int::from_be(self.incoming_buffer[0].header.seq_nr) ||
+            self.ack_nr + 1 == Int::from_be(self.incoming_buffer[0].header.seq_nr)) {
+
+            for i in range(0u, self.incoming_buffer[0].payload.len()) {
+                if idx < buf.len() {
+                    buf[idx] = self.incoming_buffer[0].payload[i];
+                } else {
+                    self.pending_data.push(self.incoming_buffer[0].payload[i]);
+                }
                 idx += 1;
             }
+            if idx >= buf.len() {
+                return buf.len();
+            }
+            let packet = self.incoming_buffer.remove(0).unwrap();
+            debug!("Removing packet from buffer: {}", packet);
             self.ack_nr = Int::from_be(packet.header.seq_nr);
         }
 
@@ -681,15 +723,6 @@ impl UtpSocket {
         }
 
         for chunk in buf.chunks(BUF_SIZE) {
-            // FIXME: this is an extremely primitive pacing mechanism
-            while self.send_buffer.len() > 10 {
-                if self.duplicate_ack_count == 3 {
-                    self.socket.send_to(self.send_buffer[0].bytes().as_slice(), self.connected_to.clone());
-                }
-                let mut buf = [0, ..BUF_SIZE];
-                try!(self.recv_from(buf));
-            }
-
             let mut packet = UtpPacket::new();
             packet.set_type(ST_DATA);
             packet.payload = Vec::from_slice(chunk);
@@ -698,11 +731,12 @@ impl UtpSocket {
             packet.header.ack_nr = self.ack_nr.to_be();
             packet.header.connection_id = self.sender_connection_id.to_be();
 
-            debug!("Pushing packet into send buffer: {}", packet);
-            try!(self.socket.send_to(packet.bytes().as_slice(), dst));
-            self.send_buffer.push(packet);
+            self.unsent_queue.push(packet);
             self.seq_nr += 1;
         }
+
+        // Flush unsent packet queue
+        self.send();
 
         // Consume acknowledgements until latest packet
         let mut buf = [0, ..BUF_SIZE];
@@ -712,6 +746,35 @@ impl UtpSocket {
 
         Ok(())
     }
+
+    /// Send every packet in the unsent packet queue.
+    fn send(&mut self) {
+        let dst = self.connected_to;
+        loop {
+            // FIXME: this is an extremely primitive pacing mechanism
+            while self.send_window.len() > 10 {
+            // while self.curr_window > self.max_window {
+                if self.duplicate_ack_count == 3 {
+                    self.socket.send_to(self.send_window[0].bytes().as_slice(), dst);
+                }
+                let mut buf = [0, ..BUF_SIZE];
+                self.recv_from(buf);
+            }
+
+            let packet = match self.unsent_queue.pop_front() {
+                None => break,
+                Some(packet) => packet,
+            };
+
+            match self.socket.send_to(packet.bytes().as_slice(), dst) {
+                Ok(_) => {},
+                Err(ref e) => fail!("{}", e),
+            }
+            debug!("sent {}", packet);
+            self.send_window.push(packet);
+        }
+    }
+
 
     #[allow(missing_doc)]
     #[deprecated = "renamed to `send_to`"]
@@ -811,10 +874,18 @@ impl UtpSocket {
             },
             ST_FIN => {
                 self.state = CS_FIN_RECEIVED;
-                // TODO: check if no packets are missing
-                // If all packets are received
-                self.state = CS_EOF;
-                Some(self.prepare_reply(&packet.header, ST_STATE))
+
+                // If all packets are received and handled
+                if self.pending_data.is_empty() &&
+                    self.incoming_buffer.is_empty() &&
+                    self.ack_nr == Int::from_be(packet.header.seq_nr)
+                {
+                    self.state = CS_EOF;
+                    Some(self.prepare_reply(&packet.header, ST_STATE))
+                } else {
+                    debug!("FIN received but there are missing packets");
+                    None
+                }
             }
             ST_STATE => {
                 let packet_rtt = Int::from_be(packet.header.timestamp_difference_microseconds) as int;
@@ -844,7 +915,7 @@ impl UtpSocket {
                         // If three or more packets are acknowledged past the implicit missing one,
                         // assume it was lost.
                         if bits.filter(|&bit| bit == 1).count() >= 3 {
-                            let packet = self.send_buffer.iter().find(|pkt| Int::from_be(pkt.header.seq_nr) == Int::from_be(packet.header.ack_nr) + 1).unwrap();
+                            let packet = self.send_window.iter().find(|pkt| Int::from_be(pkt.header.seq_nr) == Int::from_be(packet.header.ack_nr) + 1).unwrap();
                             debug!("sending {}", packet);
                             self.socket.send_to(packet.bytes().as_slice(), self.connected_to);
                         }
@@ -856,8 +927,8 @@ impl UtpSocket {
                                 debug!("SACK: packet {} received", seq_nr);
                             } else if seq_nr < self.seq_nr {
                                 debug!("SACK: packet {} lost", seq_nr);
-                                match self.send_buffer.iter().find(|pkt| Int::from_be(pkt.header.seq_nr) == seq_nr) {
-                                    None => fail!("Packet {} not found", seq_nr),
+                                match self.send_window.iter().find(|pkt| Int::from_be(pkt.header.seq_nr) == seq_nr) {
+                                    None => debug!("Packet {} not found", seq_nr),
                                     Some(packet) => {
                                         match self.socket.send_to(packet.bytes().as_slice(), self.connected_to) {
                                             Ok(_) => {},
@@ -879,8 +950,8 @@ impl UtpSocket {
                 // TODO: checking if the send buffer isn't empty isn't a
                 // foolproof way to differentiate between triple-ACK and three
                 // keep alives spread in time
-                if !self.send_buffer.is_empty() && self.duplicate_ack_count == 3 {
-                    for packet in self.send_buffer.iter().take_while(|pkt| Int::from_be(pkt.header.seq_nr) <= Int::from_be(packet.header.ack_nr) + 1) {
+                if !self.send_window.is_empty() && self.duplicate_ack_count == 3 {
+                    for packet in self.send_window.iter().take_while(|pkt| Int::from_be(pkt.header.seq_nr) <= Int::from_be(packet.header.ack_nr) + 1) {
                         debug!("resending: {}", packet);
                         match self.socket.send_to(packet.bytes().as_slice(), self.connected_to) {
                             Ok(_) => {},
@@ -890,9 +961,9 @@ impl UtpSocket {
                 }
 
                 // Success, advance send window
-                while !self.send_buffer.is_empty() &&
-                    Int::from_be(self.send_buffer[0].header.seq_nr) <= self.last_acked {
-                    self.send_buffer.remove(0);
+                while !self.send_window.is_empty() &&
+                    Int::from_be(self.send_window[0].header.seq_nr) <= self.last_acked {
+                    self.send_window.remove(0);
                 }
 
                 if self.state == CS_FIN_SENT &&
@@ -947,22 +1018,15 @@ impl Clone for UtpSocket {
             ack_nr: self.ack_nr,
             state: self.state,
             incoming_buffer: Vec::new(),
-            send_buffer: Vec::new(),
+            send_window: Vec::new(),
+            unsent_queue: DList::new(),
             duplicate_ack_count: 0,
             last_acked: 0,
             last_acked_timestamp: 0,
             rtt: 0,
             rtt_variance: 0,
             timeout: 500,
-        }
-    }
-}
-
-impl Drop for UtpSocket {
-    fn drop(&mut self) {
-        match self.close() {
-            Ok(_) => {},
-            Err(e) => fail!("{}", e),
+            pending_data: DList::new(),
         }
     }
 }
@@ -1024,15 +1088,6 @@ impl Writer for UtpStream {
     fn write(&mut self, buf: &[u8]) -> IoResult<()> {
         let dst = self.socket.connected_to;
         self.socket.send_to(buf, dst)
-    }
-}
-
-impl Drop for UtpStream {
-    fn drop(&mut self) {
-        match self.close() {
-            Ok(_) => {},
-            Err(e) => fail!("{}", e),
-        }
     }
 }
 
@@ -1639,28 +1694,28 @@ mod test {
         spawn(proc() {
             let mut client = iotry!(client.connect(serverAddr));
             assert!(client.state == CS_CONNECTED);
-            let mut s = client.socket.clone();
+            let mut s = client.socket;
             let mut window: Vec<UtpPacket> = Vec::new();
 
-            let mut i = 0;
-            for data in Vec::from_fn(12, |idx| idx as u8 + 1).as_slice().chunks(3) {
+            for (i, data) in Vec::from_fn(12, |idx| idx as u8 + 1).as_slice().chunks(3).enumerate() {
                 let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
                 packet.set_type(ST_DATA);
                 packet.header.connection_id = client.sender_connection_id.to_be();
-                packet.header.seq_nr = (client.seq_nr + i).to_be();
+                packet.header.seq_nr = client.seq_nr.to_be();
                 packet.header.ack_nr = client.ack_nr.to_be();
                 packet.payload = Vec::from_slice(data);
                 window.push(packet.clone());
-                client.send_buffer.push(packet.clone());
-                i += 1;
+                client.send_window.push(packet.clone());
+                client.seq_nr += 1;
             }
 
             let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
             packet.set_type(ST_FIN);
             packet.header.connection_id = client.sender_connection_id.to_be();
-            packet.header.seq_nr = (client.seq_nr + i).to_be();
+            packet.header.seq_nr = client.seq_nr.to_be();
             packet.header.ack_nr = client.ack_nr.to_be();
             window.push(packet);
+            client.seq_nr += 1;
 
             iotry!(s.send_to(window[3].bytes().as_slice(), serverAddr));
             iotry!(s.send_to(window[2].bytes().as_slice(), serverAddr));
@@ -1719,17 +1774,6 @@ mod test {
                 Err(e) => fail!("{}", e),
             };
             expect_eq!(packet.header.ack_nr, seq_nr.to_be());
-
-            let mut buf = [0, ..BUF_SIZE];
-            iotry!(client.recv_from(buf));
-            let packet = UtpPacket::decode(buf);
-            debug!("received {}", packet);
-            let mut reply = UtpPacket::new();
-            reply.header.seq_nr = (Int::from_be(UtpPacket::decode(test_syn_raw).header.seq_nr) + 1).to_be();
-            reply.header.ack_nr = packet.header.seq_nr;
-            reply.header.connection_id = packet.header.connection_id;
-            reply.set_type(ST_STATE);
-            iotry!(client.send_to(reply.bytes().as_slice(), serverAddr));
             drop(client);
         });
 
@@ -2036,7 +2080,7 @@ mod test {
                     iotry!(client.socket.send_to(packet.bytes().as_slice(), dst));
                 }
 
-                client.send_buffer.push(packet);
+                client.send_window.push(packet);
                 client.seq_nr += 1;
             }
 
@@ -2044,6 +2088,37 @@ mod test {
         });
 
         let read = iotry!(server.read_to_end());
+        assert_eq!(read.len(), data.len());
+        assert_eq!(read, data);
+    }
+
+    #[test]
+    fn test_tolerance_to_small_buffers() {
+        use std::io::EndOfFile;
+
+        let serverAddr = next_test_ip4();
+        let mut server = iotry!(UtpSocket::bind(serverAddr));
+        let len = 1024;
+        let data = Vec::from_fn(len, |idx| idx as u8);
+        let to_send = data.clone();
+
+        spawn(proc() {
+            let mut client = iotry!(UtpStream::connect(serverAddr));
+            iotry!(client.write(to_send.as_slice()));
+            iotry!(client.close());
+        });
+
+        let mut read = Vec::new();
+        while server.state != CS_CLOSED {
+            let mut small_buffer = [0, ..512];
+            match server.recv_from(small_buffer) {
+                Ok((0, _src)) => (),
+                Ok((len, _src)) => read.push_all(small_buffer.slice_to(len)),
+                Err(ref e) if e.kind == EndOfFile => break,
+                Err(e) => fail!("{}", e),
+            }
+        }
+
         assert_eq!(read.len(), data.len());
         assert_eq!(read, data);
     }
