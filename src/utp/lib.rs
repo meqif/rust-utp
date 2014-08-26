@@ -900,7 +900,7 @@ impl UtpSocket {
                 debug!("self.rtt: {}", self.rtt);
                 debug!("self.timeout: {}", self.timeout);
 
-                if packet.header.ack_nr == Int::from_be(self.last_acked) {
+                if Int::from_be(packet.header.ack_nr) == self.last_acked {
                     self.duplicate_ack_count += 1;
                 } else {
                     self.last_acked = Int::from_be(packet.header.ack_nr);
