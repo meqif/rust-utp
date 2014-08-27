@@ -877,7 +877,9 @@ impl UtpSocket {
                         sack.grow((len / 4 + 1) * 4 - len, &0);
                     }
 
-                    reply.set_sack(Some(sack));
+                    if sack.len() > 0 {
+                        reply.set_sack(Some(sack));
+                    }
                 }
 
                 Some(reply)
