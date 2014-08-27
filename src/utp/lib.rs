@@ -372,6 +372,15 @@ impl UtpPacket {
             payload: payload,
         }
     }
+
+    /// Return a clone of this object without the payload
+    fn shallow_clone(&self) -> UtpPacket {
+        UtpPacket {
+            header: self.header.clone(),
+            extensions: self.extensions.clone(),
+            payload: Vec::new(),
+        }
+    }
 }
 
 impl Clone for UtpPacket {
@@ -608,13 +617,15 @@ impl UtpSocket {
             self.connected_to = src;
         }
 
+        let shallow_clone = packet.shallow_clone();
+
         if packet.get_type() == ST_DATA &&
             self.ack_nr < packet.seq_nr()
         {
-            self.insert_into_buffer(packet.clone());
+            self.insert_into_buffer(packet);
         }
 
-        match self.handle_packet(packet) {
+        match self.handle_packet(shallow_clone) {
             Some(pkt) => {
                 let pkt = pkt.wnd_size(BUF_SIZE as u32);
                 try!(self.socket.send_to(pkt.bytes().as_slice(), src));
