@@ -1906,6 +1906,9 @@ mod test {
         // handling in the *next* call to `UtpSocket.recv_from`.
         iotry!(server.socket.recv_from(buf));
 
+        // Set a much smaller than usual timeout, for quicker test completion
+        server.timeout = 50;
+
         // Now wait for the previously discarded packet
         loop {
             match server.recv_from(buf) {
