@@ -361,7 +361,13 @@ impl UtpPacket {
 
         let mut payload;
         if idx < buf.len() {
-            payload = Vec::from_slice(buf.slice_from(idx));
+            let len = buf.len() - idx;
+            payload = Vec::with_capacity(buf.len() - idx);
+            unsafe {
+                payload.set_len(len);
+                let pload = buf.as_ptr().offset(idx as int);
+                std::ptr::copy_nonoverlapping_memory(payload.as_mut_ptr(), pload, len);
+            };
         } else {
             payload = Vec::new();
         }
