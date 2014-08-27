@@ -338,7 +338,6 @@ impl UtpPacket {
 
         // Consume known extensions and skip over unknown ones
         while idx < buf.len() && kind != 0 {
-            // Ignoring next extension type at buf[HEADER_SIZE]
             let len = buf[idx + 1] as uint;
             let extension_start = idx + 2;
             let payload_start = extension_start + len;
