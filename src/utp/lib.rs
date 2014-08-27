@@ -848,7 +848,6 @@ impl UtpSocket {
                 if self.ack_nr + 1 < packet.seq_nr() {
                     debug!("current ack_nr ({}) is behind received packet seq_nr ({})",
                            self.ack_nr, packet.seq_nr());
-                    self.insert_into_buffer(packet.clone());
 
                     // Set SACK extension payload if the packet is not in order
                     let mut stashed = self.incoming_buffer.iter()
