@@ -686,6 +686,7 @@ impl UtpSocket {
     fn flush_incoming_buffer(&mut self, buf: &mut [u8], start: uint) -> uint {
         let mut idx = start;
 
+        // try replacing copies with std::ptr::copy_nonoverlapping_memory
         if !self.pending_data.is_empty() {
             loop {
                 if idx < buf.len() {
@@ -715,6 +716,16 @@ impl UtpSocket {
         while !self.incoming_buffer.is_empty() &&
             (self.ack_nr == self.incoming_buffer[0].seq_nr() ||
             self.ack_nr + 1 == self.incoming_buffer[0].seq_nr()) {
+
+            if self.incoming_buffer[0].payload.len() <= buf.len() - idx {
+                let packet = self.incoming_buffer.remove(0).unwrap();
+                debug!("Removing packet from buffer: {}", packet);
+                self.ack_nr = packet.seq_nr();
+                unsafe {
+                    std::ptr::copy_nonoverlapping_memory(buf.as_mut_ptr(), packet.payload.as_ptr(), packet.payload.len());
+                }
+                return idx + packet.payload.len();
+            }
 
             for i in range(0u, self.incoming_buffer[0].payload.len()) {
                 if idx < buf.len() {
