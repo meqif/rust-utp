@@ -243,6 +243,11 @@ impl UtpPacket {
         Int::from_be(self.header.ack_nr)
     }
 
+    #[inline(always)]
+    fn connection_id(&self) -> u16 {
+        Int::from_be(self.header.connection_id)
+    }
+
     fn wnd_size(&self, new_wnd_size: u32) -> UtpPacket {
         UtpPacket {
             header: self.header.wnd_size(new_wnd_size),
@@ -850,8 +855,8 @@ impl UtpSocket {
     fn handle_packet(&mut self, packet: UtpPacket) -> Option<UtpPacket> {
         // Reset connection if connection id doesn't match and this isn't a SYN
         if packet.get_type() != ST_SYN &&
-           !(Int::from_be(packet.header.connection_id) == self.sender_connection_id ||
-           Int::from_be(packet.header.connection_id) == self.receiver_connection_id) {
+           !(packet.connection_id() == self.sender_connection_id ||
+           packet.connection_id() == self.receiver_connection_id) {
             return Some(self.prepare_reply(&packet.header, ST_RESET));
         }
 
@@ -865,8 +870,8 @@ impl UtpSocket {
                 // Update socket information for new connections
                 self.ack_nr = packet.seq_nr();
                 self.seq_nr = random();
-                self.receiver_connection_id = Int::from_be(packet.header.connection_id) + 1;
-                self.sender_connection_id = Int::from_be(packet.header.connection_id);
+                self.receiver_connection_id = packet.connection_id() + 1;
+                self.sender_connection_id = packet.connection_id();
                 self.state = CS_CONNECTED;
 
                 Some(self.prepare_reply(&packet.header, ST_STATE))
@@ -1159,7 +1164,7 @@ mod test {
         assert_eq!(pkt.header.get_version(), 1);
         assert_eq!(pkt.header.get_type(), ST_STATE);
         assert_eq!(pkt.header.extension, 0);
-        assert_eq!(Int::from_be(pkt.header.connection_id), 16808);
+        assert_eq!(pkt.connection_id(), 16808);
         assert_eq!(Int::from_be(pkt.header.timestamp_microseconds), 2570047530);
         assert_eq!(Int::from_be(pkt.header.timestamp_difference_microseconds), 2672436769);
         assert_eq!(Int::from_be(pkt.header.wnd_size), ::std::num::pow(2u32, 20));
@@ -1180,7 +1185,7 @@ mod test {
         assert_eq!(packet.header.get_version(), 1);
         assert_eq!(packet.header.get_type(), ST_STATE);
         assert_eq!(packet.header.extension, 1);
-        assert_eq!(Int::from_be(packet.header.connection_id), 16807);
+        assert_eq!(packet.connection_id(), 16807);
         assert_eq!(Int::from_be(packet.header.timestamp_microseconds), 0);
         assert_eq!(Int::from_be(packet.header.timestamp_difference_microseconds), 0);
         assert_eq!(Int::from_be(packet.header.wnd_size), 1500);
@@ -1207,7 +1212,7 @@ mod test {
         assert_eq!(packet.header.get_version(), 1);
         assert_eq!(packet.header.get_type(), ST_STATE);
         assert_eq!(packet.header.extension, 1);
-        assert_eq!(Int::from_be(packet.header.connection_id), 16807);
+        assert_eq!(packet.connection_id(), 16807);
         assert_eq!(Int::from_be(packet.header.timestamp_microseconds), 0);
         assert_eq!(Int::from_be(packet.header.timestamp_difference_microseconds), 0);
         assert_eq!(Int::from_be(packet.header.wnd_size), 1500);
@@ -1475,8 +1480,8 @@ mod test {
         // equal to initial connection id + 1
         // Receiver (i.e., who accepted connection) has connection id equal to
         // initial connection id
-        assert!(Int::from_be(response.header.connection_id) == initial_connection_id);
-        assert!(Int::from_be(response.header.connection_id) == Int::from_be(sent.connection_id) - 1);
+        assert!(response.connection_id() == initial_connection_id);
+        assert!(response.connection_id() == Int::from_be(sent.connection_id) - 1);
 
         // Previous packets should be ack'ed
         assert!(response.ack_nr() == Int::from_be(sent.seq_nr));
