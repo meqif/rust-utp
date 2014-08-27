@@ -619,9 +619,7 @@ impl UtpSocket {
 
         let shallow_clone = packet.shallow_clone();
 
-        if packet.get_type() == ST_DATA &&
-            self.ack_nr < packet.seq_nr()
-        {
+        if packet.get_type() == ST_DATA && self.ack_nr < packet.seq_nr() {
             self.insert_into_buffer(packet);
         }
 
@@ -1022,10 +1020,8 @@ impl UtpSocket {
         if !self.incoming_buffer.is_empty() && i < self.incoming_buffer.len() &&
             self.incoming_buffer[i].header.seq_nr == packet.header.seq_nr {
             self.incoming_buffer.remove(i);
-            self.incoming_buffer.insert(i, packet);
-        } else {
-            self.incoming_buffer.insert(i, packet);
         }
+    self.incoming_buffer.insert(i, packet);
     }
 }
 
