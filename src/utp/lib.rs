@@ -471,13 +471,18 @@ impl UtpSocket {
         packet.set_type(ST_SYN);
         packet.header.connection_id = self.receiver_connection_id.to_be();
         packet.header.seq_nr = self.seq_nr.to_be();
+        packet.header.timestamp_microseconds = now_microseconds().to_be();
 
         // Send packet
-        let mut buf = [0, ..BUF_SIZE];
-        let (len, addr) = try!(self.packet_send(&packet, buf));
+        try!(self.socket.send_to(packet.to_bytes().as_slice(), other));
         self.state = CS_SYN_SENT;
 
         // Validate response
+        let mut buf = [0, ..BUF_SIZE];
+        let (len, addr) = match self.socket.recv_from(buf) {
+            Ok(v) => v,
+            Err(e) => fail!("{}", e),
+        };
         assert!(len == HEADER_SIZE);
         assert!(addr == self.connected_to);
 
@@ -497,45 +502,6 @@ impl UtpSocket {
         debug!("connected to: {}", self.connected_to);
 
         return Ok(self);
-    }
-
-    /// Send `packet` and write reply to `buf`.
-    ///
-    /// This method abstracts away the (send packet, receive acknowledgment)
-    /// cycle and deals with timeouts.
-    fn packet_send(&mut self, packet: &UtpPacket, buf: &mut [u8])
-                   -> IoResult<(uint, SocketAddr)> {
-        use std::io::{IoError, TimedOut};
-
-        for _ in range(0u, 5) {
-            let dst = self.connected_to;
-            let mut packet = packet.clone();
-            packet.header.timestamp_microseconds = now_microseconds().to_be();
-
-            try!(self.socket.send_to(packet.bytes().as_slice(), dst));
-            debug!("sent {}", packet.header);
-
-            debug!("setting read timeout of {} ms", self.timeout);
-            self.socket.set_read_timeout(Some(self.timeout as u64));
-
-            let (len, addr) = match self.socket.recv_from(buf) {
-                Ok(v) => v,
-                Err(ref e) if e.kind == TimedOut => {
-                    debug!("recv_from timed out");
-                    self.timeout = self.timeout * 2;
-                    continue;
-                }
-                Err(e) => fail!("{}", e),
-            };
-
-            return Ok((len, addr));
-        }
-
-        return Err(IoError {
-            kind: TimedOut,
-            desc: "Connection timed out",
-            detail: None,
-        });
     }
 
     /// Gracefully close connection to peer.
