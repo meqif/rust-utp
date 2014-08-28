@@ -145,13 +145,6 @@ impl UtpPacketHeader {
         self.type_ver & 0x0F
     }
 
-    fn wnd_size(&self, new_wnd_size: u32) -> UtpPacketHeader {
-        UtpPacketHeader {
-            wnd_size: new_wnd_size.to_be(),
-            .. self.clone()
-        }
-    }
-
     /// Return packet header as a slice of bytes.
     fn bytes(&self) -> &[u8] {
         let buf: &[u8, ..HEADER_SIZE] = unsafe { transmute(self) };
@@ -224,11 +217,12 @@ impl UtpPacket {
         }
     }
 
+    #[inline]
     fn set_type(&mut self, t: UtpPacketType) {
         self.header.set_type(t);
     }
 
-    // TODO: Read up on pointers and ownership
+    #[inline]
     fn get_type(&self) -> UtpPacketType {
         self.header.get_type()
     }
@@ -248,12 +242,13 @@ impl UtpPacket {
         Int::from_be(self.header.connection_id)
     }
 
-    fn wnd_size(&self, new_wnd_size: u32) -> UtpPacket {
-        UtpPacket {
-            header: self.header.wnd_size(new_wnd_size),
-            extensions: self.extensions.clone(),
-            payload: self.payload.clone(),
-        }
+    #[inline]
+    fn set_wnd_size(&mut self, new_wnd_size: u32) {
+        self.header.wnd_size = new_wnd_size.to_be();
+    }
+
+    fn wnd_size(&self) -> u32 {
+        Int::from_be(self.header.wnd_size)
     }
 
     /// Set Selective ACK field in packet header and add appropriate data.
@@ -649,7 +644,8 @@ impl UtpSocket {
 
         match self.handle_packet(shallow_clone) {
             Some(pkt) => {
-                let pkt = pkt.wnd_size(BUF_SIZE as u32);
+                let mut pkt = pkt;
+                pkt.set_wnd_size(BUF_SIZE as u32);
                 try!(self.socket.send_to(pkt.bytes().as_slice(), src));
                 debug!("sent {}", pkt.header);
             },
@@ -837,7 +833,8 @@ impl UtpSocket {
     /// Sends three identical ACK/STATE packets to the remote host, signalling a
     /// fast resend request.
     fn send_fast_resend_request(&mut self) {
-        let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+        let mut packet = UtpPacket::new();
+        packet.set_wnd_size(BUF_SIZE as u32);
         packet.set_type(ST_STATE);
         packet.header.ack_nr = self.ack_nr.to_be();
         packet.header.seq_nr = self.seq_nr.to_be();
@@ -1446,7 +1443,8 @@ mod test {
         let serverAddr = next_test_ip4();
         let mut socket = iotry!(UtpSocket::bind(serverAddr));
 
-        let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+        let mut packet = UtpPacket::new();
+        packet.set_wnd_size(BUF_SIZE as u32);
         packet.set_type(ST_SYN);
         packet.header.connection_id = initial_connection_id.to_be();
         let sent = packet.header;
@@ -1541,7 +1539,8 @@ mod test {
         let mut socket = iotry!(UtpSocket::bind(serverAddr));
 
         // Establish connection
-        let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+        let mut packet = UtpPacket::new();
+        packet.set_wnd_size(BUF_SIZE as u32);
         packet.set_type(ST_SYN);
         packet.header.connection_id = initial_connection_id.to_be();
 
@@ -1554,7 +1553,8 @@ mod test {
         let old_response = response;
 
         // Now, send a keepalive packet
-        let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+        let mut packet = UtpPacket::new();
+        packet.set_wnd_size(BUF_SIZE as u32);
         packet.set_type(ST_STATE);
         packet.header.connection_id = initial_connection_id.to_be();
         packet.header.seq_nr = (old_packet.seq_nr() + 1).to_be();
@@ -1576,7 +1576,8 @@ mod test {
         let mut socket = iotry!(UtpSocket::bind(serverAddr));
 
         // Establish connection
-        let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+        let mut packet = UtpPacket::new();
+        packet.set_wnd_size(BUF_SIZE as u32);
         packet.set_type(ST_SYN);
         packet.header.connection_id = initial_connection_id.to_be();
 
@@ -1587,7 +1588,8 @@ mod test {
         // Now, disrupt connection with a packet with an incorrect connection id
         let new_connection_id = initial_connection_id.to_le();
 
-        let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+        let mut packet = UtpPacket::new();
+        packet.set_wnd_size(BUF_SIZE as u32);
         packet.set_type(ST_STATE);
         packet.header.connection_id = new_connection_id;
 
@@ -1693,7 +1695,8 @@ mod test {
         let mut socket = iotry!(UtpSocket::bind(serverAddr));
 
         // Establish connection
-        let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+        let mut packet = UtpPacket::new();
+        packet.set_wnd_size(BUF_SIZE as u32);
         packet.set_type(ST_SYN);
         packet.header.connection_id = initial_connection_id.to_be();
 
@@ -1708,7 +1711,8 @@ mod test {
         let mut window: Vec<UtpPacket> = Vec::new();
 
         // Now, send a keepalive packet
-        let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+        let mut packet = UtpPacket::new();
+        packet.set_wnd_size(BUF_SIZE as u32);
         packet.set_type(ST_DATA);
         packet.header.connection_id = initial_connection_id.to_be();
         packet.header.seq_nr = (old_packet.seq_nr() + 1).to_be();
@@ -1716,7 +1720,8 @@ mod test {
         packet.payload = vec!(1,2,3);
         window.push(packet);
 
-        let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+        let mut packet = UtpPacket::new();
+        packet.set_wnd_size(BUF_SIZE as u32);
         packet.set_type(ST_DATA);
         packet.header.connection_id = initial_connection_id.to_be();
         packet.header.seq_nr = (old_packet.seq_nr() + 2).to_be();
@@ -1754,7 +1759,8 @@ mod test {
             let mut window: Vec<UtpPacket> = Vec::new();
 
             for (i, data) in Vec::from_fn(12, |idx| idx as u8 + 1).as_slice().chunks(3).enumerate() {
-                let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+                let mut packet = UtpPacket::new();
+                packet.set_wnd_size(BUF_SIZE as u32);
                 packet.set_type(ST_DATA);
                 packet.header.connection_id = client.sender_connection_id.to_be();
                 packet.header.seq_nr = client.seq_nr.to_be();
@@ -1765,7 +1771,8 @@ mod test {
                 client.seq_nr += 1;
             }
 
-            let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+            let mut packet = UtpPacket::new();
+            packet.set_wnd_size(BUF_SIZE as u32);
             packet.set_type(ST_FIN);
             packet.header.connection_id = client.sender_connection_id.to_be();
             packet.header.seq_nr = client.seq_nr.to_be();
@@ -1877,7 +1884,8 @@ mod test {
         let data_packet = data_packet;
 
         // Send triple ACK
-        let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+        let mut packet = UtpPacket::new();
+        packet.set_wnd_size(BUF_SIZE as u32);
         packet.set_type(ST_STATE);
         packet.header.seq_nr = server.seq_nr.to_be();
         packet.header.ack_nr = (data_packet.seq_nr() - 1).to_be();
@@ -2016,7 +2024,8 @@ mod test {
             assert!(client.state == CS_CONNECTED);
             let mut s = client.socket.clone();
 
-            let mut packet = UtpPacket::new().wnd_size(BUF_SIZE as u32);
+            let mut packet = UtpPacket::new();
+            packet.set_wnd_size(BUF_SIZE as u32);
             packet.set_type(ST_DATA);
             packet.header.connection_id = client.sender_connection_id.to_be();
             packet.header.seq_nr = client.seq_nr.to_be();
