@@ -2080,6 +2080,7 @@ mod test {
         // Client
         spawn(proc() {
             let mut client = iotry!(UtpStream::connect(serverAddr));
+            client.socket.timeout = 50;
 
             // Stream.write
             iotry!(client.write(to_send.as_slice()));
