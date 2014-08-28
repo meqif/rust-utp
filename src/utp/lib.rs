@@ -480,18 +480,32 @@ impl UtpSocket {
         packet.set_type(ST_SYN);
         packet.header.connection_id = self.receiver_connection_id.to_be();
         packet.header.seq_nr = self.seq_nr.to_be();
-        packet.header.timestamp_microseconds = now_microseconds().to_be();
 
-        // Send packet
-        try!(self.socket.send_to(packet.to_bytes().as_slice(), other));
-        self.state = CS_SYN_SENT;
-
-        // Validate response
+        let mut len = 0;
+        let mut addr = self.connected_to;
         let mut buf = [0, ..BUF_SIZE];
-        let (len, addr) = match self.socket.recv_from(buf) {
-            Ok(v) => v,
-            Err(e) => fail!("{}", e),
-        };
+
+        for _ in range(0u, 5) {
+            packet.header.timestamp_microseconds = now_microseconds().to_be();
+
+            // Send packet
+            try!(self.socket.send_to(packet.to_bytes().as_slice(), other));
+            self.state = CS_SYN_SENT;
+            debug!("self.state: {}", self.state);
+
+            // Validate response
+            self.socket.set_read_timeout(Some(500));
+            match self.socket.recv_from(buf) {
+                Ok((read, src)) => {
+                    len = read;
+                    addr = src;
+                    break;
+                },
+                Err(ref e) if e.kind == std::io::TimedOut => continue,
+                Err(e) => fail!("{}", e),
+            };
+
+        }
         assert!(len == HEADER_SIZE);
         assert!(addr == self.connected_to);
 
