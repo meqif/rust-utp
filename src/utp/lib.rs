@@ -305,8 +305,14 @@ impl UtpPacket {
             ptr::copy_nonoverlapping_memory(buf.as_mut_ptr(), header.as_ptr(), header.len());
 
             let mut idx = HEADER_SIZE;
-            for extension in self.extensions.iter() {
-                *buf.get_mut(idx) = 0; // ignore next extension id
+            let mut extensions = self.extensions.iter().peekable();
+            for extension in extensions {
+                // Set type of the next extension in the linked list
+                match extensions.peek() {
+                    None => *buf.get_mut(idx) = 0,
+                    Some(next) => *buf.get_mut(idx) = next.ty as u8,
+                }
+                // Write the length and payload of the current extension
                 let x = buf.as_mut_ptr().offset(idx as int + 1);
                 ptr::copy_nonoverlapping_memory(x, extension.to_bytes().as_ptr(), extension.len());
                 idx += 1 + extension.len();
