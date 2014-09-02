@@ -306,7 +306,7 @@ impl UtpPacket {
 
             let mut idx = HEADER_SIZE;
             for extension in self.extensions.iter() {
-                // buf[idx] = 0u8;
+                *buf.get_mut(idx) = 0; // ignore next extension id
                 let x = buf.as_mut_ptr().offset(idx as int + 1);
                 ptr::copy_nonoverlapping_memory(x, extension.to_bytes().as_ptr(), extension.len());
                 idx += 1 + extension.len();
