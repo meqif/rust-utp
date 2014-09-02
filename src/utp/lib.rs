@@ -363,7 +363,7 @@ impl UtpPacket {
         let mut payload;
         if idx < buf.len() {
             let len = buf.len() - idx;
-            payload = Vec::with_capacity(buf.len() - idx);
+            payload = Vec::with_capacity(len);
             unsafe {
                 payload.set_len(len);
                 let pload = buf.as_ptr().offset(idx as int);
