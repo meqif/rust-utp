@@ -1282,10 +1282,10 @@ mod test {
 
     #[test]
     fn test_socket_ipv4() {
-        let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
+        let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
 
-        let client = iotry!(UtpSocket::bind(clientAddr));
-        let mut server = iotry!(UtpSocket::bind(serverAddr));
+        let client = iotry!(UtpSocket::bind(client_addr));
+        let mut server = iotry!(UtpSocket::bind(server_addr));
 
         assert!(server.state == CS_NEW);
         assert!(client.state == CS_NEW);
@@ -1294,9 +1294,9 @@ mod test {
         assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
 
         spawn(proc() {
-            let client = iotry!(client.connect(serverAddr));
+            let client = iotry!(client.connect(server_addr));
             assert!(client.state == CS_CONNECTED);
-            assert_eq!(client.connected_to, serverAddr);
+            assert_eq!(client.connected_to, server_addr);
             drop(client);
         });
 
@@ -1306,7 +1306,7 @@ mod test {
         }
         // After establishing a new connection, the server's ids are a mirror of the client's.
         assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
-        assert_eq!(server.connected_to, clientAddr);
+        assert_eq!(server.connected_to, client_addr);
 
         assert!(server.state == CS_CONNECTED);
         drop(server);
@@ -1316,16 +1316,16 @@ mod test {
     fn test_recvfrom_on_closed_socket() {
         use std::io::{Closed, EndOfFile};
 
-        let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
+        let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
 
-        let client = iotry!(UtpSocket::bind(clientAddr));
-        let mut server = iotry!(UtpSocket::bind(serverAddr));
+        let client = iotry!(UtpSocket::bind(client_addr));
+        let mut server = iotry!(UtpSocket::bind(server_addr));
 
         assert!(server.state == CS_NEW);
         assert!(client.state == CS_NEW);
 
         spawn(proc() {
-            let mut client = iotry!(client.connect(serverAddr));
+            let mut client = iotry!(client.connect(server_addr));
             assert!(client.state == CS_CONNECTED);
             assert_eq!(client.close(), Ok(()));
             drop(client);
@@ -1365,16 +1365,16 @@ mod test {
     fn test_sendto_on_closed_socket() {
         use std::io::Closed;
 
-        let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
+        let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
 
-        let client = iotry!(UtpSocket::bind(clientAddr));
-        let mut server = iotry!(UtpSocket::bind(serverAddr));
+        let client = iotry!(UtpSocket::bind(client_addr));
+        let mut server = iotry!(UtpSocket::bind(server_addr));
 
         assert!(server.state == CS_NEW);
         assert!(client.state == CS_NEW);
 
         spawn(proc() {
-            let client = iotry!(client.connect(serverAddr));
+            let client = iotry!(client.connect(server_addr));
             assert!(client.state == CS_CONNECTED);
             let mut buf = [0u8, ..BUF_SIZE];
             let mut client = client;
@@ -1391,7 +1391,7 @@ mod test {
 
         // Trying to send to the socket after closing it raises an
         // error
-        match server.send_to(buf, clientAddr) {
+        match server.send_to(buf, client_addr) {
             Err(e) => expect_eq!(e.kind, Closed),
             v => fail!("expected {}, got {}", Closed, v),
         }
@@ -1401,11 +1401,11 @@ mod test {
 
     #[test]
     fn test_acks_on_socket() {
-        let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
+        let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
         let (tx, rx) = channel();
 
-        let client = iotry!(UtpSocket::bind(clientAddr));
-        let server = iotry!(UtpSocket::bind(serverAddr));
+        let client = iotry!(UtpSocket::bind(client_addr));
+        let server = iotry!(UtpSocket::bind(server_addr));
 
         spawn(proc() {
             // Make the server listen for incoming connections
@@ -1420,7 +1420,7 @@ mod test {
             drop(server);
         });
 
-        let mut client = iotry!(client.connect(serverAddr));
+        let mut client = iotry!(client.connect(server_addr));
         assert!(client.state == CS_CONNECTED);
         let sender_seq_nr = rx.recv();
         let ack_nr = client.ack_nr;
@@ -1440,8 +1440,8 @@ mod test {
         //fn test_connection_setup() {
         let initial_connection_id: u16 = random();
         let sender_connection_id = initial_connection_id + 1;
-        let serverAddr = next_test_ip4();
-        let mut socket = iotry!(UtpSocket::bind(serverAddr));
+        let server_addr = next_test_ip4();
+        let mut socket = iotry!(UtpSocket::bind(server_addr));
 
         let mut packet = UtpPacket::new();
         packet.set_wnd_size(BUF_SIZE as u32);
@@ -1535,8 +1535,8 @@ mod test {
     fn test_response_to_keepalive_ack() {
         // Boilerplate test setup
         let initial_connection_id: u16 = random();
-        let serverAddr = next_test_ip4();
-        let mut socket = iotry!(UtpSocket::bind(serverAddr));
+        let server_addr = next_test_ip4();
+        let mut socket = iotry!(UtpSocket::bind(server_addr));
 
         // Establish connection
         let mut packet = UtpPacket::new();
@@ -1572,8 +1572,8 @@ mod test {
     fn test_response_to_wrong_connection_id() {
         // Boilerplate test setup
         let initial_connection_id: u16 = random();
-        let serverAddr = next_test_ip4();
-        let mut socket = iotry!(UtpSocket::bind(serverAddr));
+        let server_addr = next_test_ip4();
+        let mut socket = iotry!(UtpSocket::bind(server_addr));
 
         // Establish connection
         let mut packet = UtpPacket::new();
@@ -1603,11 +1603,11 @@ mod test {
 
     #[test]
     fn test_utp_stream() {
-        let serverAddr = next_test_ip4();
-        let mut server = iotry!(UtpStream::bind(serverAddr));
+        let server_addr = next_test_ip4();
+        let mut server = iotry!(UtpStream::bind(server_addr));
 
         spawn(proc() {
-            let mut client = iotry!(UtpStream::connect(serverAddr));
+            let mut client = iotry!(UtpStream::connect(server_addr));
             iotry!(client.close());
         });
 
@@ -1622,11 +1622,11 @@ mod test {
         expect_eq!(len, data.len());
 
         let d = data.clone();
-        let serverAddr = next_test_ip4();
-        let mut server = UtpStream::bind(serverAddr);
+        let server_addr = next_test_ip4();
+        let mut server = UtpStream::bind(server_addr);
 
         spawn(proc() {
-            let mut client = iotry!(UtpStream::connect(serverAddr));
+            let mut client = iotry!(UtpStream::connect(server_addr));
             iotry!(client.write(d.as_slice()));
             iotry!(client.close());
         });
@@ -1645,11 +1645,11 @@ mod test {
         expect_eq!(len, data.len());
 
         let d = data.clone();
-        let serverAddr = next_test_ip4();
-        let mut server = UtpStream::bind(serverAddr);
+        let server_addr = next_test_ip4();
+        let mut server = UtpStream::bind(server_addr);
 
         spawn(proc() {
-            let mut client = iotry!(UtpStream::connect(serverAddr));
+            let mut client = iotry!(UtpStream::connect(server_addr));
             iotry!(client.write(d.as_slice()));
             iotry!(client.close());
         });
@@ -1669,11 +1669,11 @@ mod test {
         expect_eq!(len, data.len());
 
         let d = data.clone();
-        let serverAddr = next_test_ip4();
-        let mut server = UtpStream::bind(serverAddr);
+        let server_addr = next_test_ip4();
+        let mut server = UtpStream::bind(server_addr);
 
         spawn(proc() {
-            let mut client = iotry!(UtpStream::connect(serverAddr));
+            let mut client = iotry!(UtpStream::connect(server_addr));
             iotry!(client.write(d.as_slice()));
             iotry!(client.close());
         });
@@ -1691,8 +1691,8 @@ mod test {
     fn test_unordered_packets() {
         // Boilerplate test setup
         let initial_connection_id: u16 = random();
-        let serverAddr = next_test_ip4();
-        let mut socket = iotry!(UtpSocket::bind(serverAddr));
+        let server_addr = next_test_ip4();
+        let mut socket = iotry!(UtpSocket::bind(server_addr));
 
         // Establish connection
         let mut packet = UtpPacket::new();
@@ -1741,10 +1741,10 @@ mod test {
 
     #[test]
     fn test_socket_unordered_packets() {
-        let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
+        let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
 
-        let client = iotry!(UtpSocket::bind(clientAddr));
-        let mut server = iotry!(UtpSocket::bind(serverAddr));
+        let client = iotry!(UtpSocket::bind(client_addr));
+        let mut server = iotry!(UtpSocket::bind(server_addr));
 
         assert!(server.state == CS_NEW);
         assert!(client.state == CS_NEW);
@@ -1753,7 +1753,7 @@ mod test {
         assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
 
         spawn(proc() {
-            let mut client = iotry!(client.connect(serverAddr));
+            let mut client = iotry!(client.connect(server_addr));
             assert!(client.state == CS_CONNECTED);
             let mut s = client.socket;
             let mut window: Vec<UtpPacket> = Vec::new();
@@ -1780,11 +1780,11 @@ mod test {
             window.push(packet);
             client.seq_nr += 1;
 
-            iotry!(s.send_to(window[3].bytes().as_slice(), serverAddr));
-            iotry!(s.send_to(window[2].bytes().as_slice(), serverAddr));
-            iotry!(s.send_to(window[1].bytes().as_slice(), serverAddr));
-            iotry!(s.send_to(window[0].bytes().as_slice(), serverAddr));
-            iotry!(s.send_to(window[4].bytes().as_slice(), serverAddr));
+            iotry!(s.send_to(window[3].bytes().as_slice(), server_addr));
+            iotry!(s.send_to(window[2].bytes().as_slice(), server_addr));
+            iotry!(s.send_to(window[1].bytes().as_slice(), server_addr));
+            iotry!(s.send_to(window[0].bytes().as_slice(), server_addr));
+            iotry!(s.send_to(window[4].bytes().as_slice(), server_addr));
 
             for _ in range(0u, 2) {
                 let mut buf = [0, ..BUF_SIZE];
@@ -1817,9 +1817,9 @@ mod test {
     fn test_socket_should_not_buffer_syn_packets() {
         use std::io::net::udp::UdpSocket;
 
-        let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
-        let server = iotry!(UtpSocket::bind(serverAddr));
-        let client = iotry!(UdpSocket::bind(clientAddr));
+        let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
+        let server = iotry!(UtpSocket::bind(server_addr));
+        let client = iotry!(UdpSocket::bind(client_addr));
 
         let test_syn_raw = [0x41, 0x00, 0x41, 0xa7, 0x00, 0x00, 0x00,
         0x27, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x3a,
@@ -1829,7 +1829,7 @@ mod test {
 
         spawn(proc() {
             let mut client = client;
-            iotry!(client.send_to(test_syn_raw, serverAddr));
+            iotry!(client.send_to(test_syn_raw, server_addr));
             client.set_timeout(Some(10));
             let mut buf = [0, ..BUF_SIZE];
             let packet = match client.recv_from(buf) {
@@ -1850,9 +1850,9 @@ mod test {
 
     #[test]
     fn test_response_to_triple_ack() {
-        let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
-        let mut server = iotry!(UtpSocket::bind(serverAddr));
-        let client = iotry!(UtpSocket::bind(clientAddr));
+        let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
+        let mut server = iotry!(UtpSocket::bind(server_addr));
+        let client = iotry!(UtpSocket::bind(client_addr));
 
         // Fits in a packet
         static len: uint = 1024;
@@ -1861,8 +1861,8 @@ mod test {
         expect_eq!(len, data.len());
 
         spawn(proc() {
-            let mut client = iotry!(client.connect(serverAddr));
-            iotry!(client.send_to(d.as_slice(), serverAddr));
+            let mut client = iotry!(client.connect(server_addr));
+            iotry!(client.send_to(d.as_slice(), server_addr));
             iotry!(client.close());
         });
 
@@ -1892,7 +1892,7 @@ mod test {
         packet.header.connection_id = server.sender_connection_id.to_be();
 
         for _ in range(0u, 3) {
-            iotry!(server.socket.send_to(packet.bytes().as_slice(), clientAddr));
+            iotry!(server.socket.send_to(packet.bytes().as_slice(), client_addr));
         }
 
         // Receive data again and check that it's the same we reported as missing
@@ -1915,10 +1915,10 @@ mod test {
 
     #[test]
     fn test_socket_timeout_request() {
-        let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
+        let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
 
-        let client = iotry!(UtpSocket::bind(clientAddr));
-        let mut server = iotry!(UtpSocket::bind(serverAddr));
+        let client = iotry!(UtpSocket::bind(client_addr));
+        let mut server = iotry!(UtpSocket::bind(server_addr));
         let len = 512;
         let data = Vec::from_fn(len, |idx| idx as u8);
         let d = data.clone();
@@ -1930,10 +1930,10 @@ mod test {
         assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
 
         spawn(proc() {
-            let mut client = iotry!(client.connect(serverAddr));
+            let mut client = iotry!(client.connect(server_addr));
             assert!(client.state == CS_CONNECTED);
-            assert_eq!(client.connected_to, serverAddr);
-            iotry!(client.send_to(d.as_slice(), serverAddr));
+            assert_eq!(client.connected_to, server_addr);
+            iotry!(client.send_to(d.as_slice(), server_addr));
             drop(client);
         });
 
@@ -1943,7 +1943,7 @@ mod test {
         }
         // After establishing a new connection, the server's ids are a mirror of the client's.
         assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
-        assert_eq!(server.connected_to, clientAddr);
+        assert_eq!(server.connected_to, client_addr);
 
         assert!(server.state == CS_CONNECTED);
 
@@ -1969,8 +1969,8 @@ mod test {
 
     #[test]
     fn test_sorted_buffer_insertion() {
-        let serverAddr = next_test_ip4();
-        let mut socket = iotry!(UtpSocket::bind(serverAddr));
+        let server_addr = next_test_ip4();
+        let mut socket = iotry!(UtpSocket::bind(server_addr));
 
         let mut packet = UtpPacket::new();
         packet.header.seq_nr = 1;
@@ -2008,10 +2008,10 @@ mod test {
 
     #[test]
     fn test_duplicate_packet_handling() {
-        let (serverAddr, clientAddr) = (next_test_ip4(), next_test_ip4());
+        let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
 
-        let client = iotry!(UtpSocket::bind(clientAddr));
-        let mut server = iotry!(UtpSocket::bind(serverAddr));
+        let client = iotry!(UtpSocket::bind(client_addr));
+        let mut server = iotry!(UtpSocket::bind(server_addr));
 
         assert!(server.state == CS_NEW);
         assert!(client.state == CS_NEW);
@@ -2020,7 +2020,7 @@ mod test {
         assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
 
         spawn(proc() {
-            let mut client = iotry!(client.connect(serverAddr));
+            let mut client = iotry!(client.connect(server_addr));
             assert!(client.state == CS_CONNECTED);
             let mut s = client.socket.clone();
 
@@ -2035,7 +2035,7 @@ mod test {
             // Send two copies of the packet, with different timestamps
             for _ in range(0u, 2) {
                 packet.header.timestamp_microseconds = super::now_microseconds();
-                iotry!(s.send_to(packet.bytes().as_slice(), serverAddr));
+                iotry!(s.send_to(packet.bytes().as_slice(), server_addr));
             }
             client.seq_nr += 1;
 
@@ -2072,14 +2072,14 @@ mod test {
 
     #[test]
     fn test_selective_ack_response() {
-        let serverAddr = next_test_ip4();
+        let server_addr = next_test_ip4();
         let len = 1024 * 10;
         let data = Vec::from_fn(len, |idx| idx as u8);
         let to_send = data.clone();
 
         // Client
         spawn(proc() {
-            let mut client = iotry!(UtpStream::connect(serverAddr));
+            let mut client = iotry!(UtpStream::connect(server_addr));
             client.socket.timeout = 50;
 
             // Stream.write
@@ -2088,7 +2088,7 @@ mod test {
         });
 
         // Server
-        let mut server = iotry!(UtpSocket::bind(serverAddr));
+        let mut server = iotry!(UtpSocket::bind(server_addr));
 
         let mut buf = [0, ..BUF_SIZE];
 
@@ -2122,16 +2122,16 @@ mod test {
 
     #[test]
     fn test_correct_packet_loss() {
-        let (clientAddr, serverAddr) = (next_test_ip4(), next_test_ip4());
+        let (client_addr, server_addr) = (next_test_ip4(), next_test_ip4());
 
-        let mut server = iotry!(UtpStream::bind(serverAddr));
-        let client = iotry!(UtpSocket::bind(clientAddr));
+        let mut server = iotry!(UtpStream::bind(server_addr));
+        let client = iotry!(UtpSocket::bind(client_addr));
         let len = 1024 * 10;
         let data = Vec::from_fn(len, |idx| idx as u8);
         let to_send = data.clone();
 
         spawn(proc() {
-            let mut client = iotry!(client.connect(serverAddr));
+            let mut client = iotry!(client.connect(server_addr));
 
             // Send everything except the odd chunks
             let chunks = to_send.as_slice().chunks(BUF_SIZE);
@@ -2165,14 +2165,14 @@ mod test {
     fn test_tolerance_to_small_buffers() {
         use std::io::EndOfFile;
 
-        let serverAddr = next_test_ip4();
-        let mut server = iotry!(UtpSocket::bind(serverAddr));
+        let server_addr = next_test_ip4();
+        let mut server = iotry!(UtpSocket::bind(server_addr));
         let len = 1024;
         let data = Vec::from_fn(len, |idx| idx as u8);
         let to_send = data.clone();
 
         spawn(proc() {
-            let mut client = iotry!(UtpStream::connect(serverAddr));
+            let mut client = iotry!(UtpStream::connect(server_addr));
             iotry!(client.write(to_send.as_slice()));
             iotry!(client.close());
         });
