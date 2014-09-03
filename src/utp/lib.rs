@@ -999,7 +999,7 @@ impl UtpSocket {
                             }
                         }
                     } else {
-                        fail!("Unknown extension");
+                        debug!("Unknown extension {}, ignoring", extension.ty);
                     }
                 }
 
