@@ -732,7 +732,10 @@ impl UtpSocket {
                 unsafe {
                     let src = self.incoming_buffer[0].payload.as_ptr().offset(len as int);
                     let dst = self.pending_data.as_mut_ptr();
-                    let len = std::cmp::min(self.incoming_buffer[0].payload.len() - len, self.pending_data.capacity());
+                    let len = self.incoming_buffer[0].payload.len() - len;
+                    if len > self.pending_data.capacity() {
+                        self.pending_data.reserve(len);
+                    }
                     std::ptr::copy_nonoverlapping_memory(dst, src, len);
                     self.pending_data.set_len(len);
                 }
