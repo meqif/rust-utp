@@ -871,7 +871,7 @@ impl UtpSocket {
             self.ack_nr = packet.seq_nr();
         }
 
-        self.max_window = Int::from_be(packet.header.wnd_size) as uint;
+        self.max_window = packet.wnd_size() as uint;
         debug!("self.max_window: {}", self.max_window);
 
         match packet.header.get_type() {
