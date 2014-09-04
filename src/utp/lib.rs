@@ -281,7 +281,6 @@ impl UtpPacket {
         }
     }
 
-    /// TODO: return slice
     fn bytes(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(self.len());
         buf.push_all(self.header.bytes());
@@ -502,20 +501,14 @@ impl UtpSocket {
             // Send packet
             try!(self.socket.send_to(packet.to_bytes().as_slice(), other));
             self.state = CS_SYN_SENT;
-            debug!("self.state: {}", self.state);
 
             // Validate response
             self.socket.set_read_timeout(Some(500));
             match self.socket.recv_from(buf) {
-                Ok((read, src)) => {
-                    len = read;
-                    addr = src;
-                    break;
-                },
+                Ok((read, src)) => { len = read; addr = src; break; },
                 Err(ref e) if e.kind == std::io::TimedOut => continue,
                 Err(e) => fail!("{}", e),
             };
-
         }
         assert!(len == HEADER_SIZE);
         assert!(addr == self.connected_to);
@@ -637,7 +630,6 @@ impl UtpSocket {
             });
         }
 
-        // TODO: move this to handle_packet?
         if packet.get_type() == ST_SYN {
             self.connected_to = src;
         }
@@ -1029,7 +1021,7 @@ impl UtpSocket {
 
                 None
             },
-            ST_RESET => { // TODO
+            ST_RESET => {
                 self.state = CS_RST_RECEIVED;
                 None
             },
