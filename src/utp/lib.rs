@@ -1053,32 +1053,6 @@ impl UtpSocket {
     }
 }
 
-impl Clone for UtpSocket {
-    fn clone(&self) -> UtpSocket {
-        UtpSocket {
-            socket: self.socket.clone(),
-            connected_to: self.connected_to,
-            receiver_connection_id: self.receiver_connection_id,
-            sender_connection_id: self.sender_connection_id,
-            seq_nr: self.seq_nr,
-            ack_nr: self.ack_nr,
-            state: self.state,
-            incoming_buffer: Vec::new(),
-            send_window: Vec::new(),
-            unsent_queue: DList::new(),
-            duplicate_ack_count: 0,
-            last_acked: 0,
-            last_acked_timestamp: 0,
-            rtt: 0,
-            rtt_variance: 0,
-            timeout: 500,
-            pending_data: Vec::with_capacity(BUF_SIZE),
-            max_window: 0,
-            curr_window: 0,
-        }
-    }
-}
-
 /// Stream interface for UtpSocket.
 pub struct UtpStream {
     socket: UtpSocket,
