@@ -442,7 +442,7 @@ pub struct UtpSocket {
     rtt_variance: int,
     timeout: int,
 
-    pending_data: DList<u8>,
+    pending_data: Vec<u8>,
     max_window: uint,
     curr_window: uint,
 }
@@ -471,7 +471,7 @@ impl UtpSocket {
                 rtt: 0,
                 rtt_variance: 0,
                 timeout: 1000,
-                pending_data: DList::new(),
+                pending_data: Vec::with_capacity(BUF_SIZE),
                 max_window: 0,
                 curr_window: 0,
             }),
@@ -692,61 +692,58 @@ impl UtpSocket {
     fn flush_incoming_buffer(&mut self, buf: &mut [u8], start: uint) -> uint {
         let mut idx = start;
 
-        // try replacing copies with std::ptr::copy_nonoverlapping_memory
         if !self.pending_data.is_empty() {
-            loop {
-                if idx < buf.len() {
-                    match self.pending_data.pop_front() {
-                        None => {
-                            let packet = self.incoming_buffer.remove(0).unwrap();
-                            debug!("Removing packet from buffer: {}", packet);
-                            self.ack_nr = packet.seq_nr();
-                            return idx;
-                        },
-                        Some(v) => {
-                            buf[idx] = v;
-                            idx += 1;
-                        }
-                    }
-                } else {
-                    if self.pending_data.is_empty() && idx > start {
-                        let packet = self.incoming_buffer.remove(0).unwrap();
-                        debug!("Removing packet from buffer: {}", packet);
-                        self.ack_nr = packet.seq_nr();
-                    }
-                    return idx;
-                }
+            let len = std::cmp::min(buf.len() - idx, self.pending_data.len());
+            unsafe {
+                let dest = buf.as_mut_ptr().offset(idx as int);
+                std::ptr::copy_nonoverlapping_memory(dest, self.pending_data.as_ptr(), len);
+            }
+
+            if len == self.pending_data.len() {
+                unsafe { self.pending_data.set_len(0); }
+                let packet = self.incoming_buffer.remove(0).unwrap();
+                debug!("Removing packet from buffer: {}", packet);
+                self.ack_nr = packet.seq_nr();
+                return idx + len;
+            } else {
+                self.pending_data = Vec::from_slice(self.pending_data.slice_from(len));
             }
         }
 
         while !self.incoming_buffer.is_empty() &&
             (self.ack_nr == self.incoming_buffer[0].seq_nr() ||
-            self.ack_nr + 1 == self.incoming_buffer[0].seq_nr()) {
+             self.ack_nr + 1 == self.incoming_buffer[0].seq_nr())
+        {
+            // Copy as much as possible to the buffer
+            let len = std::cmp::min(self.incoming_buffer[0].payload.len(), buf.len() - idx);
+            unsafe {
+                let dst = buf.as_mut_ptr().offset(idx as int);
+                let src = self.incoming_buffer[0].payload.as_ptr();
+                std::ptr::copy_nonoverlapping_memory(dst, src, len);
+            }
+            idx += len;
 
             if self.incoming_buffer[0].payload.len() <= buf.len() - idx {
                 let packet = self.incoming_buffer.remove(0).unwrap();
                 debug!("Removing packet from buffer: {}", packet);
                 self.ack_nr = packet.seq_nr();
+            } else {
+                // Copy the remaining data to pending_data
                 unsafe {
-                    std::ptr::copy_nonoverlapping_memory(buf.as_mut_ptr(), packet.payload.as_ptr(), packet.payload.len());
+                    let src = self.incoming_buffer[0].payload.as_ptr().offset(len as int);
+                    let dst = self.pending_data.as_mut_ptr();
+                    let len = self.incoming_buffer[0].payload.len() - len;
+                    if len > self.pending_data.capacity() {
+                        self.pending_data.reserve(len);
+                    }
+                    std::ptr::copy_nonoverlapping_memory(dst, src, len);
+                    self.pending_data.set_len(len);
                 }
-                return idx + packet.payload.len();
             }
 
-            for i in range(0u, self.incoming_buffer[0].payload.len()) {
-                if idx < buf.len() {
-                    buf[idx] = self.incoming_buffer[0].payload[i];
-                } else {
-                    self.pending_data.push(self.incoming_buffer[0].payload[i]);
-                }
-                idx += 1;
+            if buf.len() == idx {
+                return idx;
             }
-            if idx >= buf.len() {
-                return buf.len();
-            }
-            let packet = self.incoming_buffer.remove(0).unwrap();
-            debug!("Removing packet from buffer: {}", packet);
-            self.ack_nr = packet.seq_nr();
         }
 
         return idx;
@@ -1083,7 +1080,7 @@ impl Clone for UtpSocket {
             rtt: 0,
             rtt_variance: 0,
             timeout: 500,
-            pending_data: DList::new(),
+            pending_data: Vec::with_capacity(BUF_SIZE),
             max_window: 0,
             curr_window: 0,
         }
