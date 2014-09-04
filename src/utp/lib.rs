@@ -647,7 +647,7 @@ impl UtpSocket {
         let mut idx = start;
 
         if !self.pending_data.is_empty() {
-            let len = buf.copy_from(self.pending_data.as_slice());
+            let len = buf.clone_from_slice(self.pending_data.as_slice());
             if len == self.pending_data.len() {
                 self.pending_data.clear();
                 let packet = self.incoming_buffer.remove(0).unwrap();
@@ -656,28 +656,31 @@ impl UtpSocket {
                 return idx + len;
             } else {
                 self.pending_data = Vec::from_slice(self.pending_data.slice_from(len));
-                idx += len;
             }
         }
 
         while !self.incoming_buffer.is_empty() &&
             (self.ack_nr == self.incoming_buffer[0].seq_nr() ||
-            self.ack_nr + 1 == self.incoming_buffer[0].seq_nr()) {
+             self.ack_nr + 1 == self.incoming_buffer[0].seq_nr())
+        {
+            let len = std::cmp::min(buf.len() - idx, self.incoming_buffer[0].payload.len());
 
-            for i in range(0u, self.incoming_buffer[0].payload.len()) {
-                if idx < buf.len() {
-                    buf[idx] = self.incoming_buffer[0].payload[i];
-                } else {
-                    self.pending_data.push(self.incoming_buffer[0].payload[i]);
-                }
+            for i in range(0, len) {
+                buf[idx] = self.incoming_buffer[0].payload[i];
                 idx += 1;
             }
-            if idx >= buf.len() {
-                return buf.len();
+
+            if self.incoming_buffer[0].payload.len() == len {
+                let packet = self.incoming_buffer.remove(0).unwrap();
+                debug!("Removing packet from buffer: {}", packet);
+                self.ack_nr = packet.seq_nr();
+            } else {
+                self.pending_data.push_all(self.incoming_buffer[0].payload.slice_from(len));
             }
-            let packet = self.incoming_buffer.remove(0).unwrap();
-            debug!("Removing packet from buffer: {}", packet);
-            self.ack_nr = packet.seq_nr();
+
+            if buf.len() == idx {
+                return idx;
+            }
         }
 
         return idx;
