@@ -796,7 +796,7 @@ impl UtpSocket {
     fn send(&mut self) {
         let dst = self.connected_to;
         loop {
-            while self.curr_window > self.max_window {
+            while self.send_window.len() > 100 {
                 let mut buf = [0, ..BUF_SIZE];
                 self.recv_from(buf);
             }
@@ -1007,10 +1007,16 @@ impl UtpSocket {
                 }
 
                 // Success, advance send window
-                while !self.send_window.is_empty() &&
-                    self.send_window[0].seq_nr() <= self.last_acked {
-                    let packet = self.send_window.remove(0).unwrap();
-                    self.curr_window -= packet.len();
+                match self.send_window.iter()
+                    .position(|pkt| pkt.seq_nr() == self.last_acked)
+                {
+                    None => (),
+                    Some(position) => {
+                        for _ in range(0, position + 1) {
+                            let packet = self.send_window.remove(0).unwrap();
+                            self.curr_window -= packet.len();
+                        }
+                    }
                 }
                 debug!("self.curr_window: {}", self.curr_window);
 
