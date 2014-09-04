@@ -749,7 +749,7 @@ impl UtpSocket {
         return idx;
     }
 
-    /// Send data on socket to the given address. Returns nothing on success.
+    /// Send data on socket to the remote peer. Returns nothing on success.
     //
     // # Implementation details
     //
@@ -760,7 +760,7 @@ impl UtpSocket {
     // Note that the buffer passed to `send_to` might exceed the maximum packet
     // size, which will result in the data being split over several packets.
     #[unstable]
-    pub fn send_to(&mut self, buf: &[u8], dst: SocketAddr) -> IoResult<()> {
+    pub fn send_to(&mut self, buf: &[u8]) -> IoResult<()> {
         use std::io::{IoError, Closed};
 
         if self.state == CS_CLOSED {
@@ -827,8 +827,8 @@ impl UtpSocket {
 
     #[allow(missing_doc)]
     #[deprecated = "renamed to `send_to`"]
-    pub fn sendto(&mut self, buf: &[u8], dst: SocketAddr) -> IoResult<()> {
-        self.send_to(buf, dst)
+    pub fn sendto(&mut self, buf: &[u8]) -> IoResult<()> {
+        self.send_to(buf)
     }
 
     /// Send fast resend request.
@@ -1142,8 +1142,7 @@ impl Reader for UtpStream {
 
 impl Writer for UtpStream {
     fn write(&mut self, buf: &[u8]) -> IoResult<()> {
-        let dst = self.socket.connected_to;
-        self.socket.send_to(buf, dst)
+        self.socket.send_to(buf)
     }
 }
 
@@ -1394,7 +1393,7 @@ mod test {
 
         // Trying to send to the socket after closing it raises an
         // error
-        match server.send_to(buf, client_addr) {
+        match server.send_to(buf) {
             Err(e) => expect_eq!(e.kind, Closed),
             v => fail!("expected {}, got {}", Closed, v),
         }
@@ -1865,7 +1864,7 @@ mod test {
 
         spawn(proc() {
             let mut client = iotry!(client.connect(server_addr));
-            iotry!(client.send_to(d.as_slice(), server_addr));
+            iotry!(client.send_to(d.as_slice()));
             iotry!(client.close());
         });
 
@@ -1936,7 +1935,7 @@ mod test {
             let mut client = iotry!(client.connect(server_addr));
             assert!(client.state == CS_CONNECTED);
             assert_eq!(client.connected_to, server_addr);
-            iotry!(client.send_to(d.as_slice(), server_addr));
+            iotry!(client.send_to(d.as_slice()));
             drop(client);
         });
 
