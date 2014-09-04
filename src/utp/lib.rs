@@ -403,7 +403,7 @@ pub struct UtpSocket {
     rtt_variance: int,
     timeout: int,
 
-    pending_data: DList<u8>,
+    pending_data: Vec<u8>,
     max_window: uint,
     curr_window: uint,
 }
@@ -432,7 +432,7 @@ impl UtpSocket {
                 rtt: 0,
                 rtt_variance: 0,
                 timeout: 1000,
-                pending_data: DList::new(),
+                pending_data: Vec::new(),
                 max_window: 0,
                 curr_window: 0,
             }),
@@ -647,28 +647,16 @@ impl UtpSocket {
         let mut idx = start;
 
         if !self.pending_data.is_empty() {
-            loop {
-                if idx < buf.len() {
-                    match self.pending_data.pop_front() {
-                        None => {
-                            let packet = self.incoming_buffer.remove(0).unwrap();
-                            debug!("Removing packet from buffer: {}", packet);
-                            self.ack_nr = packet.seq_nr();
-                            return idx;
-                        },
-                        Some(v) => {
-                            buf[idx] = v;
-                            idx += 1;
-                        }
-                    }
-                } else {
-                    if self.pending_data.is_empty() && idx > start {
-                        let packet = self.incoming_buffer.remove(0).unwrap();
-                        debug!("Removing packet from buffer: {}", packet);
-                        self.ack_nr = packet.seq_nr();
-                    }
-                    return idx;
-                }
+            let len = buf.copy_from(self.pending_data.as_slice());
+            if len == self.pending_data.len() {
+                self.pending_data.clear();
+                let packet = self.incoming_buffer.remove(0).unwrap();
+                debug!("Removing packet from buffer: {}", packet);
+                self.ack_nr = packet.seq_nr();
+                return idx + len;
+            } else {
+                self.pending_data = Vec::from_slice(self.pending_data.slice_from(len));
+                idx += len;
             }
         }
 
