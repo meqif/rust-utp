@@ -796,7 +796,7 @@ impl UtpSocket {
     fn send(&mut self) {
         let dst = self.connected_to;
         loop {
-            while self.curr_window > self.max_window {
+            while self.send_window.len() > 100 {
                 let mut buf = [0, ..BUF_SIZE];
                 self.recv_from(buf);
             }
