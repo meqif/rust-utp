@@ -292,38 +292,6 @@ impl UtpPacket {
         return buf;
     }
 
-    // Faster, unsafe brother of `bytes`.
-    fn to_bytes(&self) -> Vec<u8> {
-        use std::ptr;
-
-        let mut buf = Vec::with_capacity(self.len());
-        unsafe {
-            buf.set_len(self.len());
-
-            let header = self.header.bytes();
-            ptr::copy_nonoverlapping_memory(buf.as_mut_ptr(), header.as_ptr(), header.len());
-
-            let mut idx = HEADER_SIZE;
-            let mut extensions = self.extensions.iter().peekable();
-            for extension in extensions {
-                // Set type of the next extension in the linked list
-                match extensions.peek() {
-                    None => *buf.get_mut(idx) = 0,
-                    Some(next) => *buf.get_mut(idx) = next.ty as u8,
-                }
-                // Write the length and payload of the current extension
-                let x = buf.as_mut_ptr().offset(idx as int + 1);
-                ptr::copy_nonoverlapping_memory(x, extension.to_bytes().as_ptr(), extension.len());
-                idx += 1 + extension.len();
-            }
-
-            let x = buf.as_mut_ptr().offset(idx as int);
-            ptr::copy_nonoverlapping_memory(x, self.payload.as_ptr(), self.payload.len());
-        }
-        assert!(!buf.is_empty());
-        return buf;
-    }
-
     fn len(&self) -> uint {
         let ext_len = self.extensions.iter().fold(0, |acc, ext| acc + ext.len() + 1);
         self.header.len() + self.payload.len() + ext_len
@@ -361,13 +329,7 @@ impl UtpPacket {
 
         let mut payload;
         if idx < buf.len() {
-            let len = buf.len() - idx;
-            payload = Vec::with_capacity(len);
-            unsafe {
-                payload.set_len(len);
-                let pload = buf.as_ptr().offset(idx as int);
-                std::ptr::copy_nonoverlapping_memory(payload.as_mut_ptr(), pload, len);
-            };
+            payload = Vec::from_slice(buf.slice_from(idx));
         } else {
             payload = Vec::new();
         }
@@ -441,7 +403,7 @@ pub struct UtpSocket {
     rtt_variance: int,
     timeout: int,
 
-    pending_data: Vec<u8>,
+    pending_data: DList<u8>,
     max_window: uint,
     curr_window: uint,
 }
@@ -470,7 +432,7 @@ impl UtpSocket {
                 rtt: 0,
                 rtt_variance: 0,
                 timeout: 1000,
-                pending_data: Vec::with_capacity(BUF_SIZE),
+                pending_data: DList::new(),
                 max_window: 0,
                 curr_window: 0,
             }),
@@ -499,7 +461,7 @@ impl UtpSocket {
             packet.header.timestamp_microseconds = now_microseconds().to_be();
 
             // Send packet
-            try!(self.socket.send_to(packet.to_bytes().as_slice(), other));
+            try!(self.socket.send_to(packet.bytes().as_slice(), other));
             self.state = CS_SYN_SENT;
 
             // Validate response
@@ -685,57 +647,49 @@ impl UtpSocket {
         let mut idx = start;
 
         if !self.pending_data.is_empty() {
-            let len = std::cmp::min(buf.len() - idx, self.pending_data.len());
-            unsafe {
-                let dest = buf.as_mut_ptr().offset(idx as int);
-                std::ptr::copy_nonoverlapping_memory(dest, self.pending_data.as_ptr(), len);
-            }
-
-            if len == self.pending_data.len() {
-                unsafe { self.pending_data.set_len(0); }
-                let packet = self.incoming_buffer.remove(0).unwrap();
-                debug!("Removing packet from buffer: {}", packet);
-                self.ack_nr = packet.seq_nr();
-                return idx + len;
-            } else {
-                self.pending_data = Vec::from_slice(self.pending_data.slice_from(len));
+            loop {
+                if idx < buf.len() {
+                    match self.pending_data.pop_front() {
+                        None => {
+                            let packet = self.incoming_buffer.remove(0).unwrap();
+                            debug!("Removing packet from buffer: {}", packet);
+                            self.ack_nr = packet.seq_nr();
+                            return idx;
+                        },
+                        Some(v) => {
+                            buf[idx] = v;
+                            idx += 1;
+                        }
+                    }
+                } else {
+                    if self.pending_data.is_empty() && idx > start {
+                        let packet = self.incoming_buffer.remove(0).unwrap();
+                        debug!("Removing packet from buffer: {}", packet);
+                        self.ack_nr = packet.seq_nr();
+                    }
+                    return idx;
+                }
             }
         }
 
         while !self.incoming_buffer.is_empty() &&
             (self.ack_nr == self.incoming_buffer[0].seq_nr() ||
-             self.ack_nr + 1 == self.incoming_buffer[0].seq_nr())
-        {
-            // Copy as much as possible to the buffer
-            let len = std::cmp::min(self.incoming_buffer[0].payload.len(), buf.len() - idx);
-            unsafe {
-                let dst = buf.as_mut_ptr().offset(idx as int);
-                let src = self.incoming_buffer[0].payload.as_ptr();
-                std::ptr::copy_nonoverlapping_memory(dst, src, len);
-            }
-            idx += len;
+            self.ack_nr + 1 == self.incoming_buffer[0].seq_nr()) {
 
-            if self.incoming_buffer[0].payload.len() <= buf.len() - idx {
-                let packet = self.incoming_buffer.remove(0).unwrap();
-                debug!("Removing packet from buffer: {}", packet);
-                self.ack_nr = packet.seq_nr();
-            } else {
-                // Copy the remaining data to pending_data
-                unsafe {
-                    let src = self.incoming_buffer[0].payload.as_ptr().offset(len as int);
-                    let dst = self.pending_data.as_mut_ptr();
-                    let len = self.incoming_buffer[0].payload.len() - len;
-                    if len > self.pending_data.capacity() {
-                        self.pending_data.reserve(len);
-                    }
-                    std::ptr::copy_nonoverlapping_memory(dst, src, len);
-                    self.pending_data.set_len(len);
+            for i in range(0u, self.incoming_buffer[0].payload.len()) {
+                if idx < buf.len() {
+                    buf[idx] = self.incoming_buffer[0].payload[i];
+                } else {
+                    self.pending_data.push(self.incoming_buffer[0].payload[i]);
                 }
+                idx += 1;
             }
-
-            if buf.len() == idx {
-                return idx;
+            if idx >= buf.len() {
+                return buf.len();
             }
+            let packet = self.incoming_buffer.remove(0).unwrap();
+            debug!("Removing packet from buffer: {}", packet);
+            self.ack_nr = packet.seq_nr();
         }
 
         return idx;
@@ -766,15 +720,11 @@ impl UtpSocket {
         for chunk in buf.chunks(BUF_SIZE) {
             let mut packet = UtpPacket::new();
             packet.set_type(ST_DATA);
+            packet.payload = Vec::from_slice(chunk);
             packet.header.timestamp_microseconds = now_microseconds().to_be();
             packet.header.seq_nr = self.seq_nr.to_be();
             packet.header.ack_nr = self.ack_nr.to_be();
             packet.header.connection_id = self.sender_connection_id.to_be();
-            packet.payload = Vec::with_capacity(chunk.len());
-            unsafe {
-                std::ptr::copy_nonoverlapping_memory(packet.payload.as_mut_ptr(), chunk.as_ptr(), chunk.len());
-                packet.payload.set_len(chunk.len());
-            }
 
             self.unsent_queue.push(packet);
             self.seq_nr += 1;
@@ -806,7 +756,7 @@ impl UtpSocket {
                 Some(packet) => packet,
             };
 
-            match self.socket.send_to(packet.to_bytes().as_slice(), dst) {
+            match self.socket.send_to(packet.bytes().as_slice(), dst) {
                 Ok(_) => {},
                 Err(ref e) => fail!("{}", e),
             }
