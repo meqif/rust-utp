@@ -598,7 +598,7 @@ impl UtpSocket {
 
         let shallow_clone = packet.shallow_clone();
 
-        if packet.get_type() == ST_DATA && self.ack_nr < packet.seq_nr() {
+        if packet.get_type() == ST_DATA && self.ack_nr + 1 <= packet.seq_nr() {
             self.insert_into_buffer(packet);
         }
 
