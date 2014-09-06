@@ -7,6 +7,12 @@ control and full packet loss handling (though some cases are handled). However,
 it does support the Selective Acknowledgment extension, handles unordered and
 duplicate packets and presents a stream interface (`UtpStream`).
 
+## Building
+
+`cargo build --release`
+
+Note that non-release builds are *much* slower.
+
 ## To implement
 
 - [ ] congestion control
