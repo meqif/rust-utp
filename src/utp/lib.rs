@@ -598,7 +598,7 @@ impl UtpSocket {
 
         let shallow_clone = packet.shallow_clone();
 
-        if packet.get_type() == ST_DATA && self.ack_nr < packet.seq_nr() {
+        if packet.get_type() == ST_DATA && self.ack_nr + 1 <= packet.seq_nr() {
             self.insert_into_buffer(packet);
         }
 
@@ -2105,5 +2105,36 @@ mod test {
 
         assert_eq!(read.len(), data.len());
         assert_eq!(read, data);
+    }
+
+    #[test]
+    fn test_sequence_number_rollover() {
+        let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
+
+        let mut server = UtpStream::bind(server_addr);
+
+        let len = BUF_SIZE * 4;
+        let data = Vec::from_fn(len, |idx| idx as u8);
+        let to_send = data.clone();
+
+        spawn(proc() {
+            let mut socket = iotry!(UtpSocket::bind(client_addr));
+
+            // Advance socket's sequence number
+            socket.seq_nr = ::std::u16::MAX - (to_send.len() / (BUF_SIZE * 2)) as u16;
+
+            let socket = iotry!(socket.connect(server_addr));
+            let mut client = UtpStream { socket: socket };
+            // Send enough data to rollover
+            iotry!(client.write(to_send.as_slice()));
+            // Check that the sequence number did rollover
+            assert!(client.socket.seq_nr < 50);
+            // Close connection
+            iotry!(client.close());
+        });
+
+        let received = iotry!(server.read_to_end());
+        assert_eq!(received.len(), data.len());
+        assert_eq!(received, data);
     }
 }
