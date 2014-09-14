@@ -284,10 +284,22 @@ impl UtpPacket {
     fn bytes(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(self.len());
         buf.push_all(self.header.bytes());
-        for extension in self.extensions.iter() {
-            buf.push(0u8); // next extension id
+
+        let mut extensions = self.extensions.iter().peekable();
+        loop {
+            let extension = match extensions.next() {
+                None => break,
+                Some(v) => v,
+            };
+
+            // next extension id
+            match extensions.peek() {
+                None => buf.push(0u8),
+                Some(next) => buf.push(next.ty as u8),
+            }
             buf.push_all(extension.to_bytes().as_slice());
         }
+
         buf.push_all(self.payload.as_slice());
         return buf;
     }
