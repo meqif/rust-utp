@@ -413,6 +413,13 @@ enum UtpSocketState {
     CS_EOF,
 }
 
+static GAIN: uint = 1;
+static ALLOWED_INCREASE: uint = 1;
+static TARGET: uint = 100_000; // 100 milliseconds
+static MSS: uint = 1400;
+static MIN_CWND: uint = 2;
+static INIT_CWND: uint = 2;
+
 /// A uTP (Micro Transport Protocol) socket.
 pub struct UtpSocket {
     socket: UdpSocket,
@@ -434,11 +441,15 @@ pub struct UtpSocket {
 
     rtt: int,
     rtt_variance: int,
-    timeout: int,
 
     pending_data: Vec<u8>,
     max_window: uint,
     curr_window: uint,
+
+    current_delays: Vec<(u32,u32)>,
+    base_delays: Vec<(u32,u32)>,
+    congestion_timeout: u32,
+    cwnd: uint,
 }
 
 impl UtpSocket {
@@ -464,10 +475,13 @@ impl UtpSocket {
                 last_acked_timestamp: 0,
                 rtt: 0,
                 rtt_variance: 0,
-                timeout: 1000,
                 pending_data: Vec::new(),
-                max_window: 0,
+                max_window: MIN_CWND * MSS,
                 curr_window: 0,
+                current_delays: Vec::new(),
+                base_delays: Vec::new(),
+                congestion_timeout: 1000, // 1 second
+                cwnd: INIT_CWND * MSS,
             }),
             Err(e) => Err(e)
         }
@@ -601,13 +615,14 @@ impl UtpSocket {
 
         let mut b = [0, ..BUF_SIZE + HEADER_SIZE];
         if self.state != CS_NEW {
-            debug!("setting read timeout of {} ms", self.timeout);
-            self.socket.set_read_timeout(Some(self.timeout as u64));
+            debug!("setting read timeout of {} ms", self.congestion_timeout);
+            self.socket.set_read_timeout(Some(self.congestion_timeout as u64));
         }
         let (read, src) = match self.socket.recv_from(b) {
             Err(ref e) if e.kind == TimedOut => {
                 debug!("recv_from timed out");
-                self.timeout = self.timeout * 2;
+                self.congestion_timeout = self.congestion_timeout * 2;
+                self.cwnd = MSS;
                 self.send_fast_resend_request();
                 return Ok((0, self.connected_to));
             },
@@ -775,6 +790,12 @@ impl UtpSocket {
                 Some(packet) => packet,
             };
 
+            debug!("current window: {}", self.send_window.len());
+            while self.curr_window + packet.len() > self.cwnd as uint {
+                let mut buf = [0, ..BUF_SIZE];
+                self.recv_from(buf);
+            }
+
             match self.socket.send_to(packet.bytes().as_slice(), dst) {
                 Ok(_) => {},
                 Err(ref e) => fail!("{}", e),
@@ -782,10 +803,6 @@ impl UtpSocket {
             debug!("sent {}", packet);
             self.curr_window += packet.len();
             self.send_window.push(packet);
-
-            // Receive ACK
-            let mut buf = [0, ..BUF_SIZE];
-            self.recv_from(buf);
         }
     }
 
@@ -818,6 +835,32 @@ impl UtpSocket {
             }
             debug!("sent {}", packet.header);
         }
+    }
+
+    fn update_base_delay(&mut self, v: u32) {
+        // Remove measurements more than 2 minutes old
+        let now = now_microseconds();
+        loop {
+            if self.base_delays.is_empty() { break; }
+            if now - self.base_delays[0].val0() <= 2 * 60 * 1_000_000 { break; }
+            self.base_delays.remove(0);
+        }
+
+        // Insert new measurement
+        self.base_delays.push((now_microseconds(), v));
+    }
+
+    fn update_current_delay(&mut self, v: u32) {
+        // Remove measurements more than 2 minutes old
+        let now = now_microseconds();
+        loop {
+            if self.current_delays.is_empty() { break; }
+            if now - self.current_delays[0].val0() <= 2 * 60 * 1_000_000 { break; }
+            self.current_delays.remove(0);
+        }
+
+        // Insert new measurement
+        self.current_delays.push((now_microseconds(), v));
     }
 
     /// Handle incoming packet, updating socket state accordingly.
@@ -911,13 +954,14 @@ impl UtpSocket {
                 let delta = self.rtt - packet_rtt;
                 self.rtt_variance += (std::num::abs(delta) - self.rtt_variance) / 4;
                 self.rtt += (packet_rtt - self.rtt) / 8;
-                self.timeout = std::cmp::max(self.rtt + self.rtt_variance * 4, 500);
+                self.congestion_timeout = std::cmp::max(self.rtt + self.rtt_variance * 4, 500) as u32;
+                self.congestion_timeout = std::cmp::min(self.congestion_timeout, 60_000);
 
                 debug!("packet_rtt: {}", packet_rtt);
                 debug!("delta: {}", delta);
                 debug!("self.rtt_variance: {}", self.rtt_variance);
                 debug!("self.rtt: {}", self.rtt);
-                debug!("self.timeout: {}", self.timeout);
+                debug!("self.congestion_timeout: {}", self.congestion_timeout);
 
                 if packet.ack_nr() == self.last_acked {
                     self.duplicate_ack_count += 1;
@@ -926,6 +970,30 @@ impl UtpSocket {
                     self.last_acked_timestamp = now_microseconds();
                     self.duplicate_ack_count = 1;
                 }
+
+                self.update_base_delay(packet.header.timestamp_microseconds);
+                self.update_current_delay(packet.header.timestamp_difference_microseconds);
+
+                fn filter(vec: Vec<(u32,u32)>) -> u32 {
+                    let input = vec.iter().map(|&(_,x)| x as f64).collect();
+                    let output = exponential_weighted_moving_average(input, 0.333);
+                    output[output.len() - 1] as u32
+                }
+
+                let bytes_newly_acked = packet.len();
+                let flightsize = self.curr_window;
+
+                let queuing_delay = filter(self.current_delays.clone()) - self.base_delays.iter().min().unwrap().val1();
+                let off_target: u32 = (TARGET as u32 - queuing_delay) / TARGET as u32;
+                self.cwnd += GAIN * off_target as uint * bytes_newly_acked * MSS / self.cwnd;
+                let max_allowed_cwnd = flightsize + ALLOWED_INCREASE * MSS;
+                self.cwnd = std::cmp::min(self.cwnd, max_allowed_cwnd);
+                self.cwnd = std::cmp::max(self.cwnd, MIN_CWND * MSS);
+
+                debug!("queuing_delay: {}", queuing_delay);
+                debug!("off_target: {}", off_target);
+                debug!("cwnd: {}", self.cwnd);
+                debug!("max_allowed_cwnd: {}", max_allowed_cwnd);
 
                 // Process extensions, if any
                 for extension in packet.extensions.iter() {
@@ -938,7 +1006,7 @@ impl UtpSocket {
                                 None => debug!("Packet {} not found", packet.ack_nr() + 1),
                                 Some(packet) => {
                                     self.socket.send_to(packet.bytes().as_slice(), self.connected_to);
-                                    debug!("sending {}", packet);
+                                    debug!("sent {}", packet);
                                 }
                             }
                         }
@@ -967,6 +1035,13 @@ impl UtpSocket {
                     } else {
                         debug!("Unknown extension {}, ignoring", extension.ty);
                     }
+                }
+
+                // Packet lost, halve the congestion window
+                if (!self.send_window.is_empty() && self.duplicate_ack_count == 3) || packet.header.extension != 0 {
+                    debug!("packet loss detected, halving congestion window");
+                    self.cwnd = std::cmp::min(self.cwnd / 2, 2 * 1520);
+                    debug!("cwnd: {}", self.cwnd);
                 }
 
                 // Three duplicate ACKs, must resend packets since `ack_nr + 1`
@@ -1904,7 +1979,7 @@ mod test {
         iotry!(server.socket.recv_from(buf));
 
         // Set a much smaller than usual timeout, for quicker test completion
-        server.timeout = 50;
+        server.congestion_timeout = 50;
 
         // Now wait for the previously discarded packet
         loop {
@@ -2031,7 +2106,7 @@ mod test {
         // Client
         spawn(proc() {
             let mut client = iotry!(UtpStream::connect(server_addr));
-            client.socket.timeout = 50;
+            client.socket.congestion_timeout = 50;
 
             // Stream.write
             iotry!(client.write(to_send.as_slice()));
