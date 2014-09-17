@@ -58,21 +58,24 @@ fn now_microseconds() -> u32 {
 }
 
 fn exponential_weighted_moving_average(samples: Vec<f64>, alpha: f64) -> Vec<f64> {
-    fn ewma(samples: Vec<f64>, average: Vec<f64>, alpha: f64) -> Vec<f64> {
-        debug!("ewma({}, {}, {})", samples, average, alpha);
-        match (samples.len(), average.len()) {
-            (0, _) => average, // no more samples, stop
-            (_, 0) => ewma(Vec::from_slice(samples.tail()), vec!(samples[0]), alpha), // s_0 = x_0
-            (_, _) => {
-                let prev_sample = samples[0];
-                let prev_avg = *average.last().unwrap();
-                let curr_avg = alpha * prev_sample + (1.0 - alpha) * prev_avg;
-                ewma(Vec::from_slice(samples.tail()), average.append([curr_avg]), alpha)
-            },
-        }
+    let mut average = Vec::new();
+
+    if samples.is_empty() {
+        return average;
     }
 
-    ewma(samples, vec!(), alpha)
+    // s_0 = x_0
+    average.push(samples[0]);
+
+    for i in range(1u, samples.len()) {
+        let prev_sample = samples[i];
+        let prev_avg = *average.last().unwrap();
+        let curr_avg = alpha * prev_sample + (1.0 - alpha) * prev_avg;
+
+        average.push(curr_avg);
+    }
+
+    return average;
 }
 
 /// Lazy iterator over bits of a vector of bytes, starting with the LSB
