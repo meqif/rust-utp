@@ -57,6 +57,24 @@ fn now_microseconds() -> u32 {
     (t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32
 }
 
+fn exponential_weighted_moving_average(samples: Vec<f64>, alpha: f64) -> Vec<f64> {
+    fn ewma(samples: Vec<f64>, average: Vec<f64>, alpha: f64) -> Vec<f64> {
+        debug!("ewma({}, {}, {})", samples, average, alpha);
+        match (samples.len(), average.len()) {
+            (0, _) => average, // no more samples, stop
+            (_, 0) => ewma(Vec::from_slice(samples.tail()), vec!(samples[0]), alpha), // s_0 = x_0
+            (_, _) => {
+                let prev_sample = samples[0];
+                let prev_avg = *average.last().unwrap();
+                let curr_avg = alpha * prev_sample + (1.0 - alpha) * prev_avg;
+                ewma(Vec::from_slice(samples.tail()), average.append([curr_avg]), alpha)
+            },
+        }
+    }
+
+    ewma(samples, vec!(), alpha)
+}
+
 /// Lazy iterator over bits of a vector of bytes, starting with the LSB
 /// (least-significat bit) of the first element of the vector.
 struct BitIterator { object: Vec<u8>, current_byte: uint, current_bit: uint }
@@ -2151,5 +2169,22 @@ mod test {
         let received = iotry!(server.read_to_end());
         assert_eq!(received.len(), data.len());
         assert_eq!(received, data);
+    }
+
+    #[test]
+    fn test_exponential_smoothed_moving_average() {
+        use super::exponential_weighted_moving_average;
+        use std::num::abs_sub;
+        use std::iter::range_inclusive;
+
+        let input = range_inclusive(1u, 10).map(|x| x as f64).collect();
+        let alpha = 1.0/3.0;
+        let expected: Vec<f64> = Vec::from_slice([1.0, 4.0/3.0, 17.0/9.0,
+        70.0/27.0, 275.0/81.0, 1036.0/243.0, 3773.0/729.0, 13378.0/2187.0,
+        46439.0/6561.0, 158488.0/19683.0]);
+        let output = exponential_weighted_moving_average(input, alpha);
+        let result = expected.iter().zip(output.iter())
+            .fold(0.0 as f64, |acc, (&a, &b)| acc + abs_sub(a, b));
+        assert!(result == 0.0);
     }
 }
