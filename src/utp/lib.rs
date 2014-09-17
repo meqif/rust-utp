@@ -914,9 +914,13 @@ impl UtpSocket {
                         // If three or more packets are acknowledged past the implicit missing one,
                         // assume it was lost.
                         if bits.filter(|&bit| bit == 1).count() >= 3 {
-                            let packet = self.send_window.iter().find(|pkt| pkt.seq_nr() == packet.ack_nr() + 1).unwrap();
-                            debug!("sending {}", packet);
-                            self.socket.send_to(packet.bytes().as_slice(), self.connected_to);
+                            match self.send_window.iter().find(|pkt| pkt.seq_nr() == packet.ack_nr() + 1) {
+                                None => debug!("Packet {} not found", packet.ack_nr() + 1),
+                                Some(packet) => {
+                                    self.socket.send_to(packet.bytes().as_slice(), self.connected_to);
+                                    debug!("sending {}", packet);
+                                }
+                            }
                         }
 
                         let bits = BitIterator::new(extension.data.clone());
