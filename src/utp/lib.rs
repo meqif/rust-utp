@@ -749,11 +749,6 @@ impl UtpSocket {
     fn send(&mut self) {
         let dst = self.connected_to;
         loop {
-            while self.send_window.len() > 100 {
-                let mut buf = [0, ..BUF_SIZE];
-                self.recv_from(buf);
-            }
-
             let packet = match self.unsent_queue.pop_front() {
                 None => break,
                 Some(packet) => packet,
@@ -766,6 +761,10 @@ impl UtpSocket {
             debug!("sent {}", packet);
             self.curr_window += packet.len();
             self.send_window.push(packet);
+
+            // Receive ACK
+            let mut buf = [0, ..BUF_SIZE];
+            self.recv_from(buf);
         }
     }
 
