@@ -991,7 +991,8 @@ impl UtpSocket {
                 self.cwnd = std::cmp::min(self.cwnd, max_allowed_cwnd);
                 self.cwnd = std::cmp::max(self.cwnd, MIN_CWND * MSS);
 
-                self.update_congestion_timeout(Int::from_be(packet.header.timestamp_difference_microseconds) as int / 1000);
+                let rtt = (TARGET as u32 - off_target) / 1000; // in milliseconds
+                self.update_congestion_timeout(rtt as int);
 
                 debug!("queuing_delay: {}", queuing_delay);
                 debug!("off_target: {}", off_target);
