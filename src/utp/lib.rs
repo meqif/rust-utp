@@ -863,6 +863,20 @@ impl UtpSocket {
         self.current_delays.push((now_microseconds(), v));
     }
 
+    fn update_congestion_timeout(&mut self, current_delay: int) {
+        let delta = self.rtt - current_delay;
+        self.rtt_variance += (std::num::abs(delta) - self.rtt_variance) / 4;
+        self.rtt += (current_delay - self.rtt) / 8;
+        self.congestion_timeout = std::cmp::max(self.rtt + self.rtt_variance * 4, 500) as u32;
+        self.congestion_timeout = std::cmp::min(self.congestion_timeout, 60_000);
+
+        debug!("current_delay: {}", current_delay);
+        debug!("delta: {}", delta);
+        debug!("self.rtt_variance: {}", self.rtt_variance);
+        debug!("self.rtt: {}", self.rtt);
+        debug!("self.congestion_timeout: {}", self.congestion_timeout);
+    }
+
     /// Handle incoming packet, updating socket state accordingly.
     ///
     /// Returns appropriate reply packet, if needed.
@@ -950,19 +964,6 @@ impl UtpSocket {
                 }
             }
             ST_STATE => {
-                let packet_rtt = Int::from_be(packet.header.timestamp_difference_microseconds) as int;
-                let delta = self.rtt - packet_rtt;
-                self.rtt_variance += (std::num::abs(delta) - self.rtt_variance) / 4;
-                self.rtt += (packet_rtt - self.rtt) / 8;
-                self.congestion_timeout = std::cmp::max(self.rtt + self.rtt_variance * 4, 500) as u32;
-                self.congestion_timeout = std::cmp::min(self.congestion_timeout, 60_000);
-
-                debug!("packet_rtt: {}", packet_rtt);
-                debug!("delta: {}", delta);
-                debug!("self.rtt_variance: {}", self.rtt_variance);
-                debug!("self.rtt: {}", self.rtt);
-                debug!("self.congestion_timeout: {}", self.congestion_timeout);
-
                 if packet.ack_nr() == self.last_acked {
                     self.duplicate_ack_count += 1;
                 } else {
@@ -989,6 +990,8 @@ impl UtpSocket {
                 let max_allowed_cwnd = flightsize + ALLOWED_INCREASE * MSS;
                 self.cwnd = std::cmp::min(self.cwnd, max_allowed_cwnd);
                 self.cwnd = std::cmp::max(self.cwnd, MIN_CWND * MSS);
+
+                self.update_congestion_timeout(Int::from_be(packet.header.timestamp_difference_microseconds) as int / 1000);
 
                 debug!("queuing_delay: {}", queuing_delay);
                 debug!("off_target: {}", off_target);
