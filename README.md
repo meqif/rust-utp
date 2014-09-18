@@ -17,7 +17,7 @@ Note that non-release builds are *much* slower.
 
 ## To implement
 
-- [ ] congestion control
+- [x] congestion control
 - [ ] proper connection closing
     - [x] handle both RST and FIN
     - [x] send FIN on close
