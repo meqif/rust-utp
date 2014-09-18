@@ -755,7 +755,7 @@ impl UtpSocket {
             });
         }
 
-        for chunk in buf.chunks(BUF_SIZE) {
+        for chunk in buf.chunks(MSS - HEADER_SIZE) {
             let mut packet = UtpPacket::new();
             packet.set_type(ST_DATA);
             packet.payload = Vec::from_slice(chunk);
