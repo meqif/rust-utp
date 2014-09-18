@@ -1043,7 +1043,7 @@ impl UtpSocket {
                 // Packet lost, halve the congestion window
                 if (!self.send_window.is_empty() && self.duplicate_ack_count == 3) || packet.header.extension != 0 {
                     debug!("packet loss detected, halving congestion window");
-                    self.cwnd = std::cmp::min(self.cwnd / 2, 2 * 1520);
+                    self.cwnd = std::cmp::max(self.cwnd / 2, MIN_CWND * MSS);
                     debug!("cwnd: {}", self.cwnd);
                 }
 
