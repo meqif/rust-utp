@@ -4,10 +4,11 @@ name = "utp"
 version = "0.0.0"
 authors = [ "Ricardo Martins <ricardo@scarybox.net>" ]
 
-[[lib]]
+[lib]
 name = "utp"
 path = "src/utp/lib.rs"
 
 [[bin]]
 name = "utp-cat"
 path = "examples/utp-cat/main.rs"
+test = false
