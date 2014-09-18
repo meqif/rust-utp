@@ -791,7 +791,7 @@ impl UtpSocket {
             };
 
             debug!("current window: {}", self.send_window.len());
-            while self.curr_window + packet.len() > self.cwnd as uint {
+            while self.curr_window + packet.len() > std::cmp::max(MIN_CWND * MSS, std::cmp::min(self.cwnd, self.remote_wnd_size)) as uint {
                 let mut buf = [0, ..BUF_SIZE];
                 self.recv_from(buf);
             }
