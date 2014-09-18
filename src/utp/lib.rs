@@ -443,8 +443,8 @@ pub struct UtpSocket {
     rtt_variance: int,
 
     pending_data: Vec<u8>,
-    max_window: uint,
     curr_window: uint,
+    remote_wnd_size: uint,
 
     current_delays: Vec<(u32,u32)>,
     base_delays: Vec<(u32,u32)>,
@@ -476,8 +476,8 @@ impl UtpSocket {
                 rtt: 0,
                 rtt_variance: 0,
                 pending_data: Vec::new(),
-                max_window: MIN_CWND * MSS,
                 curr_window: 0,
+                remote_wnd_size: 0,
                 current_delays: Vec::new(),
                 base_delays: Vec::new(),
                 congestion_timeout: 1000, // 1 second
@@ -879,8 +879,8 @@ impl UtpSocket {
             self.ack_nr = packet.seq_nr();
         }
 
-        self.max_window = packet.wnd_size() as uint;
-        debug!("self.max_window: {}", self.max_window);
+        self.remote_wnd_size = packet.wnd_size() as uint;
+        debug!("self.remote_wnd_size: {}", self.remote_wnd_size);
 
         match packet.header.get_type() {
             ST_SYN => { // Respond with an ACK and populate own fields
