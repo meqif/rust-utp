@@ -131,7 +131,9 @@ impl UtpExtension {
     }
 
     fn to_bytes(&self) -> Vec<u8> {
-        (vec!(self.data.len() as u8)).append(self.data.as_slice())
+        let mut data = vec!(self.data.len() as u8);
+        data.extend(self.data.iter().map(|&x| x));
+        return data;
     }
 }
 
@@ -350,7 +352,7 @@ impl UtpPacket {
             if kind == SelectiveAckExtension as u8 { // or more generally, a known kind
                 let extension = UtpExtension {
                     ty: SelectiveAckExtension,
-                    data: Vec::from_slice(buf.slice(extension_start, payload_start)),
+                    data: buf.slice(extension_start, payload_start).to_vec(),
                 };
                 extensions.push(extension);
             }
@@ -361,7 +363,7 @@ impl UtpPacket {
 
         let mut payload;
         if idx < buf.len() {
-            payload = Vec::from_slice(buf.slice_from(idx));
+            payload = buf.slice_from(idx).to_vec();
         } else {
             payload = Vec::new();
         }
@@ -702,7 +704,7 @@ impl UtpSocket {
                 self.ack_nr = packet.seq_nr();
                 return idx + len;
             } else {
-                self.pending_data = Vec::from_slice(self.pending_data.slice_from(len));
+                self.pending_data = self.pending_data.slice_from(len).to_vec();
             }
         }
 
@@ -758,7 +760,7 @@ impl UtpSocket {
         for chunk in buf.chunks(MSS - HEADER_SIZE) {
             let mut packet = UtpPacket::new();
             packet.set_type(ST_DATA);
-            packet.payload = Vec::from_slice(chunk);
+            packet.payload = chunk.to_vec();
             packet.header.timestamp_microseconds = now_microseconds().to_be();
             packet.header.seq_nr = self.seq_nr.to_be();
             packet.header.ack_nr = self.ack_nr.to_be();
@@ -937,7 +939,7 @@ impl UtpSocket {
                     // multiple of 4
                     if sack.len() % 4 != 0 {
                         let len = sack.len();
-                        sack.grow((len / 4 + 1) * 4 - len, &0);
+                        sack.grow((len / 4 + 1) * 4 - len, 0);
                     }
 
                     if sack.len() > 0 {
@@ -1266,7 +1268,7 @@ mod test {
 
     #[test]
     fn test_packet_encode() {
-        let payload = Vec::from_slice("Hello\n".as_bytes());
+        let payload = "Hello\n".as_bytes().to_vec();
         let (timestamp, timestamp_diff): (u32, u32) = (15270793, 1707040186);
         let (connection_id, seq_nr, ack_nr): (u16, u16, u16) = (16808, 15090, 17096);
         let window_size: u32 = 1048576;
@@ -1297,7 +1299,7 @@ mod test {
         assert_eq!(Int::from_be(header.wnd_size), window_size);
         assert_eq!(Int::from_be(header.timestamp_microseconds), timestamp);
         assert_eq!(Int::from_be(header.timestamp_difference_microseconds), timestamp_diff);
-        assert_eq!(pkt.bytes(), Vec::from_slice(buf));
+        assert_eq!(pkt.bytes(), buf.to_vec());
     }
 
     #[test]
@@ -1787,14 +1789,14 @@ mod test {
             let mut s = client.socket;
             let mut window: Vec<UtpPacket> = Vec::new();
 
-            for (i, data) in Vec::from_fn(12, |idx| idx as u8 + 1).as_slice().chunks(3).enumerate() {
+            for data in Vec::from_fn(12, |idx| idx as u8 + 1).as_slice().chunks(3) {
                 let mut packet = UtpPacket::new();
                 packet.set_wnd_size(BUF_SIZE as u32);
                 packet.set_type(ST_DATA);
                 packet.header.connection_id = client.sender_connection_id.to_be();
                 packet.header.seq_nr = client.seq_nr.to_be();
                 packet.header.ack_nr = client.ack_nr.to_be();
-                packet.payload = Vec::from_slice(data);
+                packet.payload = data.to_vec();
                 window.push(packet.clone());
                 client.send_window.push(packet.clone());
                 client.seq_nr += 1;
@@ -2171,7 +2173,7 @@ mod test {
                 packet.header.ack_nr = client.ack_nr.to_be();
                 packet.header.connection_id = client.sender_connection_id.to_be();
                 packet.header.timestamp_microseconds = super::now_microseconds().to_be();
-                packet.payload = Vec::from_slice(chunk);
+                packet.payload = chunk.to_vec();
                 packet.set_type(ST_DATA);
 
                 if index % 2 == 0 {
@@ -2260,9 +2262,9 @@ mod test {
 
         let input = range_inclusive(1u, 10).map(|x| x as f64).collect();
         let alpha = 1.0/3.0;
-        let expected: Vec<f64> = Vec::from_slice([1.0, 4.0/3.0, 17.0/9.0,
+        let expected: Vec<f64> = [1.0, 4.0/3.0, 17.0/9.0,
         70.0/27.0, 275.0/81.0, 1036.0/243.0, 3773.0/729.0, 13378.0/2187.0,
-        46439.0/6561.0, 158488.0/19683.0]);
+        46439.0/6561.0, 158488.0/19683.0].to_vec();
         let output = exponential_weighted_moving_average(input, alpha);
         let result = expected.iter().zip(output.iter())
             .fold(0.0 as f64, |acc, (&a, &b)| acc + abs_sub(a, b));
