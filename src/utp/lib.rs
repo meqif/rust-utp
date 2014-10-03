@@ -878,14 +878,18 @@ impl UtpSocket {
         debug!("self.congestion_timeout: {}", self.congestion_timeout);
     }
 
-    /// Return the filtered current delay
+    /// Calculate the filtered current delay in the current window.
+    ///
+    /// The current delay is calculated through application of the exponential
+    /// weighted moving average filter with smoothing factor 0.333 over the
+    /// current delays in the current window.
     fn filtered_current_delay(&self) -> u32 {
         let input = self.current_delays.iter().map(|&(_,x)| x as f64).collect();
         let output = exponential_weighted_moving_average(input, 0.333);
         output[output.len() - 1] as u32
     }
 
-    /// Return the lowest seen base delay
+    /// Calculate the lowest base delay in the current window.
     fn min_base_delay(&self) -> u32 {
         self.base_delays.iter().min().unwrap().val1()
     }
