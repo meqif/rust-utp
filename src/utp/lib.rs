@@ -894,6 +894,37 @@ impl UtpSocket {
         self.base_delays.iter().min().unwrap().val1()
     }
 
+    /// Build the selective acknowledgment payload for usage in packets.
+    fn build_selective_ack(&self) -> Vec<u8> {
+        let mut stashed = self.incoming_buffer.iter()
+            .map(|pkt| pkt.seq_nr())
+            .filter(|&seq_nr| seq_nr > self.ack_nr);
+
+        let mut sack = Vec::new();
+        for seq_nr in stashed {
+            let diff = seq_nr - self.ack_nr - 2;
+            let byte = (diff / 8) as uint;
+            let bit = (diff % 8) as uint;
+
+            if byte >= sack.len() {
+                sack.push(0u8);
+            }
+
+            let mut bitarray = sack.pop().unwrap();
+            bitarray |= 1 << bit;
+            sack.push(bitarray);
+        }
+
+        // Make sure the amount of elements in the SACK vector is a
+        // multiple of 4
+        if sack.len() % 4 != 0 {
+            let len = sack.len();
+            sack.grow((len / 4 + 1) * 4 - len, 0);
+        }
+
+        return sack;
+    }
+
     /// Handle incoming packet, updating socket state accordingly.
     ///
     /// Returns appropriate reply packet, if needed.
@@ -932,31 +963,7 @@ impl UtpSocket {
                            self.ack_nr, packet.seq_nr());
 
                     // Set SACK extension payload if the packet is not in order
-                    let mut stashed = self.incoming_buffer.iter()
-                        .map(|pkt| pkt.seq_nr())
-                        .filter(|&seq_nr| seq_nr > self.ack_nr);
-
-                    let mut sack = Vec::new();
-                    for seq_nr in stashed {
-                        let diff = seq_nr - self.ack_nr - 2;
-                        let byte = (diff / 8) as uint;
-                        let bit = (diff % 8) as uint;
-
-                        if byte >= sack.len() {
-                            sack.push(0u8);
-                        }
-
-                        let mut bitarray = sack.pop().unwrap();
-                        bitarray |= 1 << bit;
-                        sack.push(bitarray);
-                    }
-
-                    // Make sure the amount of elements in the SACK vector is a
-                    // multiple of 4
-                    if sack.len() % 4 != 0 {
-                        let len = sack.len();
-                        sack.grow((len / 4 + 1) * 4 - len, 0);
-                    }
+                    let sack = self.build_selective_ack();
 
                     if sack.len() > 0 {
                         reply.set_sack(Some(sack));
