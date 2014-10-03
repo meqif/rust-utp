@@ -878,6 +878,10 @@ impl UtpSocket {
         debug!("self.congestion_timeout: {}", self.congestion_timeout);
     }
 
+    fn min_base_delay(&self) -> u32 {
+        self.base_delays.iter().min().unwrap().val1()
+    }
+
     /// Handle incoming packet, updating socket state accordingly.
     ///
     /// Returns appropriate reply packet, if needed.
@@ -985,7 +989,7 @@ impl UtpSocket {
                 let bytes_newly_acked = packet.len();
                 let flightsize = self.curr_window;
 
-                let queuing_delay = filter(self.current_delays.clone()) - self.base_delays.iter().min().unwrap().val1();
+                let queuing_delay = filter(self.current_delays.clone()) - self.min_base_delay();
                 let off_target: u32 = (TARGET as u32 - queuing_delay) / TARGET as u32;
                 self.cwnd += GAIN * off_target as uint * bytes_newly_acked * MSS / self.cwnd;
                 let max_allowed_cwnd = flightsize + ALLOWED_INCREASE * MSS;
