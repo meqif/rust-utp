@@ -40,6 +40,10 @@ static HEADER_SIZE: uint = 20;
 // Ethernet maximum transfer unit of 1500 bytes.
 static BUF_SIZE: uint = 1500;
 
+macro_rules! iotry(
+    ($e:expr) => (match $e { Ok(e) => e, Err(e) => fail!("{}", e) })
+)
+
 macro_rules! u8_to_unsigned_be(
     ($src:ident[$start:expr..$end:expr] -> $t:ty) => ({
         let mut result: $t = 0;
@@ -550,10 +554,7 @@ impl UtpSocket {
         // Wait for acknowledgment on pending sent packets
         let mut buf = [0u8, ..BUF_SIZE];
         while !self.send_window.is_empty() {
-            match self.recv_from(buf) {
-                Ok(_) => {},
-                Err(e) => fail!("{}", e),
-            }
+            iotry!(self.recv_from(buf));
         }
 
         let mut packet = UtpPacket::new();
@@ -794,13 +795,10 @@ impl UtpSocket {
             debug!("current window: {}", self.send_window.len());
             while self.curr_window + packet.len() > std::cmp::max(MIN_CWND * MSS, std::cmp::min(self.cwnd, self.remote_wnd_size)) as uint {
                 let mut buf = [0, ..BUF_SIZE];
-                self.recv_from(buf);
+                iotry!(self.recv_from(buf));
             }
 
-            match self.socket.send_to(packet.bytes().as_slice(), dst) {
-                Ok(_) => {},
-                Err(ref e) => fail!("{}", e),
-            }
+            iotry!(self.socket.send_to(packet.bytes().as_slice(), dst));
             debug!("sent {}", packet);
             self.curr_window += packet.len();
             self.send_window.push(packet);
@@ -830,10 +828,8 @@ impl UtpSocket {
             let t = now_microseconds();
             packet.header.timestamp_microseconds = t.to_be();
             packet.header.timestamp_difference_microseconds = (t - self.last_acked_timestamp).to_be();
-            match self.socket.send_to(packet.bytes().as_slice(), self.connected_to) {
-                Ok(_) => {},
-                Err(e) => fail!("{}", e),
-            }
+            iotry!(self.socket.send_to(packet.bytes().as_slice(),
+                                       self.connected_to));
             debug!("sent {}", packet.header);
         }
     }
@@ -1028,7 +1024,7 @@ impl UtpSocket {
                             match self.send_window.iter().find(|pkt| pkt.seq_nr() == packet.ack_nr() + 1) {
                                 None => debug!("Packet {} not found", packet.ack_nr() + 1),
                                 Some(packet) => {
-                                    self.socket.send_to(packet.bytes().as_slice(), self.connected_to);
+                                    iotry!(self.socket.send_to(packet.bytes().as_slice(), self.connected_to));
                                     debug!("sent {}", packet);
                                 }
                             }
@@ -1044,10 +1040,7 @@ impl UtpSocket {
                                 match self.send_window.iter().find(|pkt| pkt.seq_nr() == seq_nr) {
                                     None => debug!("Packet {} not found", seq_nr),
                                     Some(packet) => {
-                                        match self.socket.send_to(packet.bytes().as_slice(), self.connected_to) {
-                                            Ok(_) => {},
-                                            Err(e) => fail!("{}", e),
-                                        }
+                                        iotry!(self.socket.send_to(packet.bytes().as_slice(), self.connected_to));
                                         debug!("sent {}", packet);
                                     }
                                 }
@@ -1074,10 +1067,8 @@ impl UtpSocket {
                 if !self.send_window.is_empty() && self.duplicate_ack_count == 3 {
                     for packet in self.send_window.iter().take_while(|pkt| pkt.seq_nr() <= packet.ack_nr() + 1) {
                         debug!("resending: {}", packet);
-                        match self.socket.send_to(packet.bytes().as_slice(), self.connected_to) {
-                            Ok(_) => {},
-                            Err(e) => fail!("{}", e),
-                        }
+                        iotry!(self.socket.send_to(packet.bytes().as_slice(),
+                                                   self.connected_to));
                     }
                 }
 
@@ -1208,10 +1199,6 @@ mod test {
                 fail!("expected {}, got {}", $right, $left);
             }
         );
-    )
-
-    macro_rules! iotry(
-        ($e:expr) => (match $e { Ok(e) => e, Err(e) => fail!("{}", e) })
     )
 
     #[test]
