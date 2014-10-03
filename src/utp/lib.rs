@@ -1003,13 +1003,14 @@ impl UtpSocket {
                 let flightsize = self.curr_window;
 
                 let queuing_delay = self.filtered_current_delay() - self.min_base_delay();
-                let off_target: u32 = (TARGET as u32 - queuing_delay) / TARGET as u32;
+                let target = TARGET as u32;
+                let off_target: u32 = (target - queuing_delay) / target;
                 self.cwnd += GAIN * off_target as uint * bytes_newly_acked * MSS / self.cwnd;
                 let max_allowed_cwnd = flightsize + ALLOWED_INCREASE * MSS;
                 self.cwnd = std::cmp::min(self.cwnd, max_allowed_cwnd);
                 self.cwnd = std::cmp::max(self.cwnd, MIN_CWND * MSS);
 
-                let rtt = (TARGET as u32 - off_target) / 1000; // in milliseconds
+                let rtt = (target - off_target) / 1000; // in milliseconds
                 self.update_congestion_timeout(rtt as int);
 
                 debug!("queuing_delay: {}", queuing_delay);
