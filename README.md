@@ -7,7 +7,7 @@ control and full packet loss handling (though some cases are handled). However,
 it does support the Selective Acknowledgment extension, handles unordered and
 duplicate packets and presents a stream interface (`UtpStream`).
 
-[![Build Status](https://api.travis-ci.org/meqif/rust-utp.svg)](https://travis-ci.org/meqif/rust-utp)
+[![Build Status](http://img.shields.io/travis/meqif/rust-utp.svg?style=flat)](https://travis-ci.org/meqif/rust-utp)
 
 ## Building
 
