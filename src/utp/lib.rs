@@ -696,8 +696,13 @@ impl UtpSocket {
     fn flush_incoming_buffer(&mut self, buf: &mut [u8], start: uint) -> uint {
         let mut idx = start;
 
+        // Check if there is any pending data from a partially flushed packet
         if !self.pending_data.is_empty() {
             let len = buf.clone_from_slice(self.pending_data.as_slice());
+
+            // If all the data in the pending data buffer fits the given output
+            // buffer, remove the corresponding packet from the incoming buffer
+            // and clear the pending data buffer
             if len == self.pending_data.len() {
                 self.pending_data.clear();
                 let packet = self.incoming_buffer.remove(0).unwrap();
@@ -705,10 +710,13 @@ impl UtpSocket {
                 self.ack_nr = packet.seq_nr();
                 return idx + len;
             } else {
+                // Remove the bytes copied to the output buffer from the pending
+                // data buffer (i.e., pending -= output)
                 self.pending_data = self.pending_data.slice_from(len).to_vec();
             }
         }
 
+        // Copy the payload of as many packets in the incoming buffer as possible
         while !self.incoming_buffer.is_empty() &&
             (self.ack_nr == self.incoming_buffer[0].seq_nr() ||
              self.ack_nr + 1 == self.incoming_buffer[0].seq_nr())
@@ -720,6 +728,7 @@ impl UtpSocket {
                 idx += 1;
             }
 
+            // Remove top packet if its payload fits the output buffer
             if self.incoming_buffer[0].payload.len() == len {
                 let packet = self.incoming_buffer.remove(0).unwrap();
                 debug!("Removing packet from buffer: {}", packet);
@@ -728,6 +737,7 @@ impl UtpSocket {
                 self.pending_data.push_all(self.incoming_buffer[0].payload.slice_from(len));
             }
 
+            // Stop if the output buffer is full
             if buf.len() == idx {
                 return idx;
             }
