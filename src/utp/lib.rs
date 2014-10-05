@@ -606,7 +606,7 @@ impl UtpSocket {
             });
         }
 
-        match self.flush_incoming_buffer(buf, 0) {
+        match self.flush_incoming_buffer(buf) {
             0 => self.recv(buf),
             read => Ok((read, self.connected_to)),
         }
@@ -663,7 +663,7 @@ impl UtpSocket {
         };
 
         // Flush incoming buffer if possible
-        let read = self.flush_incoming_buffer(buf, 0);
+        let read = self.flush_incoming_buffer(buf);
 
         Ok((read, src))
     }
@@ -693,8 +693,8 @@ impl UtpSocket {
     /// no missing packets. The discarded packets' payload is written to the
     /// slice `buf`, starting in position `start`.
     /// Returns the last written index.
-    fn flush_incoming_buffer(&mut self, buf: &mut [u8], start: uint) -> uint {
-        let mut idx = start;
+    fn flush_incoming_buffer(&mut self, buf: &mut [u8]) -> uint {
+        let mut idx = 0;
 
         // Check if there is any pending data from a partially flushed packet
         if !self.pending_data.is_empty() {
