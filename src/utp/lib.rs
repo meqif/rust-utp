@@ -688,6 +688,19 @@ impl UtpSocket {
         resp
     }
 
+    /// Remove packet in incoming buffer and update current acknowledgement
+    /// number.
+    fn advance_incoming_buffer(&mut self) -> Option<UtpPacket> {
+        match self.incoming_buffer.remove(0) {
+            Some(packet) => {
+                debug!("Removed packet from incoming buffer: {}", packet);
+                self.ack_nr = packet.seq_nr();
+                Some(packet)
+            },
+            None => None
+        }
+    }
+
     /// Discards sequential, ordered packets in incoming buffer, starting from
     /// the most recently acknowledged to the most recent, as long as there are
     /// no missing packets. The discarded packets' payload is written to the
@@ -705,9 +718,7 @@ impl UtpSocket {
             // and clear the pending data buffer
             if len == self.pending_data.len() {
                 self.pending_data.clear();
-                let packet = self.incoming_buffer.remove(0).unwrap();
-                debug!("Removing packet from buffer: {}", packet);
-                self.ack_nr = packet.seq_nr();
+                self.advance_incoming_buffer();
                 return idx + len;
             } else {
                 // Remove the bytes copied to the output buffer from the pending
@@ -730,9 +741,7 @@ impl UtpSocket {
 
             // Remove top packet if its payload fits the output buffer
             if self.incoming_buffer[0].payload.len() == len {
-                let packet = self.incoming_buffer.remove(0).unwrap();
-                debug!("Removing packet from buffer: {}", packet);
-                self.ack_nr = packet.seq_nr();
+                self.advance_incoming_buffer();
             } else {
                 self.pending_data.push_all(self.incoming_buffer[0].payload.slice_from(len));
             }
