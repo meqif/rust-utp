@@ -952,6 +952,22 @@ impl UtpSocket {
         }
     }
 
+    /// Forget sent packets that were acknowledged by the remote peer.
+    fn advance_send_window(&mut self) {
+        match self.send_window.iter()
+            .position(|pkt| pkt.seq_nr() == self.last_acked)
+        {
+            None => (),
+            Some(position) => {
+                for _ in range(0, position + 1) {
+                    let packet = self.send_window.remove(0).unwrap();
+                    self.curr_window -= packet.len();
+                }
+            }
+        }
+        debug!("self.curr_window: {}", self.curr_window);
+    }
+
     /// Handle incoming packet, updating socket state accordingly.
     ///
     /// Returns appropriate reply packet, if needed.
@@ -1092,18 +1108,7 @@ impl UtpSocket {
                 }
 
                 // Success, advance send window
-                match self.send_window.iter()
-                    .position(|pkt| pkt.seq_nr() == self.last_acked)
-                {
-                    None => (),
-                    Some(position) => {
-                        for _ in range(0, position + 1) {
-                            let packet = self.send_window.remove(0).unwrap();
-                            self.curr_window -= packet.len();
-                        }
-                    }
-                }
-                debug!("self.curr_window: {}", self.curr_window);
+                self.advance_send_window();
 
                 if self.state == CS_FIN_SENT &&
                     packet.ack_nr() == self.seq_nr {
