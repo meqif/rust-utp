@@ -942,6 +942,16 @@ impl UtpSocket {
         return sack;
     }
 
+    fn resend_lost_packet(&mut self, lost_packet_nr: u16) {
+        match self.send_window.iter().find(|pkt| pkt.seq_nr() == lost_packet_nr + 1) {
+            None => debug!("Packet {} not found", lost_packet_nr + 1),
+            Some(packet) => {
+                iotry!(self.socket.send_to(packet.bytes().as_slice(), self.connected_to));
+                debug!("sent {}", packet);
+            }
+        }
+    }
+
     /// Handle incoming packet, updating socket state accordingly.
     ///
     /// Returns appropriate reply packet, if needed.
@@ -1042,13 +1052,7 @@ impl UtpSocket {
                         // If three or more packets are acknowledged past the implicit missing one,
                         // assume it was lost.
                         if bits.filter(|&bit| bit == 1).count() >= 3 {
-                            match self.send_window.iter().find(|pkt| pkt.seq_nr() == packet.ack_nr() + 1) {
-                                None => debug!("Packet {} not found", packet.ack_nr() + 1),
-                                Some(packet) => {
-                                    iotry!(self.socket.send_to(packet.bytes().as_slice(), self.connected_to));
-                                    debug!("sent {}", packet);
-                                }
-                            }
+                            self.resend_lost_packet(packet.ack_nr());
                         }
 
                         let bits = BitIterator::new(extension.data.clone());
@@ -1058,13 +1062,7 @@ impl UtpSocket {
                                 debug!("SACK: packet {} received", seq_nr);
                             } else if seq_nr < self.seq_nr {
                                 debug!("SACK: packet {} lost", seq_nr);
-                                match self.send_window.iter().find(|pkt| pkt.seq_nr() == seq_nr) {
-                                    None => debug!("Packet {} not found", seq_nr),
-                                    Some(packet) => {
-                                        iotry!(self.socket.send_to(packet.bytes().as_slice(), self.connected_to));
-                                        debug!("sent {}", packet);
-                                    }
-                                }
+                                self.resend_lost_packet(seq_nr);
                             } else {
                                 break;
                             }
