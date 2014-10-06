@@ -1677,9 +1677,9 @@ mod test {
     #[test]
     fn test_utp_stream_small_data() {
         // Fits in a packet
-        static len: uint = 1024;
-        let data = Vec::from_fn(len, |idx| idx as u8);
-        expect_eq!(len, data.len());
+        static LEN: uint = 1024;
+        let data = Vec::from_fn(LEN, |idx| idx as u8);
+        expect_eq!(LEN, data.len());
 
         let d = data.clone();
         let server_addr = next_test_ip4();
@@ -1700,9 +1700,9 @@ mod test {
     #[test]
     fn test_utp_stream_large_data() {
         // Has to be sent over several packets
-        static len: uint = 1024 * 1024;
-        let data = Vec::from_fn(len, |idx| idx as u8);
-        expect_eq!(len, data.len());
+        static LEN: uint = 1024 * 1024;
+        let data = Vec::from_fn(LEN, |idx| idx as u8);
+        expect_eq!(LEN, data.len());
 
         let d = data.clone();
         let server_addr = next_test_ip4();
@@ -1724,9 +1724,9 @@ mod test {
     fn test_utp_stream_successive_reads() {
         use std::io::Closed;
 
-        static len: uint = 1024;
-        let data: Vec<u8> = Vec::from_fn(len, |idx| idx as u8);
-        expect_eq!(len, data.len());
+        static LEN: uint = 1024;
+        let data: Vec<u8> = Vec::from_fn(LEN, |idx| idx as u8);
+        expect_eq!(LEN, data.len());
 
         let d = data.clone();
         let server_addr = next_test_ip4();
@@ -1915,10 +1915,10 @@ mod test {
         let client = iotry!(UtpSocket::bind(client_addr));
 
         // Fits in a packet
-        static len: uint = 1024;
-        let data = Vec::from_fn(len, |idx| idx as u8);
+        static LEN: uint = 1024;
+        let data = Vec::from_fn(LEN, |idx| idx as u8);
         let d = data.clone();
-        expect_eq!(len, data.len());
+        expect_eq!(LEN, data.len());
 
         spawn(proc() {
             let mut client = iotry!(client.connect(server_addr));
