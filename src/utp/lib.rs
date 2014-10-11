@@ -35,10 +35,10 @@ use std::rand::random;
 use std::fmt;
 use std::collections::{DList, Deque};
 
-static HEADER_SIZE: uint = 20;
+const HEADER_SIZE: uint = 20;
 // For simplicity's sake, let us assume no packet will ever exceed the
 // Ethernet maximum transfer unit of 1500 bytes.
-static BUF_SIZE: uint = 1500;
+const BUF_SIZE: uint = 1500;
 
 macro_rules! iotry(
     ($e:expr) => (match $e { Ok(e) => e, Err(e) => fail!("{}", e) })
@@ -418,12 +418,12 @@ enum UtpSocketState {
     CS_EOF,
 }
 
-static GAIN: uint = 1;
-static ALLOWED_INCREASE: uint = 1;
-static TARGET: uint = 100_000; // 100 milliseconds
-static MSS: uint = 1400;
-static MIN_CWND: uint = 2;
-static INIT_CWND: uint = 2;
+const GAIN: uint = 1;
+const ALLOWED_INCREASE: uint = 1;
+const TARGET: uint = 100_000; // 100 milliseconds
+const MSS: uint = 1400;
+const MIN_CWND: uint = 2;
+const INIT_CWND: uint = 2;
 
 /// A uTP (Micro Transport Protocol) socket.
 pub struct UtpSocket {
@@ -1677,7 +1677,7 @@ mod test {
     #[test]
     fn test_utp_stream_small_data() {
         // Fits in a packet
-        static LEN: uint = 1024;
+        const LEN: uint = 1024;
         let data = Vec::from_fn(LEN, |idx| idx as u8);
         expect_eq!(LEN, data.len());
 
@@ -1700,7 +1700,7 @@ mod test {
     #[test]
     fn test_utp_stream_large_data() {
         // Has to be sent over several packets
-        static LEN: uint = 1024 * 1024;
+        const LEN: uint = 1024 * 1024;
         let data = Vec::from_fn(LEN, |idx| idx as u8);
         expect_eq!(LEN, data.len());
 
@@ -1724,7 +1724,7 @@ mod test {
     fn test_utp_stream_successive_reads() {
         use std::io::Closed;
 
-        static LEN: uint = 1024;
+        const LEN: uint = 1024;
         let data: Vec<u8> = Vec::from_fn(LEN, |idx| idx as u8);
         expect_eq!(LEN, data.len());
 
@@ -1915,7 +1915,7 @@ mod test {
         let client = iotry!(UtpSocket::bind(client_addr));
 
         // Fits in a packet
-        static LEN: uint = 1024;
+        const LEN: uint = 1024;
         let data = Vec::from_fn(LEN, |idx| idx as u8);
         let d = data.clone();
         expect_eq!(LEN, data.len());
