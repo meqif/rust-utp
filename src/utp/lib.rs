@@ -140,7 +140,6 @@ impl UtpExtension {
     }
 }
 
-#[allow(dead_code)]
 #[deriving(Clone)]
 #[packed]
 struct UtpPacketHeader {
@@ -216,7 +215,6 @@ impl fmt::Show for UtpPacketHeader {
     }
 }
 
-#[allow(dead_code)]
 struct UtpPacket {
     header: UtpPacketHeader,
     extensions: Vec<UtpExtension>,
