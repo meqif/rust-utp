@@ -6,7 +6,6 @@ authors = [ "Ricardo Martins <ricardo@scarybox.net>" ]
 
 [lib]
 name = "utp"
-path = "src/utp/lib.rs"
 
 [[bin]]
 name = "utp-cat"
