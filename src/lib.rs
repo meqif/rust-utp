@@ -855,9 +855,7 @@ impl UtpSocket {
     fn update_base_delay(&mut self, v: u32) {
         // Remove measurements more than 2 minutes old
         let now = now_microseconds();
-        loop {
-            if self.base_delays.is_empty() { break; }
-            if now - self.base_delays[0].val0() <= DELAY_MAX_AGE { break; }
+        while !self.base_delays.is_empty() && now - self.base_delays[0].val0() > DELAY_MAX_AGE {
             self.base_delays.remove(0);
         }
 
@@ -868,9 +866,7 @@ impl UtpSocket {
     fn update_current_delay(&mut self, v: u32) {
         // Remove measurements more than 2 minutes old
         let now = now_microseconds();
-        loop {
-            if self.current_delays.is_empty() { break; }
-            if now - self.current_delays[0].val0() <= DELAY_MAX_AGE { break; }
+        while !self.current_delays.is_empty() && now - self.current_delays[0].val0() > DELAY_MAX_AGE {
             self.current_delays.remove(0);
         }
 
