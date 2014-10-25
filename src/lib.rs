@@ -15,12 +15,6 @@
 // - Handle packet loss
 // - Path MTU discovery (RFC4821)
 
-#![crate_name = "utp"]
-
-#![license = "MIT/ASL2"]
-#![crate_type = "dylib"]
-#![crate_type = "rlib"]
-
 #![feature(macro_rules, phase, if_let, while_let)]
 #![deny(missing_doc)]
 
