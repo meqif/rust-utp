@@ -429,7 +429,7 @@ impl UtpSocket {
         let skt = UdpSocket::bind(addr);
         let connection_id = random::<u16>();
         match skt {
-            Ok(x)  => Ok(UtpSocket {
+            Ok(x) => Ok(UtpSocket {
                 socket: x,
                 connected_to: addr,
                 receiver_connection_id: connection_id,
@@ -806,8 +806,7 @@ impl UtpSocket {
             let t = now_microseconds();
             packet.header.timestamp_microseconds = t.to_be();
             packet.header.timestamp_difference_microseconds = (t - self.last_acked_timestamp).to_be();
-            iotry!(self.socket.send_to(packet.bytes().as_slice(),
-                                       self.connected_to));
+            iotry!(self.socket.send_to(packet.bytes().as_slice(), self.connected_to));
             debug!("sent {}", packet.header);
         }
     }
@@ -1060,8 +1059,7 @@ impl UtpSocket {
                 // Success, advance send window
                 self.advance_send_window();
 
-                if self.state == SocketFinSent &&
-                    packet.ack_nr() == self.seq_nr {
+                if self.state == SocketFinSent && packet.ack_nr() == self.seq_nr {
                     self.state = SocketClosed;
                 }
 
