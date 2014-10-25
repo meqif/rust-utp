@@ -15,7 +15,10 @@
 // - Handle packet loss
 // - Path MTU discovery (RFC4821)
 
-#![feature(macro_rules, phase, if_let, while_let)]
+#![feature(macro_rules)]
+#![feature(phase)]
+#![feature(if_let)]
+#![feature(while_let)]
 #![deny(missing_doc)]
 
 extern crate time;
