@@ -21,7 +21,7 @@
 #![crate_type = "dylib"]
 #![crate_type = "rlib"]
 
-#![feature(macro_rules, phase)]
+#![feature(macro_rules, phase, if_let, while_let)]
 #![deny(missing_doc)]
 
 extern crate time;
@@ -310,12 +310,7 @@ impl UtpPacket {
         buf.push_all(self.header.bytes());
 
         let mut extensions = self.extensions.iter().peekable();
-        loop {
-            let extension = match extensions.next() {
-                None => break,
-                Some(v) => v,
-            };
-
+        while let Some(extension) = extensions.next() {
             // next extension id
             match extensions.peek() {
                 None => buf.push(0u8),
@@ -649,15 +644,12 @@ impl UtpSocket {
             self.insert_into_buffer(packet);
         }
 
-        match self.handle_packet(shallow_clone) {
-            Some(pkt) => {
+        if let Some(pkt) = self.handle_packet(shallow_clone) {
                 let mut pkt = pkt;
                 pkt.set_wnd_size(BUF_SIZE as u32);
                 try!(self.socket.send_to(pkt.bytes().as_slice(), src));
                 debug!("sent {}", pkt.header);
-            },
-            None => {}
-        };
+        }
 
         // Flush incoming buffer if possible
         let read = self.flush_incoming_buffer(buf);
@@ -802,12 +794,7 @@ impl UtpSocket {
     /// Send every packet in the unsent packet queue.
     fn send(&mut self) {
         let dst = self.connected_to;
-        loop {
-            let packet = match self.unsent_queue.pop_front() {
-                None => break,
-                Some(packet) => packet,
-            };
-
+        while let Some(packet) = self.unsent_queue.pop_front() {
             debug!("current window: {}", self.send_window.len());
             let max_inflight = std::cmp::min(self.cwnd, self.remote_wnd_size);
             let max_inflight = std::cmp::max(MIN_CWND * MSS, max_inflight);
@@ -947,15 +934,12 @@ impl UtpSocket {
 
     /// Forget sent packets that were acknowledged by the remote peer.
     fn advance_send_window(&mut self) {
-        match self.send_window.iter()
+        if let Some(position) = self.send_window.iter()
             .position(|pkt| pkt.seq_nr() == self.last_acked)
         {
-            None => (),
-            Some(position) => {
-                for _ in range(0, position + 1) {
-                    let packet = self.send_window.remove(0).unwrap();
-                    self.curr_window -= packet.len();
-                }
+            for _ in range(0, position + 1) {
+                let packet = self.send_window.remove(0).unwrap();
+                self.curr_window -= packet.len();
             }
         }
         debug!("self.curr_window: {}", self.curr_window);
