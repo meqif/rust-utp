@@ -34,6 +34,9 @@ use std::mem::transmute;
 use std::rand::random;
 use std::fmt;
 use std::collections::{DList, Deque};
+use util::{now_microseconds, exponential_weighted_moving_average};
+
+mod util;
 
 const HEADER_SIZE: uint = 20;
 // For simplicity's sake, let us assume no packet will ever exceed the
@@ -54,33 +57,6 @@ macro_rules! u8_to_unsigned_be(
         result
     })
 )
-
-/// Return current time in microseconds since the UNIX epoch.
-fn now_microseconds() -> u32 {
-    let t = time::get_time();
-    (t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32
-}
-
-fn exponential_weighted_moving_average(samples: Vec<f64>, alpha: f64) -> Vec<f64> {
-    let mut average = Vec::new();
-
-    if samples.is_empty() {
-        return average;
-    }
-
-    // s_0 = x_0
-    average.push(samples[0]);
-
-    for i in range(1u, samples.len()) {
-        let prev_sample = samples[i];
-        let prev_avg = *average.last().unwrap();
-        let curr_avg = alpha * prev_sample + (1.0 - alpha) * prev_avg;
-
-        average.push(curr_avg);
-    }
-
-    return average;
-}
 
 /// Lazy iterator over bits of a vector of bytes, starting with the LSB
 /// (least-significat bit) of the first element of the vector.
@@ -1193,6 +1169,7 @@ mod test {
     use super::{SocketConnected, SocketNew, SocketClosed, SocketEndOfFile};
     use std::rand::random;
     use std::io::test::next_test_ip4;
+    use util::now_microseconds;
 
     macro_rules! expect_eq(
         ($left:expr, $right:expr) => (
@@ -2071,7 +2048,7 @@ mod test {
 
             // Send two copies of the packet, with different timestamps
             for _ in range(0u, 2) {
-                packet.header.timestamp_microseconds = super::now_microseconds();
+                packet.header.timestamp_microseconds = now_microseconds();
                 iotry!(s.send_to(packet.bytes().as_slice(), server_addr));
             }
             client.seq_nr += 1;
@@ -2142,7 +2119,7 @@ mod test {
         packet.header.seq_nr = server.seq_nr.to_be();
         packet.header.ack_nr = (server.ack_nr - 1).to_be();
         packet.header.connection_id = server.sender_connection_id.to_be();
-        packet.header.timestamp_microseconds = super::now_microseconds().to_be();
+        packet.header.timestamp_microseconds = now_microseconds().to_be();
         packet.set_type(StatePacket);
         packet.set_sack(Some(vec!(12, 0, 0, 0)));
 
@@ -2178,7 +2155,7 @@ mod test {
                 packet.header.seq_nr = client.seq_nr.to_be();
                 packet.header.ack_nr = client.ack_nr.to_be();
                 packet.header.connection_id = client.sender_connection_id.to_be();
-                packet.header.timestamp_microseconds = super::now_microseconds().to_be();
+                packet.header.timestamp_microseconds = now_microseconds().to_be();
                 packet.payload = chunk.to_vec();
                 packet.set_type(DataPacket);
 
@@ -2258,22 +2235,5 @@ mod test {
         let received = iotry!(server.read_to_end());
         assert_eq!(received.len(), data.len());
         assert_eq!(received, data);
-    }
-
-    #[test]
-    fn test_exponential_smoothed_moving_average() {
-        use super::exponential_weighted_moving_average;
-        use std::num::abs_sub;
-        use std::iter::range_inclusive;
-
-        let input = range_inclusive(1u, 10).map(|x| x as f64).collect();
-        let alpha = 1.0/3.0;
-        let expected: Vec<f64> = [1.0, 4.0/3.0, 17.0/9.0,
-        70.0/27.0, 275.0/81.0, 1036.0/243.0, 3773.0/729.0, 13378.0/2187.0,
-        46439.0/6561.0, 158488.0/19683.0].to_vec();
-        let output = exponential_weighted_moving_average(input, alpha);
-        let result = expected.iter().zip(output.iter())
-            .fold(0.0 as f64, |acc, (&a, &b)| acc + abs_sub(a, b));
-        assert!(result == 0.0);
     }
 }
