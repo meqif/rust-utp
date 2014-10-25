@@ -895,8 +895,8 @@ impl UtpSocket {
     }
 
     fn resend_lost_packet(&mut self, lost_packet_nr: u16) {
-        match self.send_window.iter().find(|pkt| pkt.seq_nr() == lost_packet_nr + 1) {
-            None => debug!("Packet {} not found", lost_packet_nr + 1),
+        match self.send_window.iter().find(|pkt| pkt.seq_nr() == lost_packet_nr) {
+            None => debug!("Packet {} not found", lost_packet_nr),
             Some(packet) => {
                 iotry!(self.socket.send_to(packet.bytes().as_slice(), self.connected_to));
                 debug!("sent {}", packet);
@@ -1017,7 +1017,7 @@ impl UtpSocket {
                         // If three or more packets are acknowledged past the implicit missing one,
                         // assume it was lost.
                         if bits.filter(|&bit| bit == 1).count() >= 3 {
-                            self.resend_lost_packet(packet.ack_nr());
+                            self.resend_lost_packet(packet.ack_nr() + 1);
                         }
 
                         let bits = BitIterator::new(extension.data.clone());
@@ -1027,7 +1027,7 @@ impl UtpSocket {
                                 debug!("SACK: packet {} received", seq_nr);
                             } else if seq_nr < self.seq_nr {
                                 debug!("SACK: packet {} lost", seq_nr);
-                                self.resend_lost_packet(seq_nr);
+                                self.resend_lost_packet(seq_nr + 1);
                             } else {
                                 break;
                             }
