@@ -1168,14 +1168,6 @@ mod test {
     use std::io::test::next_test_ip4;
     use util::now_microseconds;
 
-    macro_rules! expect_eq(
-        ($left:expr, $right:expr) => (
-            if !($left == $right) {
-                fail!("expected {}, got {}", $right, $left);
-            }
-        );
-    )
-
     #[test]
     fn test_packet_decode() {
         let buf = [0x21, 0x00, 0x41, 0xa8, 0x99, 0x2f, 0xd0, 0x2a, 0x9f, 0x4a,
@@ -1352,20 +1344,20 @@ mod test {
             Err(e) => fail!("{}", e),
             _ => {},
         }
-        expect_eq!(server.state, SocketEndOfFile);
+        assert_eq!(server.state, SocketEndOfFile);
 
         // Trying to listen on the socket after closing it raises an
         // EOF error
         match server.recv_from(buf) {
-            Err(e) => expect_eq!(e.kind, EndOfFile),
+            Err(e) => assert_eq!(e.kind, EndOfFile),
             v => fail!("expected {}, got {}", EndOfFile, v),
         }
 
-        expect_eq!(server.state, SocketClosed);
+        assert_eq!(server.state, SocketClosed);
 
         // Trying again raises a Closed error
         match server.recv_from(buf) {
-            Err(e) => expect_eq!(e.kind, Closed),
+            Err(e) => assert_eq!(e.kind, Closed),
             v => fail!("expected {}, got {}", Closed, v),
         }
 
@@ -1398,12 +1390,12 @@ mod test {
         assert!(server.state == SocketConnected);
 
         iotry!(server.close());
-        expect_eq!(server.state, SocketClosed);
+        assert_eq!(server.state, SocketClosed);
 
         // Trying to send to the socket after closing it raises an
         // error
         match server.send_to(buf) {
-            Err(e) => expect_eq!(e.kind, Closed),
+            Err(e) => assert_eq!(e.kind, Closed),
             v => fail!("expected {}, got {}", Closed, v),
         }
 
@@ -1630,7 +1622,7 @@ mod test {
         // Fits in a packet
         const LEN: uint = 1024;
         let data = Vec::from_fn(LEN, |idx| idx as u8);
-        expect_eq!(LEN, data.len());
+        assert_eq!(LEN, data.len());
 
         let d = data.clone();
         let server_addr = next_test_ip4();
@@ -1644,8 +1636,8 @@ mod test {
 
         let read = iotry!(server.read_to_end());
         assert!(!read.is_empty());
-        expect_eq!(read.len(), data.len());
-        expect_eq!(read, data);
+        assert_eq!(read.len(), data.len());
+        assert_eq!(read, data);
     }
 
     #[test]
@@ -1653,7 +1645,7 @@ mod test {
         // Has to be sent over several packets
         const LEN: uint = 1024 * 1024;
         let data = Vec::from_fn(LEN, |idx| idx as u8);
-        expect_eq!(LEN, data.len());
+        assert_eq!(LEN, data.len());
 
         let d = data.clone();
         let server_addr = next_test_ip4();
@@ -1667,8 +1659,8 @@ mod test {
 
         let read = iotry!(server.read_to_end());
         assert!(!read.is_empty());
-        expect_eq!(read.len(), data.len());
-        expect_eq!(read, data);
+        assert_eq!(read.len(), data.len());
+        assert_eq!(read, data);
     }
 
     #[test]
@@ -1677,7 +1669,7 @@ mod test {
 
         const LEN: uint = 1024;
         let data: Vec<u8> = Vec::from_fn(LEN, |idx| idx as u8);
-        expect_eq!(LEN, data.len());
+        assert_eq!(LEN, data.len());
 
         let d = data.clone();
         let server_addr = next_test_ip4();
@@ -1817,8 +1809,8 @@ mod test {
 
         match stream.read_to_end() {
             Ok(data) => {
-                expect_eq!(data.len(), expected.len());
-                expect_eq!(data, expected);
+                assert_eq!(data.len(), expected.len());
+                assert_eq!(data, expected);
             },
             Err(e) => fail!("{}", e),
         }
@@ -1847,7 +1839,7 @@ mod test {
                 Ok((nread, _src)) => UtpPacket::decode(buf.slice_to(nread)),
                 Err(e) => fail!("{}", e),
             };
-            expect_eq!(packet.header.ack_nr, seq_nr.to_be());
+            assert_eq!(packet.header.ack_nr, seq_nr.to_be());
             drop(client);
         });
 
@@ -1855,7 +1847,7 @@ mod test {
         let mut buf = [0, ..20];
         iotry!(server.recv_from(buf));
         assert!(server.ack_nr != 0);
-        expect_eq!(server.ack_nr, seq_nr);
+        assert_eq!(server.ack_nr, seq_nr);
         assert!(server.incoming_buffer.is_empty());
     }
 
@@ -1869,7 +1861,7 @@ mod test {
         const LEN: uint = 1024;
         let data = Vec::from_fn(LEN, |idx| idx as u8);
         let d = data.clone();
-        expect_eq!(LEN, data.len());
+        assert_eq!(LEN, data.len());
 
         spawn(proc() {
             let mut client = iotry!(client.connect(server_addr));
@@ -1887,7 +1879,7 @@ mod test {
             Ok((read, _src)) => {
                 data_packet = UtpPacket::decode(buf.slice_to(read));
                 assert!(data_packet.get_type() == DataPacket);
-                expect_eq!(data_packet.payload, data);
+                assert_eq!(data_packet.payload, data);
                 assert_eq!(data_packet.payload.len(), data.len());
             },
             Err(e) => fail!("{}", e),
@@ -2074,8 +2066,8 @@ mod test {
         match stream.read_to_end() {
             Ok(data) => {
                 println!("{}", data);
-                expect_eq!(data.len(), expected.len());
-                expect_eq!(data, expected);
+                assert_eq!(data.len(), expected.len());
+                assert_eq!(data, expected);
             },
             Err(e) => fail!("{}", e),
         }
@@ -2127,8 +2119,8 @@ mod test {
         let mut stream = UtpStream { socket: server };
         let read = iotry!(stream.read_to_end());
         assert!(!read.is_empty());
-        expect_eq!(read.len(), data.len());
-        expect_eq!(read, data);
+        assert_eq!(read.len(), data.len());
+        assert_eq!(read, data);
     }
 
     #[test]
