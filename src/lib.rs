@@ -39,6 +39,7 @@ const HEADER_SIZE: uint = 20;
 // For simplicity's sake, let us assume no packet will ever exceed the
 // Ethernet maximum transfer unit of 1500 bytes.
 const BUF_SIZE: uint = 1500;
+const DELAY_MAX_AGE: u32 = 2 * 60 * 1_000_000;
 
 macro_rules! iotry(
     ($e:expr) => (match $e { Ok(e) => e, Err(e) => fail!("{}", e) })
@@ -856,7 +857,7 @@ impl UtpSocket {
         let now = now_microseconds();
         loop {
             if self.base_delays.is_empty() { break; }
-            if now - self.base_delays[0].val0() <= 2 * 60 * 1_000_000 { break; }
+            if now - self.base_delays[0].val0() <= DELAY_MAX_AGE { break; }
             self.base_delays.remove(0);
         }
 
@@ -869,7 +870,7 @@ impl UtpSocket {
         let now = now_microseconds();
         loop {
             if self.current_delays.is_empty() { break; }
-            if now - self.current_delays[0].val0() <= 2 * 60 * 1_000_000 { break; }
+            if now - self.current_delays[0].val0() <= DELAY_MAX_AGE { break; }
             self.current_delays.remove(0);
         }
 
