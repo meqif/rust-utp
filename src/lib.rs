@@ -1051,8 +1051,7 @@ impl UtpSocket {
                 if !self.send_window.is_empty() && self.duplicate_ack_count == 3 {
                     for packet in self.send_window.iter().take_while(|pkt| pkt.seq_nr() <= packet.ack_nr() + 1) {
                         debug!("resending: {}", packet);
-                        iotry!(self.socket.send_to(packet.bytes().as_slice(),
-                                                   self.connected_to));
+                        iotry!(self.socket.send_to(packet.bytes().as_slice(), self.connected_to));
                     }
                 }
 
@@ -1093,7 +1092,7 @@ impl UtpSocket {
             self.incoming_buffer[i].header.seq_nr == packet.header.seq_nr {
             self.incoming_buffer.remove(i);
         }
-    self.incoming_buffer.insert(i, packet);
+        self.incoming_buffer.insert(i, packet);
     }
 }
 
