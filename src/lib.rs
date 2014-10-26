@@ -1022,6 +1022,9 @@ impl UtpSocket {
                 debug!("cwnd: {}", self.cwnd);
                 debug!("max_allowed_cwnd: {}", max_allowed_cwnd);
 
+                let mut packet_loss_detected: bool = !self.send_window.is_empty() &&
+                                                     self.duplicate_ack_count == 3;
+
                 // Process extensions, if any
                 for extension in packet.extensions.iter() {
                     if extension.ty == SelectiveAckExtension {
@@ -1030,6 +1033,7 @@ impl UtpSocket {
                         // assume it was lost.
                         if bits.filter(|&bit| bit == 1).count() >= 3 {
                             self.resend_lost_packet(packet.ack_nr() + 1);
+                            packet_loss_detected = true;
                         }
 
                         let bits = BitIterator::new(extension.data.clone());
@@ -1042,6 +1046,7 @@ impl UtpSocket {
                             {
                                 debug!("SACK: packet {} lost", seq_nr);
                                 self.resend_lost_packet(seq_nr);
+                                packet_loss_detected = true;
                             } else {
                                 break;
                             }
@@ -1052,7 +1057,7 @@ impl UtpSocket {
                 }
 
                 // Packet lost, halve the congestion window
-                if (!self.send_window.is_empty() && self.duplicate_ack_count == 3) || packet.header.extension != 0 {
+                if packet_loss_detected {
                     debug!("packet loss detected, halving congestion window");
                     self.cwnd = std::cmp::max(self.cwnd / 2, MIN_CWND * MSS);
                     debug!("cwnd: {}", self.cwnd);
