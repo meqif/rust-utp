@@ -1037,7 +1037,9 @@ impl UtpSocket {
                             let seq_nr = packet.ack_nr() + 2 + idx as u16;
                             if received {
                                 debug!("SACK: packet {} received", seq_nr);
-                            } else if seq_nr < self.seq_nr {
+                            } else if !self.send_window.is_empty() &&
+                                seq_nr < self.send_window.last().unwrap().seq_nr()
+                            {
                                 debug!("SACK: packet {} lost", seq_nr);
                                 self.resend_lost_packet(seq_nr);
                             } else {
