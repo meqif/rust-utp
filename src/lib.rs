@@ -1039,7 +1039,7 @@ impl UtpSocket {
                                 debug!("SACK: packet {} received", seq_nr);
                             } else if seq_nr < self.seq_nr {
                                 debug!("SACK: packet {} lost", seq_nr);
-                                self.resend_lost_packet(seq_nr + 1);
+                                self.resend_lost_packet(seq_nr);
                             } else {
                                 break;
                             }
