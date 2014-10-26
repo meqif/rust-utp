@@ -1061,9 +1061,10 @@ impl UtpSocket {
                 // foolproof way to differentiate between triple-ACK and three
                 // keep alives spread in time
                 if !self.send_window.is_empty() && self.duplicate_ack_count == 3 {
-                    for packet in self.send_window.iter().take_while(|pkt| pkt.seq_nr() <= packet.ack_nr() + 1) {
-                        debug!("resending: {}", packet);
-                        iotry!(self.socket.send_to(packet.bytes().as_slice(), self.connected_to));
+                    for i in range(0, self.send_window.len()) {
+                        let seq_nr = self.send_window[i].seq_nr();
+                        if seq_nr <= packet.ack_nr() { continue; }
+                        self.resend_lost_packet(seq_nr);
                     }
                 }
 
