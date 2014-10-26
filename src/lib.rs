@@ -358,7 +358,7 @@ impl UtpPacket {
 impl Clone for UtpPacket {
     fn clone(&self) -> UtpPacket {
         UtpPacket {
-            header:  self.header,
+            header: self.header,
             extensions: self.extensions.clone(),
             payload: self.payload.clone(),
         }
@@ -408,6 +408,7 @@ pub struct UtpSocket {
     duplicate_ack_count: uint,
     last_acked: u16,
     last_acked_timestamp: u32,
+    fin_seq_nr: u16,
 
     rtt: int,
     rtt_variance: int,
@@ -443,6 +444,7 @@ impl UtpSocket {
                 duplicate_ack_count: 0,
                 last_acked: 0,
                 last_acked_timestamp: 0,
+                fin_seq_nr: 0,
                 rtt: 0,
                 rtt_variance: 0,
                 pending_data: Vec::new(),
@@ -936,6 +938,15 @@ impl UtpSocket {
         self.remote_wnd_size = packet.wnd_size() as uint;
         debug!("self.remote_wnd_size: {}", self.remote_wnd_size);
 
+        // Ignore packets with sequence number higher than the one in the FIN packet.
+        if self.state == SocketFinReceived && self.fin_seq_nr == self.ack_nr &&
+            packet.seq_nr() > self.fin_seq_nr
+        {
+            debug!("Ignoring packet with sequence number {} (higher than FIN: {})",
+                   packet.seq_nr(), self.fin_seq_nr);
+            return None;
+        }
+
         match packet.header.get_type() {
             SynPacket => { // Respond with an ACK and populate own fields
                 // Update socket information for new connections
@@ -966,11 +977,12 @@ impl UtpSocket {
             },
             FinPacket => {
                 self.state = SocketFinReceived;
+                self.fin_seq_nr = packet.seq_nr();
 
                 // If all packets are received and handled
                 if self.pending_data.is_empty() &&
                     self.incoming_buffer.is_empty() &&
-                    self.ack_nr == packet.seq_nr()
+                    self.ack_nr == self.fin_seq_nr
                 {
                     self.state = SocketEndOfFile;
                     Some(self.prepare_reply(&packet.header, StatePacket))
