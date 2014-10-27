@@ -19,6 +19,7 @@
 #![feature(phase)]
 #![feature(if_let)]
 #![feature(while_let)]
+#![feature(globs)]
 #![deny(missing_doc)]
 
 extern crate time;
@@ -29,11 +30,9 @@ use std::io::net::ip::SocketAddr;
 use std::io::IoResult;
 use std::rand::random;
 use std::collections::{DList, Deque};
-use util::{now_microseconds, exponential_weighted_moving_average};
+use util::*;
 use bit_iterator::BitIterator;
-use packet::{UtpPacket, UtpPacketType, HEADER_SIZE};
-use packet::{StatePacket, FinPacket, DataPacket, ResetPacket, SynPacket};
-use packet::SelectiveAckExtension;
+use packet::*;
 
 mod util;
 mod bit_iterator;
