@@ -42,6 +42,12 @@ mod packet;
 // Ethernet maximum transfer unit of 1500 bytes.
 const BUF_SIZE: uint = 1500;
 const DELAY_MAX_AGE: u32 = 2 * 60 * 1_000_000;
+const GAIN: uint = 1;
+const ALLOWED_INCREASE: uint = 1;
+const TARGET: uint = 100_000; // 100 milliseconds
+const MSS: uint = 1400;
+const MIN_CWND: uint = 2;
+const INIT_CWND: uint = 2;
 
 macro_rules! iotry(
     ($e:expr) => (match $e { Ok(e) => e, Err(e) => fail!("{}", e) })
@@ -58,13 +64,6 @@ enum UtpSocketState {
     SocketClosed,
     SocketEndOfFile,
 }
-
-const GAIN: uint = 1;
-const ALLOWED_INCREASE: uint = 1;
-const TARGET: uint = 100_000; // 100 milliseconds
-const MSS: uint = 1400;
-const MIN_CWND: uint = 2;
-const INIT_CWND: uint = 2;
 
 /// A uTP (Micro Transport Protocol) socket.
 pub struct UtpSocket {
