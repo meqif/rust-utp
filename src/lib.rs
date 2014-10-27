@@ -11,7 +11,6 @@
 // - Lossy UDP socket for testing purposes: send and receive ops are wrappers
 // that stochastically drop or reorder packets.
 // - Sending FIN on drop
-// - Setters and getters that hide header field endianness conversion
 // - Handle packet loss
 // - Path MTU discovery (RFC4821)
 

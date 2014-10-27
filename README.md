@@ -23,7 +23,7 @@ Note that non-release builds are *much* slower.
     - [x] send FIN on close
     - [ ] automatically send FIN (or should it be RST?) on `drop` if not already closed
 - [x] sending RST on mismatch
-- [ ] setters and getters that hide header field endianness conversion
+- [x] setters and getters that hide header field endianness conversion
 - [x] SACK extension
 - [ ] handle packet loss
     - [x] send triple-ACK to re-request lost packet (fast resend request)
