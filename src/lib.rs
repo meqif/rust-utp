@@ -274,7 +274,7 @@ impl UtpSocket {
             Err(e) => return Err(e),
         };
         let packet = UtpPacket::decode(b.slice_to(read));
-        debug!("received {}", packet.header);
+        debug!("received {}", packet);
 
         if packet.get_type() == ResetPacket {
             return Err(IoError {
@@ -298,7 +298,7 @@ impl UtpSocket {
                 let mut pkt = pkt;
                 pkt.set_wnd_size(BUF_SIZE as u32);
                 try!(self.socket.send_to(pkt.bytes().as_slice(), src));
-                debug!("sent {}", pkt.header);
+                debug!("sent {}", pkt);
         }
 
         // Flush incoming buffer if possible
@@ -484,7 +484,7 @@ impl UtpSocket {
             packet.set_timestamp_microseconds(t);
             packet.set_timestamp_difference_microseconds((t - self.last_acked_timestamp));
             iotry!(self.socket.send_to(packet.bytes().as_slice(), self.connected_to));
-            debug!("sent {}", packet.header);
+            debug!("sent {}", packet);
         }
     }
 
@@ -621,7 +621,7 @@ impl UtpSocket {
             return None;
         }
 
-        match packet.header.get_type() {
+        match packet.get_type() {
             SynPacket => { // Respond with an ACK and populate own fields
                 // Update socket information for new connections
                 self.ack_nr = packet.seq_nr();

@@ -125,7 +125,7 @@ impl fmt::Show for UtpPacketHeader {
 }
 
 pub struct UtpPacket {
-    pub header: UtpPacketHeader,
+    header: UtpPacketHeader,
     pub extensions: Vec<UtpExtension>,
     pub payload: Vec<u8>,
 }
