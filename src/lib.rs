@@ -27,17 +27,18 @@ extern crate time;
 use std::io::net::udp::UdpSocket;
 use std::io::net::ip::SocketAddr;
 use std::io::IoResult;
-use std::mem::transmute;
 use std::rand::random;
-use std::fmt;
 use std::collections::{DList, Deque};
 use util::{now_microseconds, exponential_weighted_moving_average};
 use bit_iterator::BitIterator;
+use packet::{UtpPacket, UtpPacketType, HEADER_SIZE};
+use packet::{StatePacket, FinPacket, DataPacket, ResetPacket, SynPacket};
+use packet::SelectiveAckExtension;
 
 mod util;
 mod bit_iterator;
+mod packet;
 
-const HEADER_SIZE: uint = 20;
 // For simplicity's sake, let us assume no packet will ever exceed the
 // Ethernet maximum transfer unit of 1500 bytes.
 const BUF_SIZE: uint = 1500;
@@ -46,305 +47,6 @@ const DELAY_MAX_AGE: u32 = 2 * 60 * 1_000_000;
 macro_rules! iotry(
     ($e:expr) => (match $e { Ok(e) => e, Err(e) => fail!("{}", e) })
 )
-
-macro_rules! u8_to_unsigned_be(
-    ($src:ident[$start:expr..$end:expr] -> $t:ty) => ({
-        let mut result: $t = 0;
-        for i in range(0u, $end-$start+1).rev() {
-            result = result | $src[$start+i] as $t << i*8;
-        }
-        result
-    })
-)
-
-#[deriving(PartialEq,Eq,Show)]
-enum UtpPacketType {
-    DataPacket  = 0,
-    FinPacket   = 1,
-    StatePacket = 2,
-    ResetPacket = 3,
-    SynPacket   = 4,
-}
-
-#[deriving(PartialEq,Eq,Show,Clone)]
-enum UtpExtensionType {
-    SelectiveAckExtension = 1,
-}
-
-#[deriving(Clone)]
-struct UtpExtension {
-    ty: UtpExtensionType,
-    data: Vec<u8>,
-}
-
-impl UtpExtension {
-    fn len(&self) -> uint {
-        1 + self.data.len()
-    }
-
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut data = vec!(self.data.len() as u8);
-        data.extend(self.data.iter().map(|&x| x));
-        return data;
-    }
-}
-
-#[deriving(Clone)]
-#[packed]
-struct UtpPacketHeader {
-    type_ver: u8, // type: u4, ver: u4
-    extension: u8,
-    connection_id: u16,
-    timestamp_microseconds: u32,
-    timestamp_difference_microseconds: u32,
-    wnd_size: u32,
-    seq_nr: u16,
-    ack_nr: u16,
-}
-
-impl UtpPacketHeader {
-    /// Set type of packet to the specified type.
-    fn set_type(&mut self, t: UtpPacketType) {
-        let version = 0x0F & self.type_ver;
-        self.type_ver = t as u8 << 4 | version;
-    }
-
-    fn get_type(&self) -> UtpPacketType {
-        let t: UtpPacketType = unsafe { transmute(self.type_ver >> 4) };
-        t
-    }
-
-    fn get_version(&self) -> u8 {
-        self.type_ver & 0x0F
-    }
-
-    /// Return packet header as a slice of bytes.
-    fn bytes(&self) -> &[u8] {
-        let buf: &[u8, ..HEADER_SIZE] = unsafe { transmute(self) };
-        return buf.as_slice();
-    }
-
-    fn len(&self) -> uint {
-        return HEADER_SIZE;
-    }
-
-    /// Read byte buffer and return corresponding packet header.
-    /// It assumes the fields are in network (big-endian) byte order,
-    /// preserving it.
-    fn decode(buf: &[u8]) -> UtpPacketHeader {
-        UtpPacketHeader {
-            type_ver: buf[0],
-            extension: buf[1],
-            connection_id: u8_to_unsigned_be!(buf[2..3] -> u16),
-            timestamp_microseconds: u8_to_unsigned_be!(buf[4..7] -> u32),
-            timestamp_difference_microseconds: u8_to_unsigned_be!(buf[8..11] -> u32),
-            wnd_size: u8_to_unsigned_be!(buf[12..15] -> u32),
-            seq_nr: u8_to_unsigned_be!(buf[16..17] -> u16),
-            ack_nr: u8_to_unsigned_be!(buf[18..19] -> u16),
-        }
-    }
-}
-
-impl fmt::Show for UtpPacketHeader {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "(type: {}, version: {}, extension: {}, \
-                connection_id: {}, timestamp_microseconds: {}, \
-                timestamp_difference_microseconds: {}, wnd_size: {}, \
-                seq_nr: {}, ack_nr: {})",
-                self.get_type(),
-                Int::from_be(self.get_version()),
-                Int::from_be(self.extension),
-                Int::from_be(self.connection_id),
-                Int::from_be(self.timestamp_microseconds),
-                Int::from_be(self.timestamp_difference_microseconds),
-                Int::from_be(self.wnd_size),
-                Int::from_be(self.seq_nr),
-                Int::from_be(self.ack_nr),
-        )
-    }
-}
-
-struct UtpPacket {
-    header: UtpPacketHeader,
-    extensions: Vec<UtpExtension>,
-    payload: Vec<u8>,
-}
-
-impl UtpPacket {
-    /// Construct a new, empty packet.
-    fn new() -> UtpPacket {
-        UtpPacket {
-            header: UtpPacketHeader {
-                type_ver: DataPacket as u8 << 4 | 1,
-                extension: 0,
-                connection_id: 0,
-                timestamp_microseconds: 0,
-                timestamp_difference_microseconds: 0,
-                wnd_size: 0,
-                seq_nr: 0,
-                ack_nr: 0,
-            },
-            extensions: Vec::new(),
-            payload: Vec::new(),
-        }
-    }
-
-    #[inline]
-    fn set_type(&mut self, t: UtpPacketType) {
-        self.header.set_type(t);
-    }
-
-    #[inline]
-    fn get_type(&self) -> UtpPacketType {
-        self.header.get_type()
-    }
-
-    #[inline(always)]
-    fn seq_nr(&self) -> u16 {
-        Int::from_be(self.header.seq_nr)
-    }
-
-    #[inline(always)]
-    fn ack_nr(&self) -> u16 {
-        Int::from_be(self.header.ack_nr)
-    }
-
-    #[inline(always)]
-    fn connection_id(&self) -> u16 {
-        Int::from_be(self.header.connection_id)
-    }
-
-    #[inline]
-    fn set_wnd_size(&mut self, new_wnd_size: u32) {
-        self.header.wnd_size = new_wnd_size.to_be();
-    }
-
-    fn wnd_size(&self) -> u32 {
-        Int::from_be(self.header.wnd_size)
-    }
-
-    /// Set Selective ACK field in packet header and add appropriate data.
-    ///
-    /// If None is passed, the SACK extension is disabled and the respective
-    /// data is flushed. Otherwise, the SACK extension is enabled and the
-    /// vector `v` is taken as the extension's payload.
-    ///
-    /// The length of the SACK extension is expressed in bytes, which
-    /// must be a multiple of 4 and at least 4.
-    fn set_sack(&mut self, v: Option<Vec<u8>>) {
-        match v {
-            None => {
-                self.header.extension = 0;
-                self.extensions = Vec::new();
-            },
-            Some(bv) => {
-                // The length of the SACK extension is expressed in bytes, which
-                // must be a multiple of 4 and at least 4.
-                assert!(bv.len() >= 4);
-                assert!(bv.len() % 4 == 0);
-
-                let extension = UtpExtension {
-                    ty: SelectiveAckExtension,
-                    data: bv,
-                };
-                self.extensions.push(extension);
-                self.header.extension |= SelectiveAckExtension as u8;
-            }
-        }
-    }
-
-    fn bytes(&self) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(self.len());
-        buf.push_all(self.header.bytes());
-
-        let mut extensions = self.extensions.iter().peekable();
-        while let Some(extension) = extensions.next() {
-            // next extension id
-            match extensions.peek() {
-                None => buf.push(0u8),
-                Some(next) => buf.push(next.ty as u8),
-            }
-            buf.push_all(extension.to_bytes().as_slice());
-        }
-
-        buf.push_all(self.payload.as_slice());
-        return buf;
-    }
-
-    fn len(&self) -> uint {
-        let ext_len = self.extensions.iter().fold(0, |acc, ext| acc + ext.len() + 1);
-        self.header.len() + self.payload.len() + ext_len
-    }
-
-    /// Decode a byte slice and construct the equivalent UtpPacket.
-    ///
-    /// Note that this method makes no attempt to guess the payload size, saving
-    /// all except the initial 20 bytes corresponding to the header as payload.
-    /// It's the caller's responsability to use an appropriately sized buffer.
-    fn decode(buf: &[u8]) -> UtpPacket {
-        let header = UtpPacketHeader::decode(buf);
-
-        let mut extensions = Vec::new();
-        let mut idx = HEADER_SIZE;
-        let mut kind = header.extension;
-
-        // Consume known extensions and skip over unknown ones
-        while idx < buf.len() && kind != 0 {
-            let len = buf[idx + 1] as uint;
-            let extension_start = idx + 2;
-            let payload_start = extension_start + len;
-
-            if kind == SelectiveAckExtension as u8 { // or more generally, a known kind
-                let extension = UtpExtension {
-                    ty: SelectiveAckExtension,
-                    data: buf.slice(extension_start, payload_start).to_vec(),
-                };
-                extensions.push(extension);
-            }
-
-            kind = buf[idx];
-            idx += payload_start;
-        }
-
-        let mut payload;
-        if idx < buf.len() {
-            payload = buf.slice_from(idx).to_vec();
-        } else {
-            payload = Vec::new();
-        }
-
-        UtpPacket {
-            header: header,
-            extensions: extensions,
-            payload: payload,
-        }
-    }
-
-    /// Return a clone of this object without the payload
-    fn shallow_clone(&self) -> UtpPacket {
-        UtpPacket {
-            header: self.header.clone(),
-            extensions: self.extensions.clone(),
-            payload: Vec::new(),
-        }
-    }
-}
-
-impl Clone for UtpPacket {
-    fn clone(&self) -> UtpPacket {
-        UtpPacket {
-            header: self.header,
-            extensions: self.extensions.clone(),
-            payload: self.payload.clone(),
-        }
-    }
-}
-
-impl fmt::Show for UtpPacket {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.header.fmt(f)
-    }
-}
 
 #[deriving(PartialEq,Eq,Show)]
 enum UtpSocketState {
@@ -444,15 +146,15 @@ impl UtpSocket {
 
         let mut packet = UtpPacket::new();
         packet.set_type(SynPacket);
-        packet.header.connection_id = self.receiver_connection_id.to_be();
-        packet.header.seq_nr = self.seq_nr.to_be();
+        packet.set_connection_id(self.receiver_connection_id);
+        packet.set_seq_nr(self.seq_nr);
 
         let mut len = 0;
         let mut addr = self.connected_to;
         let mut buf = [0, ..BUF_SIZE];
 
         for _ in range(0u, 5) {
-            packet.header.timestamp_microseconds = now_microseconds().to_be();
+            packet.set_timestamp_microseconds(now_microseconds());
 
             // Send packet
             try!(self.socket.send_to(packet.bytes().as_slice(), other));
@@ -500,10 +202,10 @@ impl UtpSocket {
         }
 
         let mut packet = UtpPacket::new();
-        packet.header.connection_id = self.sender_connection_id.to_be();
-        packet.header.seq_nr = self.seq_nr.to_be();
-        packet.header.ack_nr = self.ack_nr.to_be();
-        packet.header.timestamp_microseconds = now_microseconds().to_be();
+        packet.set_connection_id(self.sender_connection_id);
+        packet.set_seq_nr(self.seq_nr);
+        packet.set_ack_nr(self.ack_nr);
+        packet.set_timestamp_microseconds(now_microseconds());
         packet.set_type(FinPacket);
 
         // Send FIN
@@ -613,16 +315,16 @@ impl UtpSocket {
         self.recv_from(buf)
     }
 
-    fn prepare_reply(&self, original: &UtpPacketHeader, t: UtpPacketType) -> UtpPacket {
+    fn prepare_reply(&self, original: &UtpPacket, t: UtpPacketType) -> UtpPacket {
         let mut resp = UtpPacket::new();
         resp.set_type(t);
         let self_t_micro: u32 = now_microseconds();
-        let other_t_micro: u32 = Int::from_be(original.timestamp_microseconds);
-        resp.header.timestamp_microseconds = self_t_micro.to_be();
-        resp.header.timestamp_difference_microseconds = (self_t_micro - other_t_micro).to_be();
-        resp.header.connection_id = self.sender_connection_id.to_be();
-        resp.header.seq_nr = self.seq_nr.to_be();
-        resp.header.ack_nr = self.ack_nr.to_be();
+        let other_t_micro: u32 = original.timestamp_microseconds();
+        resp.set_timestamp_microseconds(self_t_micro);
+        resp.set_timestamp_difference_microseconds((self_t_micro - other_t_micro));
+        resp.set_connection_id(self.sender_connection_id);
+        resp.set_seq_nr(self.seq_nr);
+        resp.set_ack_nr(self.ack_nr);
 
         resp
     }
@@ -720,10 +422,10 @@ impl UtpSocket {
             let mut packet = UtpPacket::new();
             packet.set_type(DataPacket);
             packet.payload = chunk.to_vec();
-            packet.header.timestamp_microseconds = now_microseconds().to_be();
-            packet.header.seq_nr = self.seq_nr.to_be();
-            packet.header.ack_nr = self.ack_nr.to_be();
-            packet.header.connection_id = self.sender_connection_id.to_be();
+            packet.set_timestamp_microseconds(now_microseconds());
+            packet.set_seq_nr(self.seq_nr);
+            packet.set_ack_nr(self.ack_nr);
+            packet.set_connection_id(self.sender_connection_id);
 
             self.unsent_queue.push(packet);
             self.seq_nr += 1;
@@ -775,14 +477,14 @@ impl UtpSocket {
         let mut packet = UtpPacket::new();
         packet.set_wnd_size(BUF_SIZE as u32);
         packet.set_type(StatePacket);
-        packet.header.ack_nr = self.ack_nr.to_be();
-        packet.header.seq_nr = self.seq_nr.to_be();
-        packet.header.connection_id = self.sender_connection_id.to_be();
+        packet.set_ack_nr(self.ack_nr);
+        packet.set_seq_nr(self.seq_nr);
+        packet.set_connection_id(self.sender_connection_id);
 
         for _ in range(0u, 3) {
             let t = now_microseconds();
-            packet.header.timestamp_microseconds = t.to_be();
-            packet.header.timestamp_difference_microseconds = (t - self.last_acked_timestamp).to_be();
+            packet.set_timestamp_microseconds(t);
+            packet.set_timestamp_difference_microseconds((t - self.last_acked_timestamp));
             iotry!(self.socket.send_to(packet.bytes().as_slice(), self.connected_to));
             debug!("sent {}", packet.header);
         }
@@ -902,7 +604,7 @@ impl UtpSocket {
         if packet.get_type() != SynPacket &&
            !(packet.connection_id() == self.sender_connection_id ||
            packet.connection_id() == self.receiver_connection_id) {
-            return Some(self.prepare_reply(&packet.header, ResetPacket));
+            return Some(self.prepare_reply(&packet, ResetPacket));
         }
 
         // Acknowledge only if the packet strictly follows the previous one
@@ -931,10 +633,10 @@ impl UtpSocket {
                 self.sender_connection_id = packet.connection_id();
                 self.state = SocketConnected;
 
-                Some(self.prepare_reply(&packet.header, StatePacket))
+                Some(self.prepare_reply(&packet, StatePacket))
             }
             DataPacket => {
-                let mut reply = self.prepare_reply(&packet.header, StatePacket);
+                let mut reply = self.prepare_reply(&packet, StatePacket);
 
                 if self.ack_nr + 1 < packet.seq_nr() {
                     debug!("current ack_nr ({}) is behind received packet seq_nr ({})",
@@ -960,7 +662,7 @@ impl UtpSocket {
                     self.ack_nr == self.fin_seq_nr
                 {
                     self.state = SocketEndOfFile;
-                    Some(self.prepare_reply(&packet.header, StatePacket))
+                    Some(self.prepare_reply(&packet, StatePacket))
                 } else {
                     debug!("FIN received but there are missing packets");
                     None
@@ -975,8 +677,8 @@ impl UtpSocket {
                     self.duplicate_ack_count = 1;
                 }
 
-                self.update_base_delay(packet.header.timestamp_microseconds);
-                self.update_current_delay(packet.header.timestamp_difference_microseconds);
+                self.update_base_delay(packet.timestamp_microseconds());
+                self.update_current_delay(packet.timestamp_difference_microseconds());
 
                 let bytes_newly_acked = packet.len();
                 let flightsize = self.curr_window;
@@ -1002,7 +704,7 @@ impl UtpSocket {
 
                 // Process extensions, if any
                 for extension in packet.extensions.iter() {
-                    if extension.ty == SelectiveAckExtension {
+                    if extension.get_type() == SelectiveAckExtension {
                         let bits = BitIterator::new(extension.data.clone());
                         // If three or more packets are acknowledged past the implicit missing one,
                         // assume it was lost.
@@ -1027,7 +729,7 @@ impl UtpSocket {
                             }
                         }
                     } else {
-                        debug!("Unknown extension {}, ignoring", extension.ty);
+                        debug!("Unknown extension {}, ignoring", extension.get_type());
                     }
                 }
 
@@ -1084,7 +786,7 @@ impl UtpSocket {
         }
 
         if !self.incoming_buffer.is_empty() && i < self.incoming_buffer.len() &&
-            self.incoming_buffer[i].header.seq_nr == packet.header.seq_nr {
+            self.incoming_buffer[i].seq_nr() == packet.seq_nr() {
             self.incoming_buffer.remove(i);
         }
         self.incoming_buffer.insert(i, packet);
@@ -1152,128 +854,13 @@ impl Writer for UtpStream {
 
 #[cfg(test)]
 mod test {
-    use super::{UtpSocket, UtpPacket, UtpStream};
-    use super::{StatePacket, FinPacket, DataPacket, ResetPacket, SynPacket};
-    use super::{BUF_SIZE, HEADER_SIZE};
+    use super::{UtpSocket, UtpStream};
+    use super::{BUF_SIZE};
     use super::{SocketConnected, SocketNew, SocketClosed, SocketEndOfFile};
     use std::rand::random;
     use std::io::test::next_test_ip4;
     use util::now_microseconds;
-
-    #[test]
-    fn test_packet_decode() {
-        let buf = [0x21, 0x00, 0x41, 0xa8, 0x99, 0x2f, 0xd0, 0x2a, 0x9f, 0x4a,
-                   0x26, 0x21, 0x00, 0x10, 0x00, 0x00, 0x3a, 0xf2, 0x6c, 0x79];
-        let pkt = UtpPacket::decode(buf);
-        assert_eq!(pkt.header.get_version(), 1);
-        assert_eq!(pkt.header.get_type(), StatePacket);
-        assert_eq!(pkt.header.extension, 0);
-        assert_eq!(pkt.connection_id(), 16808);
-        assert_eq!(Int::from_be(pkt.header.timestamp_microseconds), 2570047530);
-        assert_eq!(Int::from_be(pkt.header.timestamp_difference_microseconds), 2672436769);
-        assert_eq!(Int::from_be(pkt.header.wnd_size), ::std::num::pow(2u32, 20));
-        assert_eq!(pkt.seq_nr(), 15090);
-        assert_eq!(pkt.ack_nr(), 27769);
-        assert_eq!(pkt.len(), buf.len());
-        assert!(pkt.payload.is_empty());
-    }
-
-    #[test]
-    fn test_decode_packet_with_extension() {
-        use super::SelectiveAckExtension;
-
-        let buf = [0x21, 0x01, 0x41, 0xa7, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                   0x00, 0x00, 0x00, 0x00, 0x05, 0xdc, 0xab, 0x53, 0x3a, 0xf5,
-                   0x00, 0x04, 0x00, 0x00, 0x00, 0x00];
-        let packet = UtpPacket::decode(buf);
-        assert_eq!(packet.header.get_version(), 1);
-        assert_eq!(packet.header.get_type(), StatePacket);
-        assert_eq!(packet.header.extension, 1);
-        assert_eq!(packet.connection_id(), 16807);
-        assert_eq!(Int::from_be(packet.header.timestamp_microseconds), 0);
-        assert_eq!(Int::from_be(packet.header.timestamp_difference_microseconds), 0);
-        assert_eq!(Int::from_be(packet.header.wnd_size), 1500);
-        assert_eq!(packet.seq_nr(), 43859);
-        assert_eq!(packet.ack_nr(), 15093);
-        assert_eq!(packet.len(), buf.len());
-        assert!(packet.payload.is_empty());
-        assert!(packet.extensions.len() == 1);
-        assert!(packet.extensions[0].ty == SelectiveAckExtension);
-        assert!(packet.extensions[0].data == vec!(0,0,0,0));
-        assert!(packet.extensions[0].len() == 1 + packet.extensions[0].data.len());
-        assert!(packet.extensions[0].len() == 5);
-    }
-
-    #[test]
-    fn test_decode_packet_with_unknown_extensions() {
-        use super::SelectiveAckExtension;
-
-        let buf = [0x21, 0x01, 0x41, 0xa7, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                   0x00, 0x00, 0x00, 0x00, 0x05, 0xdc, 0xab, 0x53, 0x3a, 0xf5,
-                   0xff, 0x04, 0x00, 0x00, 0x00, 0x00, // Imaginary extension
-                   0x00, 0x04, 0x00, 0x00, 0x00, 0x00];
-        let packet = UtpPacket::decode(buf);
-        assert_eq!(packet.header.get_version(), 1);
-        assert_eq!(packet.header.get_type(), StatePacket);
-        assert_eq!(packet.header.extension, 1);
-        assert_eq!(packet.connection_id(), 16807);
-        assert_eq!(Int::from_be(packet.header.timestamp_microseconds), 0);
-        assert_eq!(Int::from_be(packet.header.timestamp_difference_microseconds), 0);
-        assert_eq!(Int::from_be(packet.header.wnd_size), 1500);
-        assert_eq!(packet.seq_nr(), 43859);
-        assert_eq!(packet.ack_nr(), 15093);
-        assert!(packet.payload.is_empty());
-        assert!(packet.extensions.len() == 1);
-        assert!(packet.extensions[0].ty == SelectiveAckExtension);
-        assert!(packet.extensions[0].data == vec!(0,0,0,0));
-        assert!(packet.extensions[0].len() == 1 + packet.extensions[0].data.len());
-        assert!(packet.extensions[0].len() == 5);
-    }
-
-    #[test]
-    fn test_packet_encode() {
-        let payload = "Hello\n".as_bytes().to_vec();
-        let (timestamp, timestamp_diff): (u32, u32) = (15270793, 1707040186);
-        let (connection_id, seq_nr, ack_nr): (u16, u16, u16) = (16808, 15090, 17096);
-        let window_size: u32 = 1048576;
-        let mut pkt = UtpPacket::new();
-        pkt.set_type(DataPacket);
-        pkt.header.timestamp_microseconds = timestamp.to_be();
-        pkt.header.timestamp_difference_microseconds = timestamp_diff.to_be();
-        pkt.header.connection_id = connection_id.to_be();
-        pkt.header.seq_nr = seq_nr.to_be();
-        pkt.header.ack_nr = ack_nr.to_be();
-        pkt.header.wnd_size = window_size.to_be();
-        pkt.payload = payload.clone();
-        let header = pkt.header;
-        let buf: &[u8] = [0x01, 0x00, 0x41, 0xa8, 0x00, 0xe9, 0x03, 0x89,
-                    0x65, 0xbf, 0x5d, 0xba, 0x00, 0x10, 0x00, 0x00,
-                    0x3a, 0xf2, 0x42, 0xc8, 0x48, 0x65, 0x6c, 0x6c,
-                    0x6f, 0x0a];
-
-        assert_eq!(pkt.len(), buf.len());
-        assert_eq!(pkt.len(), HEADER_SIZE + payload.len());
-        assert_eq!(pkt.payload, payload);
-        assert_eq!(header.get_version(), 1);
-        assert_eq!(header.get_type(), DataPacket);
-        assert_eq!(header.extension, 0);
-        assert_eq!(Int::from_be(header.connection_id), connection_id);
-        assert_eq!(Int::from_be(header.seq_nr), seq_nr);
-        assert_eq!(Int::from_be(header.ack_nr), ack_nr);
-        assert_eq!(Int::from_be(header.wnd_size), window_size);
-        assert_eq!(Int::from_be(header.timestamp_microseconds), timestamp);
-        assert_eq!(Int::from_be(header.timestamp_difference_microseconds), timestamp_diff);
-        assert_eq!(pkt.bytes(), buf.to_vec());
-    }
-
-    #[test]
-    fn test_reversible() {
-        let buf: &[u8] = [0x01, 0x00, 0x41, 0xa8, 0x00, 0xe9, 0x03, 0x89,
-                    0x65, 0xbf, 0x5d, 0xba, 0x00, 0x10, 0x00, 0x00,
-                    0x3a, 0xf2, 0x42, 0xc8, 0x48, 0x65, 0x6c, 0x6c,
-                    0x6f, 0x0a];
-        assert_eq!(UtpPacket::decode(buf).bytes().as_slice(), buf);
-    }
+    use packet::{UtpPacket, StatePacket, FinPacket, DataPacket, ResetPacket, SynPacket};
 
     #[test]
     fn test_socket_ipv4() {
@@ -1441,8 +1028,7 @@ mod test {
         let mut packet = UtpPacket::new();
         packet.set_wnd_size(BUF_SIZE as u32);
         packet.set_type(SynPacket);
-        packet.header.connection_id = initial_connection_id.to_be();
-        let sent = packet.header;
+        packet.set_connection_id(initial_connection_id);
 
         // Do we have a response?
         let response = socket.handle_packet(packet.clone());
@@ -1453,10 +1039,10 @@ mod test {
         assert!(response.get_type() == StatePacket);
 
         // Same connection id on both ends during connection establishment
-        assert!(response.header.connection_id == sent.connection_id);
+        assert!(response.connection_id() == packet.connection_id());
 
         // Response acknowledges SYN
-        assert!(response.header.ack_nr == sent.seq_nr);
+        assert!(response.ack_nr() == packet.seq_nr());
 
         // No payload?
         assert!(response.payload.is_empty());
@@ -1470,10 +1056,9 @@ mod test {
 
         let mut packet = UtpPacket::new();
         packet.set_type(DataPacket);
-        packet.header.connection_id = sender_connection_id.to_be();
-        packet.header.seq_nr = (old_packet.seq_nr() + 1).to_be();
-        packet.header.ack_nr = old_response.header.seq_nr;
-        let sent = packet.header;
+        packet.set_connection_id(sender_connection_id);
+        packet.set_seq_nr(old_packet.seq_nr() + 1);
+        packet.set_ack_nr(old_response.seq_nr());
 
         let response = socket.handle_packet(packet.clone());
         assert!(response.is_some());
@@ -1486,10 +1071,10 @@ mod test {
         // Receiver (i.e., who accepted connection) has connection id equal to
         // initial connection id
         assert!(response.connection_id() == initial_connection_id);
-        assert!(response.connection_id() == Int::from_be(sent.connection_id) - 1);
+        assert!(response.connection_id() == packet.connection_id() - 1);
 
         // Previous packets should be ack'ed
-        assert!(response.ack_nr() == Int::from_be(sent.seq_nr));
+        assert!(response.ack_nr() == packet.seq_nr());
 
         // Responses with no payload should not increase the sequence number
         assert!(response.payload.is_empty());
@@ -1502,12 +1087,11 @@ mod test {
 
         let mut packet = UtpPacket::new();
         packet.set_type(FinPacket);
-        packet.header.connection_id = sender_connection_id.to_be();
-        packet.header.seq_nr = (old_packet.seq_nr() + 1).to_be();
-        packet.header.ack_nr = old_response.header.seq_nr;
-        let sent = packet.header;
+        packet.set_connection_id(sender_connection_id);
+        packet.set_seq_nr(old_packet.seq_nr() + 1);
+        packet.set_ack_nr(old_response.seq_nr());
 
-        let response = socket.handle_packet(packet);
+        let response = socket.handle_packet(packet.clone());
         assert!(response.is_some());
 
         let response = response.unwrap();
@@ -1515,13 +1099,13 @@ mod test {
         assert!(response.get_type() == StatePacket);
 
         // FIN packets have no payload but the sequence number shouldn't increase
-        assert!(Int::from_be(sent.seq_nr) == old_packet.seq_nr() + 1);
+        assert!(packet.seq_nr() == old_packet.seq_nr() + 1);
 
         // Nor should the ACK packet's sequence number
-        assert!(response.header.seq_nr == old_response.header.seq_nr);
+        assert!(response.seq_nr() == old_response.seq_nr());
 
         // FIN should be acknowledged
-        assert!(response.header.ack_nr == sent.seq_nr);
+        assert!(response.ack_nr() == packet.seq_nr());
 
         //}
     }
@@ -1537,7 +1121,7 @@ mod test {
         let mut packet = UtpPacket::new();
         packet.set_wnd_size(BUF_SIZE as u32);
         packet.set_type(SynPacket);
-        packet.header.connection_id = initial_connection_id.to_be();
+        packet.set_connection_id(initial_connection_id);
 
         let response = socket.handle_packet(packet.clone());
         assert!(response.is_some());
@@ -1551,9 +1135,9 @@ mod test {
         let mut packet = UtpPacket::new();
         packet.set_wnd_size(BUF_SIZE as u32);
         packet.set_type(StatePacket);
-        packet.header.connection_id = initial_connection_id.to_be();
-        packet.header.seq_nr = (old_packet.seq_nr() + 1).to_be();
-        packet.header.ack_nr = old_response.header.seq_nr;
+        packet.set_connection_id(initial_connection_id);
+        packet.set_seq_nr(old_packet.seq_nr() + 1);
+        packet.set_ack_nr(old_response.seq_nr());
 
         let response = socket.handle_packet(packet.clone());
         assert!(response.is_none());
@@ -1574,26 +1158,26 @@ mod test {
         let mut packet = UtpPacket::new();
         packet.set_wnd_size(BUF_SIZE as u32);
         packet.set_type(SynPacket);
-        packet.header.connection_id = initial_connection_id.to_be();
+        packet.set_connection_id(initial_connection_id);
 
         let response = socket.handle_packet(packet.clone());
         assert!(response.is_some());
         assert!(response.unwrap().get_type() == StatePacket);
 
         // Now, disrupt connection with a packet with an incorrect connection id
-        let new_connection_id = initial_connection_id.to_le();
+        let new_connection_id = initial_connection_id * 2;
 
         let mut packet = UtpPacket::new();
         packet.set_wnd_size(BUF_SIZE as u32);
         packet.set_type(StatePacket);
-        packet.header.connection_id = new_connection_id;
+        packet.set_connection_id(new_connection_id);
 
         let response = socket.handle_packet(packet.clone());
         assert!(response.is_some());
 
         let response = response.unwrap();
         assert!(response.get_type() == ResetPacket);
-        assert!(response.header.ack_nr == packet.header.seq_nr);
+        assert!(response.ack_nr() == packet.seq_nr());
     }
 
     #[test]
@@ -1693,7 +1277,7 @@ mod test {
         let mut packet = UtpPacket::new();
         packet.set_wnd_size(BUF_SIZE as u32);
         packet.set_type(SynPacket);
-        packet.header.connection_id = initial_connection_id.to_be();
+        packet.set_connection_id(initial_connection_id);
 
         let response = socket.handle_packet(packet.clone());
         assert!(response.is_some());
@@ -1709,18 +1293,18 @@ mod test {
         let mut packet = UtpPacket::new();
         packet.set_wnd_size(BUF_SIZE as u32);
         packet.set_type(DataPacket);
-        packet.header.connection_id = initial_connection_id.to_be();
-        packet.header.seq_nr = (old_packet.seq_nr() + 1).to_be();
-        packet.header.ack_nr = old_response.header.seq_nr;
+        packet.set_connection_id(initial_connection_id);
+        packet.set_seq_nr(old_packet.seq_nr() + 1);
+        packet.set_ack_nr(old_response.seq_nr());
         packet.payload = vec!(1,2,3);
         window.push(packet);
 
         let mut packet = UtpPacket::new();
         packet.set_wnd_size(BUF_SIZE as u32);
         packet.set_type(DataPacket);
-        packet.header.connection_id = initial_connection_id.to_be();
-        packet.header.seq_nr = (old_packet.seq_nr() + 2).to_be();
-        packet.header.ack_nr = old_response.header.seq_nr;
+        packet.set_connection_id(initial_connection_id);
+        packet.set_seq_nr(old_packet.seq_nr() + 2);
+        packet.set_ack_nr(old_response.seq_nr());
         packet.payload = vec!(4,5,6);
         window.push(packet);
 
@@ -1728,7 +1312,7 @@ mod test {
         let response = socket.handle_packet(window[1].clone());
         assert!(response.is_some());
         let response = response.unwrap();
-        assert!(response.header.ack_nr != window[1].header.seq_nr);
+        assert!(response.ack_nr() != window[1].seq_nr());
 
         let response = socket.handle_packet(window[0].clone());
         assert!(response.is_some());
@@ -1757,9 +1341,9 @@ mod test {
                 let mut packet = UtpPacket::new();
                 packet.set_wnd_size(BUF_SIZE as u32);
                 packet.set_type(DataPacket);
-                packet.header.connection_id = client.sender_connection_id.to_be();
-                packet.header.seq_nr = client.seq_nr.to_be();
-                packet.header.ack_nr = client.ack_nr.to_be();
+                packet.set_connection_id(client.sender_connection_id);
+                packet.set_seq_nr(client.seq_nr);
+                packet.set_ack_nr(client.ack_nr);
                 packet.payload = data.to_vec();
                 window.push(packet.clone());
                 client.send_window.push(packet.clone());
@@ -1769,9 +1353,9 @@ mod test {
             let mut packet = UtpPacket::new();
             packet.set_wnd_size(BUF_SIZE as u32);
             packet.set_type(FinPacket);
-            packet.header.connection_id = client.sender_connection_id.to_be();
-            packet.header.seq_nr = client.seq_nr.to_be();
-            packet.header.ack_nr = client.ack_nr.to_be();
+            packet.set_connection_id(client.sender_connection_id);
+            packet.set_seq_nr(client.seq_nr);
+            packet.set_ack_nr(client.ack_nr);
             window.push(packet);
             client.seq_nr += 1;
 
@@ -1831,7 +1415,7 @@ mod test {
                 Ok((nread, _src)) => UtpPacket::decode(buf.slice_to(nread)),
                 Err(e) => fail!("{}", e),
             };
-            assert_eq!(packet.header.ack_nr, seq_nr.to_be());
+            assert_eq!(packet.ack_nr(), seq_nr);
             drop(client);
         });
 
@@ -1882,9 +1466,9 @@ mod test {
         let mut packet = UtpPacket::new();
         packet.set_wnd_size(BUF_SIZE as u32);
         packet.set_type(StatePacket);
-        packet.header.seq_nr = server.seq_nr.to_be();
-        packet.header.ack_nr = (data_packet.seq_nr() - 1).to_be();
-        packet.header.connection_id = server.sender_connection_id.to_be();
+        packet.set_seq_nr(server.seq_nr);
+        packet.set_ack_nr(data_packet.seq_nr() - 1);
+        packet.set_connection_id(server.sender_connection_id);
 
         for _ in range(0u, 3) {
             iotry!(server.socket.send_to(packet.bytes().as_slice(), client_addr));
@@ -1968,37 +1552,37 @@ mod test {
         let mut socket = iotry!(UtpSocket::bind(server_addr));
 
         let mut packet = UtpPacket::new();
-        packet.header.seq_nr = 1;
+        packet.set_seq_nr(1);
 
         assert!(socket.incoming_buffer.is_empty());
 
         socket.insert_into_buffer(packet.clone());
         assert_eq!(socket.incoming_buffer.len(), 1);
 
-        packet.header.seq_nr = 2;
-        packet.header.timestamp_microseconds = 128;
+        packet.set_seq_nr(2);
+        packet.set_timestamp_microseconds(128);
 
         socket.insert_into_buffer(packet.clone());
         assert_eq!(socket.incoming_buffer.len(), 2);
-        assert_eq!(socket.incoming_buffer[1].header.seq_nr, 2);
-        assert_eq!(socket.incoming_buffer[1].header.timestamp_microseconds, 128);
+        assert_eq!(socket.incoming_buffer[1].seq_nr(), 2);
+        assert_eq!(socket.incoming_buffer[1].timestamp_microseconds(), 128);
 
-        packet.header.seq_nr = 3;
-        packet.header.timestamp_microseconds = 256;
+        packet.set_seq_nr(3);
+        packet.set_timestamp_microseconds(256);
 
         socket.insert_into_buffer(packet.clone());
         assert_eq!(socket.incoming_buffer.len(), 3);
-        assert_eq!(socket.incoming_buffer[2].header.seq_nr, 3);
-        assert_eq!(socket.incoming_buffer[2].header.timestamp_microseconds, 256);
+        assert_eq!(socket.incoming_buffer[2].seq_nr(), 3);
+        assert_eq!(socket.incoming_buffer[2].timestamp_microseconds(), 256);
 
         // Replace a packet with a more recent version
-        packet.header.seq_nr = 2;
-        packet.header.timestamp_microseconds = 456;
+        packet.set_seq_nr(2);
+        packet.set_timestamp_microseconds(456);
 
         socket.insert_into_buffer(packet.clone());
         assert_eq!(socket.incoming_buffer.len(), 3);
-        assert_eq!(socket.incoming_buffer[1].header.seq_nr, 2);
-        assert_eq!(socket.incoming_buffer[1].header.timestamp_microseconds, 456);
+        assert_eq!(socket.incoming_buffer[1].seq_nr(), 2);
+        assert_eq!(socket.incoming_buffer[1].timestamp_microseconds(), 456);
     }
 
     #[test]
@@ -2022,14 +1606,14 @@ mod test {
             let mut packet = UtpPacket::new();
             packet.set_wnd_size(BUF_SIZE as u32);
             packet.set_type(DataPacket);
-            packet.header.connection_id = client.sender_connection_id.to_be();
-            packet.header.seq_nr = client.seq_nr.to_be();
-            packet.header.ack_nr = client.ack_nr.to_be();
+            packet.set_connection_id(client.sender_connection_id);
+            packet.set_seq_nr(client.seq_nr);
+            packet.set_ack_nr(client.ack_nr);
             packet.payload = vec!(1,2,3);
 
             // Send two copies of the packet, with different timestamps
             for _ in range(0u, 2) {
-                packet.header.timestamp_microseconds = now_microseconds();
+                packet.set_timestamp_microseconds(now_microseconds());
                 iotry!(s.send_to(packet.bytes().as_slice(), server_addr));
             }
             client.seq_nr += 1;
@@ -2097,10 +1681,10 @@ mod test {
 
         // Generate SACK
         let mut packet = UtpPacket::new();
-        packet.header.seq_nr = server.seq_nr.to_be();
-        packet.header.ack_nr = (server.ack_nr - 1).to_be();
-        packet.header.connection_id = server.sender_connection_id.to_be();
-        packet.header.timestamp_microseconds = now_microseconds().to_be();
+        packet.set_seq_nr(server.seq_nr);
+        packet.set_ack_nr(server.ack_nr - 1);
+        packet.set_connection_id(server.sender_connection_id);
+        packet.set_timestamp_microseconds(now_microseconds());
         packet.set_type(StatePacket);
         packet.set_sack(Some(vec!(12, 0, 0, 0)));
 
@@ -2133,10 +1717,10 @@ mod test {
             let dst = client.connected_to;
             for (index, chunk) in chunks.enumerate() {
                 let mut packet = UtpPacket::new();
-                packet.header.seq_nr = client.seq_nr.to_be();
-                packet.header.ack_nr = client.ack_nr.to_be();
-                packet.header.connection_id = client.sender_connection_id.to_be();
-                packet.header.timestamp_microseconds = now_microseconds().to_be();
+                packet.set_seq_nr(client.seq_nr);
+                packet.set_ack_nr(client.ack_nr);
+                packet.set_connection_id(client.sender_connection_id);
+                packet.set_timestamp_microseconds(now_microseconds());
                 packet.payload = chunk.to_vec();
                 packet.set_type(DataPacket);
 
