@@ -543,12 +543,11 @@ impl UtpSocket {
     /// Build the selective acknowledgment payload for usage in packets.
     fn build_selective_ack(&self) -> Vec<u8> {
         let mut stashed = self.incoming_buffer.iter()
-            .map(|pkt| pkt.seq_nr())
-            .filter(|&seq_nr| seq_nr > self.ack_nr);
+            .filter(|&pkt| pkt.seq_nr() > self.ack_nr);
 
         let mut sack = Vec::new();
-        for seq_nr in stashed {
-            let diff = seq_nr - self.ack_nr - 2;
+        for packet in stashed {
+            let diff = packet.seq_nr() - self.ack_nr - 2;
             let byte = (diff / 8) as uint;
             let bit = (diff % 8) as uint;
 
