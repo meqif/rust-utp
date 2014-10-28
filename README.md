@@ -1,11 +1,18 @@
 # rust-utp
 
-A [Micro Transport Protocol](http://www.bittorrent.org/beps/bep_0029.html) library implemented in Rust.
+A [Micro Transport Protocol](http://www.bittorrent.org/beps/bep_0029.html)
+library implemented in Rust.
 
-The current implementation is somewhat incomplete, lacking both congestion
-control and full packet loss handling (though some cases are handled). However,
-it does support the Selective Acknowledgment extension, handles unordered and
-duplicate packets and presents a stream interface (`UtpStream`).
+The Micro Transport Protocol is a reliable protocol with ordered delivery built
+over UDP. Its congestion control algorithm is
+[LEDBAT](http://tools.ietf.org/html/rfc6817), which tries to use as much unused
+bandwidth as it can but readily yield to competing flows, making it useful for
+bulk transfers without introducing congestion in the network.
+
+The current implementation is somewhat incomplete, lacking a complete implementation of congestion
+control. However, it does support packet loss detection (except by timeout) the
+Selective Acknowledgment extension, handles unordered and duplicate packets and
+presents a stream interface (`UtpStream`).
 
 [![Build Status](http://img.shields.io/travis/meqif/rust-utp.svg?style=flat)](https://travis-ci.org/meqif/rust-utp)
 
