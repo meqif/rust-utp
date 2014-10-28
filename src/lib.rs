@@ -30,7 +30,6 @@ use std::io::IoResult;
 use std::rand::random;
 use std::collections::{DList, Deque};
 use util::*;
-use bit_iterator::BitIterator;
 use packet::*;
 
 mod util;
@@ -701,7 +700,7 @@ impl UtpSocket {
                 // Process extensions, if any
                 for extension in packet.extensions.iter() {
                     if extension.get_type() == SelectiveAckExtension {
-                        let bits = BitIterator::new(extension.data.clone());
+                        let bits = extension.iter();
                         // If three or more packets are acknowledged past the implicit missing one,
                         // assume it was lost.
                         if bits.filter(|&bit| bit == 1).count() >= 3 {
@@ -709,7 +708,7 @@ impl UtpSocket {
                             packet_loss_detected = true;
                         }
 
-                        let bits = BitIterator::new(extension.data.clone());
+                        let bits = extension.iter();
                         for (idx, received) in bits.map(|bit| bit == 1).enumerate() {
                             let seq_nr = packet.ack_nr() + 2 + idx as u16;
                             if received {

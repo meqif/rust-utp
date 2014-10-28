@@ -1,5 +1,6 @@
 use std::mem::transmute;
 use std::fmt;
+use bit_iterator::BitIterator;
 
 pub const HEADER_SIZE: uint = 20;
 
@@ -46,6 +47,10 @@ impl UtpExtension {
         let mut data = vec!(self.data.len() as u8);
         data.extend(self.data.iter().map(|&x| x));
         return data;
+    }
+
+    pub fn iter(&self) -> BitIterator {
+        BitIterator::new(self.data.clone())
     }
 }
 
