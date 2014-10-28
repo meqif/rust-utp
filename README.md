@@ -6,7 +6,7 @@ library implemented in Rust.
 The Micro Transport Protocol is a reliable protocol with ordered delivery built
 over UDP. Its congestion control algorithm is
 [LEDBAT](http://tools.ietf.org/html/rfc6817), which tries to use as much unused
-bandwidth as it can but readily yield to competing flows, making it useful for
+bandwidth as it can but readily yields to competing flows, making it useful for
 bulk transfers without introducing congestion in the network.
 
 The current implementation is somewhat incomplete, lacking a complete implementation of congestion
