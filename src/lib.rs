@@ -48,7 +48,7 @@ const MIN_CWND: uint = 2;
 const INIT_CWND: uint = 2;
 
 macro_rules! iotry(
-    ($e:expr) => (match $e { Ok(e) => e, Err(e) => fail!("{}", e) })
+    ($e:expr) => (match $e { Ok(e) => e, Err(e) => panic!("{}", e) })
 )
 
 #[deriving(PartialEq,Eq,Show)]
@@ -161,7 +161,7 @@ impl UtpSocket {
             match self.socket.recv_from(buf) {
                 Ok((read, src)) => { len = read; addr = src; break; },
                 Err(ref e) if e.kind == std::io::TimedOut => continue,
-                Err(e) => fail!("{}", e),
+                Err(e) => panic!("{}", e),
             };
         }
         assert!(len == HEADER_SIZE);
@@ -213,7 +213,7 @@ impl UtpSocket {
             match self.recv_from(buf) {
                 Ok(_) => {},
                 Err(ref e) if e.kind == std::io::EndOfFile => self.state = SocketClosed,
-                Err(e) => fail!("{}", e),
+                Err(e) => panic!("{}", e),
             };
         }
 
@@ -915,7 +915,7 @@ mod test {
 
         // Closing the connection is fine
         match server.recv_from(buf) {
-            Err(e) => fail!("{}", e),
+            Err(e) => panic!("{}", e),
             _ => {},
         }
         assert_eq!(server.state, SocketEndOfFile);
@@ -924,7 +924,7 @@ mod test {
         // EOF error
         match server.recv_from(buf) {
             Err(e) => assert_eq!(e.kind, EndOfFile),
-            v => fail!("expected {}, got {}", EndOfFile, v),
+            v => panic!("expected {}, got {}", EndOfFile, v),
         }
 
         assert_eq!(server.state, SocketClosed);
@@ -932,7 +932,7 @@ mod test {
         // Trying again raises a Closed error
         match server.recv_from(buf) {
             Err(e) => assert_eq!(e.kind, Closed),
-            v => fail!("expected {}, got {}", Closed, v),
+            v => panic!("expected {}, got {}", Closed, v),
         }
 
         drop(server);
@@ -970,7 +970,7 @@ mod test {
         // error
         match server.send_to(buf) {
             Err(e) => assert_eq!(e.kind, Closed),
-            v => fail!("expected {}, got {}", Closed, v),
+            v => panic!("expected {}, got {}", Closed, v),
         }
 
         drop(server);
@@ -1257,7 +1257,7 @@ mod test {
         let mut buf = [0u8, ..4096];
         match server.read(buf) {
             Err(ref e) if e.kind == Closed => {},
-            _ => fail!("should have failed with Closed"),
+            _ => panic!("should have failed with Closed"),
         };
     }
 
@@ -1383,7 +1383,7 @@ mod test {
                 assert_eq!(data.len(), expected.len());
                 assert_eq!(data, expected);
             },
-            Err(e) => fail!("{}", e),
+            Err(e) => panic!("{}", e),
         }
     }
 
@@ -1408,7 +1408,7 @@ mod test {
             let mut buf = [0, ..BUF_SIZE];
             let packet = match client.recv_from(buf) {
                 Ok((nread, _src)) => UtpPacket::decode(buf.slice_to(nread)),
-                Err(e) => fail!("{}", e),
+                Err(e) => panic!("{}", e),
             };
             assert_eq!(packet.ack_nr(), seq_nr);
             drop(client);
@@ -1453,7 +1453,7 @@ mod test {
                 assert_eq!(data_packet.payload, data);
                 assert_eq!(data_packet.payload.len(), data.len());
             },
-            Err(e) => fail!("{}", e),
+            Err(e) => panic!("{}", e),
         }
         let data_packet = data_packet;
 
@@ -1471,7 +1471,7 @@ mod test {
 
         // Receive data again and check that it's the same we reported as missing
         match server.socket.recv_from(buf) {
-            Ok((0, _)) => fail!("Received 0 bytes from socket"),
+            Ok((0, _)) => panic!("Received 0 bytes from socket"),
             Ok((read, _src)) => {
                 let packet = UtpPacket::decode(buf.slice_to(read));
                 assert_eq!(packet.get_type(), DataPacket);
@@ -1480,7 +1480,7 @@ mod test {
                 let response = server.handle_packet(packet).unwrap();
                 iotry!(server.socket.send_to(response.bytes().as_slice(), server.connected_to));
             },
-            Err(e) => fail!("{}", e),
+            Err(e) => panic!("{}", e),
         }
 
         // Receive close
@@ -1534,7 +1534,7 @@ mod test {
             match server.recv_from(buf) {
                 Ok((0, _)) => continue,
                 Ok(_) => break,
-                Err(e) => fail!("{}", e),
+                Err(e) => panic!("{}", e),
             }
         }
 
@@ -1640,7 +1640,7 @@ mod test {
                 assert_eq!(data.len(), expected.len());
                 assert_eq!(data, expected);
             },
-            Err(e) => fail!("{}", e),
+            Err(e) => panic!("{}", e),
         }
     }
 
@@ -1758,7 +1758,7 @@ mod test {
                 Ok((0, _src)) => (),
                 Ok((len, _src)) => read.push_all(small_buffer.slice_to(len)),
                 Err(ref e) if e.kind == EndOfFile => break,
-                Err(e) => fail!("{}", e),
+                Err(e) => panic!("{}", e),
             }
         }
 

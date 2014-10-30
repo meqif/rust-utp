@@ -42,7 +42,7 @@ fn main() {
 
     let mut stream = match UtpStream::connect(addr) {
         Ok(stream) => stream,
-        Err(e) => fail!("{}", e),
+        Err(e) => panic!("{}", e),
     };
 
     // Ignoring the result of both calls below for the sake of brevity

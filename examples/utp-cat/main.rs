@@ -5,7 +5,7 @@ extern crate utp;
 use std::io::net::ip::{Ipv4Addr, SocketAddr};
 
 macro_rules! iotry(
-    ($e:expr) => (match $e { Ok(v) => v, Err(e) => fail!("{}", e), })
+    ($e:expr) => (match $e { Ok(v) => v, Err(e) => panic!("{}", e), })
 )
 
 fn usage() {
