@@ -75,8 +75,7 @@ impl UtpPacketHeader {
     }
 
     pub fn get_type(&self) -> UtpPacketType {
-        let t: UtpPacketType = unsafe { transmute(self.type_ver >> 4) };
-        t
+        unsafe { transmute(self.type_ver >> 4) }
     }
 
     pub fn get_version(&self) -> u8 {
