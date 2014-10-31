@@ -19,7 +19,7 @@
 #![feature(if_let)]
 #![feature(while_let)]
 #![feature(globs)]
-#![deny(missing_doc)]
+#![deny(missing_docs)]
 
 extern crate time;
 #[phase(plugin, link)] extern crate log;
@@ -161,7 +161,7 @@ impl UtpSocket {
             match self.socket.recv_from(buf) {
                 Ok((read, src)) => { len = read; addr = src; break; },
                 Err(ref e) if e.kind == std::io::TimedOut => continue,
-                Err(e) => panic!("{}", e),
+                Err(e) => return Err(e),
             };
         }
         assert!(len == HEADER_SIZE);
@@ -194,7 +194,7 @@ impl UtpSocket {
         // Wait for acknowledgment on pending sent packets
         let mut buf = [0u8, ..BUF_SIZE];
         while !self.send_window.is_empty() {
-            iotry!(self.recv_from(buf));
+            try!(self.recv_from(buf));
         }
 
         let mut packet = UtpPacket::new();
@@ -213,7 +213,7 @@ impl UtpSocket {
             match self.recv_from(buf) {
                 Ok(_) => {},
                 Err(ref e) if e.kind == std::io::EndOfFile => self.state = SocketClosed,
-                Err(e) => panic!("{}", e),
+                Err(e) => return Err(e),
             };
         }
 
@@ -305,7 +305,7 @@ impl UtpSocket {
         Ok((read, src))
     }
 
-    #[allow(missing_doc)]
+    #[allow(missing_docs)]
     #[deprecated = "renamed to `recv_from`"]
     pub fn recvfrom(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
         self.recv_from(buf)
@@ -459,7 +459,7 @@ impl UtpSocket {
     }
 
 
-    #[allow(missing_doc)]
+    #[allow(missing_docs)]
     #[deprecated = "renamed to `send_to`"]
     pub fn sendto(&mut self, buf: &[u8]) -> IoResult<()> {
         self.send_to(buf)
