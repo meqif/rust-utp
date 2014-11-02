@@ -797,8 +797,7 @@ impl UtpStream {
     /// Create a uTP stream listening on the given address.
     #[unstable]
     pub fn bind(addr: SocketAddr) -> IoResult<UtpStream> {
-        let socket = UtpSocket::bind(addr);
-        match socket {
+        match UtpSocket::bind(addr) {
             Ok(s)  => Ok(UtpStream { socket: s }),
             Err(e) => Err(e),
         }
