@@ -163,29 +163,32 @@ impl UtpPacket {
         self.header.get_type()
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn seq_nr(&self) -> u16 {
         Int::from_be(self.header.seq_nr)
     }
 
+    #[inline]
     pub fn set_seq_nr(&mut self, seq_nr: u16) {
         self.header.seq_nr = seq_nr.to_be();
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn ack_nr(&self) -> u16 {
         Int::from_be(self.header.ack_nr)
     }
 
+    #[inline]
     pub fn set_ack_nr(&mut self, ack_nr: u16) {
         self.header.ack_nr = ack_nr.to_be()
     }
 
-    #[inline(always)]
+    #[inline]
     pub fn connection_id(&self) -> u16 {
         Int::from_be(self.header.connection_id)
     }
 
+    #[inline]
     pub fn set_connection_id(&mut self, conn_id: u16) {
         self.header.connection_id = conn_id.to_be();
     }
@@ -195,22 +198,27 @@ impl UtpPacket {
         self.header.wnd_size = new_wnd_size.to_be();
     }
 
+    #[inline]
     pub fn wnd_size(&self) -> u32 {
         Int::from_be(self.header.wnd_size)
     }
 
+    #[inline]
     pub fn timestamp_microseconds(&self) -> u32 {
         Int::from_be(self.header.timestamp_microseconds)
     }
 
+    #[inline]
     pub fn set_timestamp_microseconds(&mut self, tstamp: u32) {
         self.header.timestamp_microseconds = tstamp.to_be();
     }
 
+    #[inline]
     pub fn timestamp_difference_microseconds(&self) -> u32 {
         Int::from_be(self.header.timestamp_difference_microseconds)
     }
 
+    #[inline]
     pub fn set_timestamp_difference_microseconds(&mut self, tstamp: u32) {
         self.header.timestamp_difference_microseconds = tstamp.to_be();
     }
