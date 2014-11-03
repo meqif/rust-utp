@@ -225,8 +225,8 @@ impl UtpSocket {
     /// Receive data from socket.
     ///
     /// On success, returns the number of bytes read and the sender's address.
-    /// Returns SocketEndOfFile after receiving a FIN packet when the remaining
-    /// inflight packets are consumed. Subsequent calls return SocketClosed.
+    /// Returns `SocketEndOfFile` after receiving a FIN packet when the remaining
+    /// inflight packets are consumed. Subsequent calls return `SocketClosed`.
     #[unstable]
     pub fn recv_from(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
         use std::io::{IoError, EndOfFile, Closed};
