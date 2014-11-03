@@ -306,12 +306,6 @@ impl UtpSocket {
         Ok((read, src))
     }
 
-    #[allow(missing_docs)]
-    #[deprecated = "renamed to `recv_from`"]
-    pub fn recvfrom(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
-        self.recv_from(buf)
-    }
-
     fn prepare_reply(&self, original: &UtpPacket, t: UtpPacketType) -> UtpPacket {
         let mut resp = UtpPacket::new();
         resp.set_type(t);
@@ -457,13 +451,6 @@ impl UtpSocket {
             self.curr_window += packet.len();
             self.send_window.push(packet);
         }
-    }
-
-
-    #[allow(missing_docs)]
-    #[deprecated = "renamed to `send_to`"]
-    pub fn sendto(&mut self, buf: &[u8]) -> IoResult<()> {
-        self.send_to(buf)
     }
 
     /// Send fast resend request.
