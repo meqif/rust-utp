@@ -1,5 +1,7 @@
 # rust-utp
 
+[![Build Status](http://img.shields.io/travis/meqif/rust-utp.svg?style=flat)](https://travis-ci.org/meqif/rust-utp)
+
 A [Micro Transport Protocol](http://www.bittorrent.org/beps/bep_0029.html)
 library implemented in Rust.
 
@@ -13,8 +15,6 @@ The current implementation is somewhat incomplete, lacking a complete implementa
 control. However, it does support packet loss detection (except by timeout) the
 Selective Acknowledgment extension, handles unordered and duplicate packets and
 presents a stream interface (`UtpStream`).
-
-[![Build Status](http://img.shields.io/travis/meqif/rust-utp.svg?style=flat)](https://travis-ci.org/meqif/rust-utp)
 
 ## Building
 
