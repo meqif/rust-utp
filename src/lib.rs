@@ -14,6 +14,7 @@
 // - Handle packet loss
 // - Path MTU discovery (RFC4821)
 
+#![experimental]
 #![feature(macro_rules)]
 #![feature(phase)]
 #![feature(if_let)]
