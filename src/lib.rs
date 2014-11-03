@@ -29,6 +29,7 @@ use std::io::net::ip::SocketAddr;
 use std::io::IoResult;
 use std::rand::random;
 use std::collections::DList;
+use std::iter::range_inclusive;
 use util::*;
 use packet::*;
 
@@ -583,7 +584,7 @@ impl UtpSocket {
         if let Some(position) = self.send_window.iter()
             .position(|pkt| pkt.seq_nr() == self.last_acked)
         {
-            for _ in range(0, position + 1) {
+            for _ in range_inclusive(0, position) {
                 let packet = self.send_window.remove(0).unwrap();
                 self.curr_window -= packet.len();
             }
