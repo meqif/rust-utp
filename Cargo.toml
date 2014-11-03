@@ -1,7 +1,7 @@
 [project]
 
 name = "utp"
-version = "0.0.0"
+version = "0.1.0"
 authors = [ "Ricardo Martins <ricardo@scarybox.net>" ]
 
 [lib]
