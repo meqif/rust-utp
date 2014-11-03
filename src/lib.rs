@@ -28,7 +28,7 @@ use std::io::net::udp::UdpSocket;
 use std::io::net::ip::SocketAddr;
 use std::io::IoResult;
 use std::rand::random;
-use std::collections::{DList, Deque};
+use std::collections::DList;
 use util::*;
 use packet::*;
 
