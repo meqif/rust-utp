@@ -94,7 +94,7 @@ pub struct UtpSocket {
 
     current_delays: Vec<(u32,u32)>,
     base_delays: Vec<(u32,u32)>,
-    congestion_timeout: u32,
+    congestion_timeout: u64,
     cwnd: uint,
 }
 
@@ -151,7 +151,7 @@ impl UtpSocket {
         let mut addr = self.connected_to;
         let mut buf = [0, ..BUF_SIZE];
 
-        let mut syn_timeout = self.congestion_timeout as u64;
+        let mut syn_timeout = self.congestion_timeout;
         for _ in range(0u, 5) {
             packet.set_timestamp_microseconds(now_microseconds());
 
@@ -266,7 +266,7 @@ impl UtpSocket {
         let mut b = [0, ..BUF_SIZE + HEADER_SIZE];
         if self.state != SocketNew {
             debug!("setting read timeout of {} ms", self.congestion_timeout);
-            self.socket.set_read_timeout(Some(self.congestion_timeout as u64));
+            self.socket.set_read_timeout(Some(self.congestion_timeout));
         }
         let (read, src) = match self.socket.recv_from(b) {
             Err(ref e) if e.kind == TimedOut => {
@@ -507,7 +507,7 @@ impl UtpSocket {
         let delta = self.rtt - current_delay;
         self.rtt_variance += (std::num::abs(delta) - self.rtt_variance) / 4;
         self.rtt += (current_delay - self.rtt) / 8;
-        self.congestion_timeout = std::cmp::max(self.rtt + self.rtt_variance * 4, 500) as u32;
+        self.congestion_timeout = std::cmp::max((self.rtt + self.rtt_variance * 4) as u64, 500);
         self.congestion_timeout = std::cmp::min(self.congestion_timeout, 60_000);
 
         debug!("current_delay: {}", current_delay);
