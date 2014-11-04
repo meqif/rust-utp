@@ -155,6 +155,7 @@ impl UtpSocket {
             packet.set_timestamp_microseconds(now_microseconds());
 
             // Send packet
+            debug!("Connecting to {}", other);
             try!(self.socket.send_to(packet.bytes().as_slice(), other));
             self.state = SocketSynSent;
 
@@ -162,7 +163,10 @@ impl UtpSocket {
             self.socket.set_read_timeout(Some(500));
             match self.socket.recv_from(buf) {
                 Ok((read, src)) => { len = read; addr = src; break; },
-                Err(ref e) if e.kind == std::io::TimedOut => continue,
+                Err(ref e) if e.kind == std::io::TimedOut => {
+                    debug!("Timed out, retrying");
+                    continue;
+                },
                 Err(e) => return Err(e),
             };
         }
