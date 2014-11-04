@@ -151,6 +151,7 @@ impl UtpSocket {
         let mut addr = self.connected_to;
         let mut buf = [0, ..BUF_SIZE];
 
+        let mut syn_timeout = self.congestion_timeout as u64;
         for _ in range(0u, 5) {
             packet.set_timestamp_microseconds(now_microseconds());
 
@@ -160,11 +161,12 @@ impl UtpSocket {
             self.state = SocketSynSent;
 
             // Validate response
-            self.socket.set_read_timeout(Some(500));
+            self.socket.set_read_timeout(Some(syn_timeout));
             match self.socket.recv_from(buf) {
                 Ok((read, src)) => { len = read; addr = src; break; },
                 Err(ref e) if e.kind == std::io::TimedOut => {
                     debug!("Timed out, retrying");
+                    syn_timeout *= 2;
                     continue;
                 },
                 Err(e) => return Err(e),
