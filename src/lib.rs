@@ -300,7 +300,7 @@ impl UtpSocket {
             self.insert_into_buffer(packet);
         }
 
-        if let Some(pkt) = self.handle_packet(shallow_clone) {
+        if let Some(pkt) = self.handle_packet(&shallow_clone) {
                 let mut pkt = pkt;
                 pkt.set_wnd_size(BUF_SIZE as u32);
                 try!(self.socket.send_to(pkt.bytes().as_slice(), src));
@@ -589,12 +589,12 @@ impl UtpSocket {
     /// Handle incoming packet, updating socket state accordingly.
     ///
     /// Returns appropriate reply packet, if needed.
-    fn handle_packet(&mut self, packet: UtpPacket) -> Option<UtpPacket> {
+    fn handle_packet(&mut self, packet: &UtpPacket) -> Option<UtpPacket> {
         // Reset connection if connection id doesn't match and this isn't a SYN
         if packet.get_type() != SynPacket &&
            !(packet.connection_id() == self.sender_connection_id ||
            packet.connection_id() == self.receiver_connection_id) {
-            return Some(self.prepare_reply(&packet, ResetPacket));
+            return Some(self.prepare_reply(packet, ResetPacket));
         }
 
         // Acknowledge only if the packet strictly follows the previous one
@@ -623,10 +623,10 @@ impl UtpSocket {
                 self.sender_connection_id = packet.connection_id();
                 self.state = SocketConnected;
 
-                Some(self.prepare_reply(&packet, StatePacket))
+                Some(self.prepare_reply(packet, StatePacket))
             }
             DataPacket => {
-                let mut reply = self.prepare_reply(&packet, StatePacket);
+                let mut reply = self.prepare_reply(packet, StatePacket);
 
                 if self.ack_nr + 1 < packet.seq_nr() {
                     debug!("current ack_nr ({}) is behind received packet seq_nr ({})",
@@ -652,7 +652,7 @@ impl UtpSocket {
                     self.ack_nr == self.fin_seq_nr
                 {
                     self.state = SocketEndOfFile;
-                    Some(self.prepare_reply(&packet, StatePacket))
+                    Some(self.prepare_reply(packet, StatePacket))
                 } else {
                     debug!("FIN received but there are missing packets");
                     None
@@ -1020,7 +1020,7 @@ mod test {
         packet.set_connection_id(initial_connection_id);
 
         // Do we have a response?
-        let response = socket.handle_packet(packet.clone());
+        let response = socket.handle_packet(&packet);
         assert!(response.is_some());
 
         // Is is of the correct type?
@@ -1049,7 +1049,7 @@ mod test {
         packet.set_seq_nr(old_packet.seq_nr() + 1);
         packet.set_ack_nr(old_response.seq_nr());
 
-        let response = socket.handle_packet(packet.clone());
+        let response = socket.handle_packet(&packet);
         assert!(response.is_some());
 
         let response = response.unwrap();
@@ -1080,7 +1080,7 @@ mod test {
         packet.set_seq_nr(old_packet.seq_nr() + 1);
         packet.set_ack_nr(old_response.seq_nr());
 
-        let response = socket.handle_packet(packet.clone());
+        let response = socket.handle_packet(&packet);
         assert!(response.is_some());
 
         let response = response.unwrap();
@@ -1112,7 +1112,7 @@ mod test {
         packet.set_type(SynPacket);
         packet.set_connection_id(initial_connection_id);
 
-        let response = socket.handle_packet(packet.clone());
+        let response = socket.handle_packet(&packet);
         assert!(response.is_some());
         let response = response.unwrap();
         assert!(response.get_type() == StatePacket);
@@ -1128,11 +1128,11 @@ mod test {
         packet.set_seq_nr(old_packet.seq_nr() + 1);
         packet.set_ack_nr(old_response.seq_nr());
 
-        let response = socket.handle_packet(packet.clone());
+        let response = socket.handle_packet(&packet);
         assert!(response.is_none());
 
         // Send a second keepalive packet, identical to the previous one
-        let response = socket.handle_packet(packet.clone());
+        let response = socket.handle_packet(&packet);
         assert!(response.is_none());
     }
 
@@ -1149,7 +1149,7 @@ mod test {
         packet.set_type(SynPacket);
         packet.set_connection_id(initial_connection_id);
 
-        let response = socket.handle_packet(packet.clone());
+        let response = socket.handle_packet(&packet);
         assert!(response.is_some());
         assert!(response.unwrap().get_type() == StatePacket);
 
@@ -1161,7 +1161,7 @@ mod test {
         packet.set_type(StatePacket);
         packet.set_connection_id(new_connection_id);
 
-        let response = socket.handle_packet(packet.clone());
+        let response = socket.handle_packet(&packet);
         assert!(response.is_some());
 
         let response = response.unwrap();
@@ -1268,7 +1268,7 @@ mod test {
         packet.set_type(SynPacket);
         packet.set_connection_id(initial_connection_id);
 
-        let response = socket.handle_packet(packet.clone());
+        let response = socket.handle_packet(&packet);
         assert!(response.is_some());
         let response = response.unwrap();
         assert!(response.get_type() == StatePacket);
@@ -1298,12 +1298,12 @@ mod test {
         window.push(packet);
 
         // Send packets in reverse order
-        let response = socket.handle_packet(window[1].clone());
+        let response = socket.handle_packet(&window[1]);
         assert!(response.is_some());
         let response = response.unwrap();
         assert!(response.ack_nr() != window[1].seq_nr());
 
-        let response = socket.handle_packet(window[0].clone());
+        let response = socket.handle_packet(&window[0]);
         assert!(response.is_some());
     }
 
@@ -1471,7 +1471,7 @@ mod test {
                 assert_eq!(packet.get_type(), DataPacket);
                 assert_eq!(packet.seq_nr(), data_packet.seq_nr());
                 assert!(packet.payload == data_packet.payload);
-                let response = server.handle_packet(packet).unwrap();
+                let response = server.handle_packet(&packet).unwrap();
                 iotry!(server.socket.send_to(response.bytes().as_slice(), server.connected_to));
             },
             Err(e) => panic!("{}", e),
