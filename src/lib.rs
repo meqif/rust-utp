@@ -626,21 +626,7 @@ impl UtpSocket {
                 Some(self.prepare_reply(packet, StatePacket))
             }
             DataPacket => {
-                let mut reply = self.prepare_reply(packet, StatePacket);
-
-                if self.ack_nr + 1 < packet.seq_nr() {
-                    debug!("current ack_nr ({}) is behind received packet seq_nr ({})",
-                           self.ack_nr, packet.seq_nr());
-
-                    // Set SACK extension payload if the packet is not in order
-                    let sack = self.build_selective_ack();
-
-                    if sack.len() > 0 {
-                        reply.set_sack(Some(sack));
-                    }
-                }
-
-                Some(reply)
+                self.handle_data_packet(packet)
             },
             FinPacket => {
                 self.state = SocketFinReceived;
@@ -756,6 +742,24 @@ impl UtpSocket {
                 None
             },
         }
+    }
+
+    fn handle_data_packet(&mut self, packet: &UtpPacket) -> Option<UtpPacket> {
+        let mut reply = self.prepare_reply(packet, StatePacket);
+
+        if self.ack_nr + 1 < packet.seq_nr() {
+            debug!("current ack_nr ({}) is behind received packet seq_nr ({})",
+                   self.ack_nr, packet.seq_nr());
+
+            // Set SACK extension payload if the packet is not in order
+            let sack = self.build_selective_ack();
+
+            if sack.len() > 0 {
+                reply.set_sack(Some(sack));
+            }
+        }
+
+        Some(reply)
     }
 
     /// Insert a packet into the socket's buffer.
