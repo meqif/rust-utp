@@ -645,91 +645,7 @@ impl UtpSocket {
                 }
             }
             StatePacket => {
-                if packet.ack_nr() == self.last_acked {
-                    self.duplicate_ack_count += 1;
-                } else {
-                    self.last_acked = packet.ack_nr();
-                    self.last_acked_timestamp = now_microseconds();
-                    self.duplicate_ack_count = 1;
-                }
-
-                self.update_base_delay(packet.timestamp_microseconds());
-                self.update_current_delay(packet.timestamp_difference_microseconds());
-
-                let bytes_newly_acked = packet.len();
-                let flightsize = self.curr_window;
-
-                let queuing_delay = self.filtered_current_delay() - self.min_base_delay();
-                let target = TARGET as u32;
-                let off_target: u32 = (target - queuing_delay) / target;
-                self.cwnd += GAIN * off_target as uint * bytes_newly_acked * MSS / self.cwnd;
-                let max_allowed_cwnd = flightsize + ALLOWED_INCREASE * MSS;
-                self.cwnd = std::cmp::min(self.cwnd, max_allowed_cwnd);
-                self.cwnd = std::cmp::max(self.cwnd, MIN_CWND * MSS);
-
-                let rtt = (target - off_target) / 1000; // in milliseconds
-                self.update_congestion_timeout(rtt as int);
-
-                debug!("queuing_delay: {}", queuing_delay);
-                debug!("off_target: {}", off_target);
-                debug!("cwnd: {}", self.cwnd);
-                debug!("max_allowed_cwnd: {}", max_allowed_cwnd);
-
-                let mut packet_loss_detected: bool = !self.send_window.is_empty() &&
-                                                     self.duplicate_ack_count == 3;
-
-                // Process extensions, if any
-                for extension in packet.extensions.iter() {
-                    if extension.get_type() == SelectiveAckExtension {
-                        let bits = extension.iter();
-                        // If three or more packets are acknowledged past the implicit missing one,
-                        // assume it was lost.
-                        if bits.filter(|&bit| bit == 1).count() >= 3 {
-                            self.resend_lost_packet(packet.ack_nr() + 1);
-                            packet_loss_detected = true;
-                        }
-
-                        let bits = extension.iter();
-                        for (idx, received) in bits.map(|bit| bit == 1).enumerate() {
-                            let seq_nr = packet.ack_nr() + 2 + idx as u16;
-                            if received {
-                                debug!("SACK: packet {} received", seq_nr);
-                            } else if !self.send_window.is_empty() &&
-                                seq_nr < self.send_window.last().unwrap().seq_nr()
-                            {
-                                debug!("SACK: packet {} lost", seq_nr);
-                                self.resend_lost_packet(seq_nr);
-                                packet_loss_detected = true;
-                            } else {
-                                break;
-                            }
-                        }
-                    } else {
-                        debug!("Unknown extension {}, ignoring", extension.get_type());
-                    }
-                }
-
-                // Packet lost, halve the congestion window
-                if packet_loss_detected {
-                    debug!("packet loss detected, halving congestion window");
-                    self.cwnd = std::cmp::max(self.cwnd / 2, MIN_CWND * MSS);
-                    debug!("cwnd: {}", self.cwnd);
-                }
-
-                // Three duplicate ACKs, must resend packets since `ack_nr + 1`
-                // TODO: checking if the send buffer isn't empty isn't a
-                // foolproof way to differentiate between triple-ACK and three
-                // keep alives spread in time
-                if !self.send_window.is_empty() && self.duplicate_ack_count == 3 {
-                    for i in range(0, self.send_window.len()) {
-                        let seq_nr = self.send_window[i].seq_nr();
-                        if seq_nr <= packet.ack_nr() { continue; }
-                        self.resend_lost_packet(seq_nr);
-                    }
-                }
-
-                // Success, advance send window
-                self.advance_send_window();
+                self.handle_state_packet(packet);
 
                 if self.state == SocketFinSent && packet.ack_nr() == self.seq_nr {
                     self.state = SocketClosed;
@@ -760,6 +676,94 @@ impl UtpSocket {
         }
 
         Some(reply)
+    }
+
+    fn handle_state_packet(&mut self, packet: &UtpPacket) {
+        if packet.ack_nr() == self.last_acked {
+            self.duplicate_ack_count += 1;
+        } else {
+            self.last_acked = packet.ack_nr();
+            self.last_acked_timestamp = now_microseconds();
+            self.duplicate_ack_count = 1;
+        }
+
+        self.update_base_delay(packet.timestamp_microseconds());
+        self.update_current_delay(packet.timestamp_difference_microseconds());
+
+        let bytes_newly_acked = packet.len();
+        let flightsize = self.curr_window;
+
+        let queuing_delay = self.filtered_current_delay() - self.min_base_delay();
+        let target = TARGET as u32;
+        let off_target: u32 = (target - queuing_delay) / target;
+        self.cwnd += GAIN * off_target as uint * bytes_newly_acked * MSS / self.cwnd;
+        let max_allowed_cwnd = flightsize + ALLOWED_INCREASE * MSS;
+        self.cwnd = std::cmp::min(self.cwnd, max_allowed_cwnd);
+        self.cwnd = std::cmp::max(self.cwnd, MIN_CWND * MSS);
+
+        let rtt = (target - off_target) / 1000; // in milliseconds
+        self.update_congestion_timeout(rtt as int);
+
+        debug!("queuing_delay: {}", queuing_delay);
+        debug!("off_target: {}", off_target);
+        debug!("cwnd: {}", self.cwnd);
+        debug!("max_allowed_cwnd: {}", max_allowed_cwnd);
+
+        let mut packet_loss_detected: bool = !self.send_window.is_empty() &&
+                                             self.duplicate_ack_count == 3;
+
+        // Process extensions, if any
+        for extension in packet.extensions.iter() {
+            if extension.get_type() == SelectiveAckExtension {
+                let bits = extension.iter();
+                // If three or more packets are acknowledged past the implicit missing one,
+                // assume it was lost.
+                if bits.filter(|&bit| bit == 1).count() >= 3 {
+                    self.resend_lost_packet(packet.ack_nr() + 1);
+                    packet_loss_detected = true;
+                }
+
+                let bits = extension.iter();
+                for (idx, received) in bits.map(|bit| bit == 1).enumerate() {
+                    let seq_nr = packet.ack_nr() + 2 + idx as u16;
+                    if received {
+                        debug!("SACK: packet {} received", seq_nr);
+                    } else if !self.send_window.is_empty() &&
+                        seq_nr < self.send_window.last().unwrap().seq_nr()
+                    {
+                        debug!("SACK: packet {} lost", seq_nr);
+                        self.resend_lost_packet(seq_nr);
+                        packet_loss_detected = true;
+                    } else {
+                        break;
+                    }
+                }
+            } else {
+                debug!("Unknown extension {}, ignoring", extension.get_type());
+            }
+        }
+
+        // Packet lost, halve the congestion window
+        if packet_loss_detected {
+            debug!("packet loss detected, halving congestion window");
+            self.cwnd = std::cmp::max(self.cwnd / 2, MIN_CWND * MSS);
+            debug!("cwnd: {}", self.cwnd);
+        }
+
+        // Three duplicate ACKs, must resend packets since `ack_nr + 1`
+        // TODO: checking if the send buffer isn't empty isn't a
+        // foolproof way to differentiate between triple-ACK and three
+        // keep alives spread in time
+        if !self.send_window.is_empty() && self.duplicate_ack_count == 3 {
+            for i in range(0, self.send_window.len()) {
+                let seq_nr = self.send_window[i].seq_nr();
+                if seq_nr <= packet.ack_nr() { continue; }
+                self.resend_lost_packet(seq_nr);
+            }
+        }
+
+        // Success, advance send window
+        self.advance_send_window();
     }
 
     /// Insert a packet into the socket's buffer.
