@@ -890,7 +890,7 @@ mod test {
 
     #[test]
     fn test_recvfrom_on_closed_socket() {
-        use std::io::{Closed, EndOfFile};
+        use std::io::EndOfFile;
 
         let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
 
@@ -928,10 +928,10 @@ mod test {
 
         assert_eq!(server.state, SocketClosed);
 
-        // Trying again raises a Closed error
+        // Trying again raises a EndOfFile error
         match server.recv_from(buf) {
-            Err(e) => assert_eq!(e.kind, Closed),
-            v => panic!("expected {}, got {}", Closed, v),
+            Err(e) => assert_eq!(e.kind, EndOfFile),
+            v => panic!("expected {}, got {}", EndOfFile, v),
         }
 
         drop(server);

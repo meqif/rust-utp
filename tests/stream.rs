@@ -73,7 +73,7 @@ fn test_stream_large_data() {
 
 #[test]
 fn test_stream_successive_reads() {
-    use std::io::Closed;
+    use std::io::EndOfFile;
 
     const LEN: uint = 1024;
     let data: Vec<u8> = Vec::from_fn(LEN, |idx| idx as u8);
@@ -93,7 +93,7 @@ fn test_stream_successive_reads() {
 
     let mut buf = [0u8, ..4096];
     match server.read(buf) {
-        Err(ref e) if e.kind == Closed => {},
-        _ => panic!("should have failed with Closed"),
+        Err(ref e) if e.kind == EndOfFile => {},
+        e => panic!("should have failed with Closed, got {}", e),
     };
 }
