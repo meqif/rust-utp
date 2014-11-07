@@ -62,7 +62,6 @@ enum UtpSocketState {
     SocketFinSent,
     SocketResetReceived,
     SocketClosed,
-    SocketEndOfFile,
 }
 
 /// A uTP (Micro Transport Protocol) socket.
@@ -183,10 +182,7 @@ impl UtpSocket {
                 detail: None,
             });
         }
-
-        self.ack_nr = packet.seq_nr();
-        self.state = SocketConnected;
-        self.seq_nr += 1;
+        self.handle_packet(&packet, addr);
 
         debug!("connected to: {}", self.connected_to);
 
@@ -206,7 +202,7 @@ impl UtpSocket {
         }
 
         // Nothing to do if the socket's already closed
-        if self.state == SocketEndOfFile || self.state == SocketClosed {
+        if self.state == SocketClosed {
             return Ok(());
         }
 
@@ -225,7 +221,6 @@ impl UtpSocket {
         while self.state != SocketClosed {
             match self.recv_from(buf) {
                 Ok(_) => {},
-                Err(ref e) if e.kind == std::io::EndOfFile => self.state = SocketClosed,
                 Err(e) => return Err(e),
             };
         }
@@ -236,14 +231,13 @@ impl UtpSocket {
     /// Receive data from socket.
     ///
     /// On success, returns the number of bytes read and the sender's address.
-    /// Returns `SocketEndOfFile` after receiving a FIN packet when the remaining
-    /// inflight packets are consumed. Subsequent calls return `SocketClosed`.
+    /// Returns `SocketClosed` after receiving a FIN packet when the remaining
+    /// inflight packets are consumed.
     #[unstable]
     pub fn recv_from(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
         use std::io::{IoError, EndOfFile, Closed};
 
-        if self.state == SocketEndOfFile {
-            self.state = SocketClosed;
+        if self.state == SocketClosed {
             return Err(IoError {
                 kind: EndOfFile,
                 desc: "End of file reached",
@@ -251,10 +245,10 @@ impl UtpSocket {
             });
         }
 
-        if self.state == SocketClosed {
+        if self.state == SocketResetReceived {
             return Err(IoError {
                 kind: Closed,
-                desc: "Connection closed",
+                desc: "Connection reset",
                 detail: None,
             });
         }
@@ -293,10 +287,6 @@ impl UtpSocket {
                 desc: "Remote host aborted connection (incorrect connection id)",
                 detail: None,
             });
-        }
-
-        if packet.get_type() == SynPacket {
-            self.connected_to = src;
         }
 
         let shallow_clone = packet.shallow_clone();
@@ -595,34 +585,27 @@ impl UtpSocket {
     /// Handle incoming packet, updating socket state accordingly.
     ///
     /// Returns appropriate reply packet, if needed.
-    fn handle_packet(&mut self, packet: &UtpPacket, _src: SocketAddr) -> Option<UtpPacket> {
-        // Reset connection if connection id doesn't match and this isn't a SYN
-        if packet.get_type() != SynPacket &&
-           !(packet.connection_id() == self.sender_connection_id ||
-           packet.connection_id() == self.receiver_connection_id) {
-            return Some(self.prepare_reply(packet, ResetPacket));
-        }
+    fn handle_packet(&mut self, packet: &UtpPacket, src: SocketAddr) -> Option<UtpPacket> {
+        debug!("({}, {})", self.state, packet.get_type());
 
         // Acknowledge only if the packet strictly follows the previous one
-        if self.ack_nr + 1 == packet.seq_nr() {
+        if packet.seq_nr() == self.ack_nr + 1 {
             self.ack_nr = packet.seq_nr();
+        }
+
+        // Reset connection if connection id doesn't match and this isn't a SYN
+        if (self.state, packet.get_type()) != (SocketNew, SynPacket) &&
+            !(packet.connection_id() == self.sender_connection_id ||
+              packet.connection_id() == self.receiver_connection_id) {
+            return Some(self.prepare_reply(packet, ResetPacket));
         }
 
         self.remote_wnd_size = packet.wnd_size() as uint;
         debug!("self.remote_wnd_size: {}", self.remote_wnd_size);
 
-        // Ignore packets with sequence number higher than the one in the FIN packet.
-        if self.state == SocketFinReceived && self.fin_seq_nr == self.ack_nr &&
-            packet.seq_nr() > self.fin_seq_nr
-        {
-            debug!("Ignoring packet with sequence number {} (higher than FIN: {})",
-                   packet.seq_nr(), self.fin_seq_nr);
-            return None;
-        }
-
-        match packet.get_type() {
-            SynPacket => { // Respond with an ACK and populate own fields
-                // Update socket information for new connections
+        match (self.state, packet.get_type()) {
+            (SocketNew, SynPacket) => {
+                self.connected_to = src;
                 self.ack_nr = packet.seq_nr();
                 self.seq_nr = random();
                 self.receiver_connection_id = packet.connection_id() + 1;
@@ -630,11 +613,21 @@ impl UtpSocket {
                 self.state = SocketConnected;
 
                 Some(self.prepare_reply(packet, StatePacket))
-            }
-            DataPacket => {
+            },
+            (SocketSynSent, StatePacket) => {
+                self.ack_nr = packet.seq_nr();
+                self.seq_nr += 1;
+                self.state = SocketConnected;
+                None
+            },
+            (SocketConnected, DataPacket) => {
                 self.handle_data_packet(packet)
             },
-            FinPacket => {
+            (SocketConnected, StatePacket) => {
+                self.handle_state_packet(packet);
+                None
+            },
+            (SocketConnected, FinPacket) => {
                 self.state = SocketFinReceived;
                 self.fin_seq_nr = packet.seq_nr();
 
@@ -643,26 +636,24 @@ impl UtpSocket {
                     self.incoming_buffer.is_empty() &&
                     self.ack_nr == self.fin_seq_nr
                 {
-                    self.state = SocketEndOfFile;
+                    self.state = SocketClosed;
                     Some(self.prepare_reply(packet, StatePacket))
                 } else {
                     debug!("FIN received but there are missing packets");
                     None
                 }
             }
-            StatePacket => {
-                self.handle_state_packet(packet);
-
-                if self.state == SocketFinSent && packet.ack_nr() == self.seq_nr {
+            (SocketFinSent, StatePacket) => {
+                if packet.ack_nr() == self.seq_nr {
                     self.state = SocketClosed;
                 }
-
                 None
-            },
-            ResetPacket => {
+            }
+            (_, ResetPacket) => {
                 self.state = SocketResetReceived;
                 None
             },
+            (state, ty) => panic!("Unimplemented handling for ({},{})", state, ty)
         }
     }
 
@@ -859,7 +850,7 @@ impl Writer for UtpStream {
 mod test {
     use super::{UtpSocket, UtpStream};
     use super::{BUF_SIZE};
-    use super::{SocketConnected, SocketNew, SocketClosed, SocketEndOfFile};
+    use super::{SocketConnected, SocketNew, SocketClosed};
     use std::rand::random;
     use std::io::test::next_test_ip4;
     use util::now_microseconds;
@@ -926,7 +917,7 @@ mod test {
             Err(e) => panic!("{}", e),
             _ => {},
         }
-        assert_eq!(server.state, SocketEndOfFile);
+        assert_eq!(server.state, SocketClosed);
 
         // Trying to listen on the socket after closing it raises an
         // EOF error
