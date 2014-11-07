@@ -430,7 +430,7 @@ impl UtpSocket {
         }
 
         // Flush unsent packet queue
-        self.send();
+        try!(self.send());
 
         // Consume acknowledgements until latest packet
         let mut buf = [0, ..BUF_SIZE];
@@ -442,7 +442,7 @@ impl UtpSocket {
     }
 
     /// Send every packet in the unsent packet queue.
-    fn send(&mut self) {
+    fn send(&mut self) -> IoResult<()> {
         let dst = self.connected_to;
         while let Some(packet) = self.unsent_queue.pop_front() {
             debug!("current window: {}", self.send_window.len());
@@ -453,11 +453,12 @@ impl UtpSocket {
                 iotry!(self.recv_from(buf));
             }
 
-            iotry!(self.socket.send_to(packet.bytes().as_slice(), dst));
+            try!(self.socket.send_to(packet.bytes().as_slice(), dst));
             debug!("sent {}", packet);
             self.curr_window += packet.len();
             self.send_window.push(packet);
         }
+        Ok(())
     }
 
     /// Send fast resend request.
