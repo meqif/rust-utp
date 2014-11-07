@@ -205,6 +205,11 @@ impl UtpSocket {
             try!(self.recv_from(buf));
         }
 
+        // Nothing to do if the socket's already closed
+        if self.state == SocketEndOfFile || self.state == SocketClosed {
+            return Ok(());
+        }
+
         let mut packet = UtpPacket::new();
         packet.set_connection_id(self.sender_connection_id);
         packet.set_seq_nr(self.seq_nr);
