@@ -425,7 +425,7 @@ impl UtpSocket {
             packet.set_ack_nr(self.ack_nr);
             packet.set_connection_id(self.sender_connection_id);
 
-            self.unsent_queue.push(packet);
+            self.unsent_queue.push_back(packet);
             self.seq_nr += 1;
         }
 
