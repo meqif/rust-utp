@@ -305,7 +305,7 @@ impl UtpSocket {
             self.insert_into_buffer(packet);
         }
 
-        if let Some(pkt) = self.handle_packet(&shallow_clone) {
+        if let Some(pkt) = self.handle_packet(&shallow_clone, src) {
                 let mut pkt = pkt;
                 pkt.set_wnd_size(BUF_SIZE as u32);
                 try!(self.socket.send_to(pkt.bytes().as_slice(), src));
@@ -595,7 +595,7 @@ impl UtpSocket {
     /// Handle incoming packet, updating socket state accordingly.
     ///
     /// Returns appropriate reply packet, if needed.
-    fn handle_packet(&mut self, packet: &UtpPacket) -> Option<UtpPacket> {
+    fn handle_packet(&mut self, packet: &UtpPacket, _src: SocketAddr) -> Option<UtpPacket> {
         // Reset connection if connection id doesn't match and this isn't a SYN
         if packet.get_type() != SynPacket &&
            !(packet.connection_id() == self.sender_connection_id ||
@@ -1025,7 +1025,7 @@ mod test {
         //fn test_connection_setup() {
         let initial_connection_id: u16 = random();
         let sender_connection_id = initial_connection_id + 1;
-        let server_addr = next_test_ip4();
+        let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
         let mut socket = iotry!(UtpSocket::bind(server_addr));
 
         let mut packet = UtpPacket::new();
@@ -1034,7 +1034,7 @@ mod test {
         packet.set_connection_id(initial_connection_id);
 
         // Do we have a response?
-        let response = socket.handle_packet(&packet);
+        let response = socket.handle_packet(&packet, client_addr);
         assert!(response.is_some());
 
         // Is is of the correct type?
@@ -1063,7 +1063,7 @@ mod test {
         packet.set_seq_nr(old_packet.seq_nr() + 1);
         packet.set_ack_nr(old_response.seq_nr());
 
-        let response = socket.handle_packet(&packet);
+        let response = socket.handle_packet(&packet, client_addr);
         assert!(response.is_some());
 
         let response = response.unwrap();
@@ -1094,7 +1094,7 @@ mod test {
         packet.set_seq_nr(old_packet.seq_nr() + 1);
         packet.set_ack_nr(old_response.seq_nr());
 
-        let response = socket.handle_packet(&packet);
+        let response = socket.handle_packet(&packet, client_addr);
         assert!(response.is_some());
 
         let response = response.unwrap();
@@ -1117,7 +1117,7 @@ mod test {
     fn test_response_to_keepalive_ack() {
         // Boilerplate test setup
         let initial_connection_id: u16 = random();
-        let server_addr = next_test_ip4();
+        let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
         let mut socket = iotry!(UtpSocket::bind(server_addr));
 
         // Establish connection
@@ -1126,7 +1126,7 @@ mod test {
         packet.set_type(SynPacket);
         packet.set_connection_id(initial_connection_id);
 
-        let response = socket.handle_packet(&packet);
+        let response = socket.handle_packet(&packet, client_addr);
         assert!(response.is_some());
         let response = response.unwrap();
         assert!(response.get_type() == StatePacket);
@@ -1142,11 +1142,11 @@ mod test {
         packet.set_seq_nr(old_packet.seq_nr() + 1);
         packet.set_ack_nr(old_response.seq_nr());
 
-        let response = socket.handle_packet(&packet);
+        let response = socket.handle_packet(&packet, client_addr);
         assert!(response.is_none());
 
         // Send a second keepalive packet, identical to the previous one
-        let response = socket.handle_packet(&packet);
+        let response = socket.handle_packet(&packet, client_addr);
         assert!(response.is_none());
     }
 
@@ -1154,7 +1154,7 @@ mod test {
     fn test_response_to_wrong_connection_id() {
         // Boilerplate test setup
         let initial_connection_id: u16 = random();
-        let server_addr = next_test_ip4();
+        let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
         let mut socket = iotry!(UtpSocket::bind(server_addr));
 
         // Establish connection
@@ -1163,7 +1163,7 @@ mod test {
         packet.set_type(SynPacket);
         packet.set_connection_id(initial_connection_id);
 
-        let response = socket.handle_packet(&packet);
+        let response = socket.handle_packet(&packet, client_addr);
         assert!(response.is_some());
         assert!(response.unwrap().get_type() == StatePacket);
 
@@ -1175,7 +1175,7 @@ mod test {
         packet.set_type(StatePacket);
         packet.set_connection_id(new_connection_id);
 
-        let response = socket.handle_packet(&packet);
+        let response = socket.handle_packet(&packet, client_addr);
         assert!(response.is_some());
 
         let response = response.unwrap();
@@ -1187,7 +1187,7 @@ mod test {
     fn test_unordered_packets() {
         // Boilerplate test setup
         let initial_connection_id: u16 = random();
-        let server_addr = next_test_ip4();
+        let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
         let mut socket = iotry!(UtpSocket::bind(server_addr));
 
         // Establish connection
@@ -1196,7 +1196,7 @@ mod test {
         packet.set_type(SynPacket);
         packet.set_connection_id(initial_connection_id);
 
-        let response = socket.handle_packet(&packet);
+        let response = socket.handle_packet(&packet, client_addr);
         assert!(response.is_some());
         let response = response.unwrap();
         assert!(response.get_type() == StatePacket);
@@ -1226,12 +1226,12 @@ mod test {
         window.push(packet);
 
         // Send packets in reverse order
-        let response = socket.handle_packet(&window[1]);
+        let response = socket.handle_packet(&window[1], client_addr);
         assert!(response.is_some());
         let response = response.unwrap();
         assert!(response.ack_nr() != window[1].seq_nr());
 
-        let response = socket.handle_packet(&window[0]);
+        let response = socket.handle_packet(&window[0], client_addr);
         assert!(response.is_some());
     }
 
@@ -1399,7 +1399,7 @@ mod test {
                 assert_eq!(packet.get_type(), DataPacket);
                 assert_eq!(packet.seq_nr(), data_packet.seq_nr());
                 assert!(packet.payload == data_packet.payload);
-                let response = server.handle_packet(&packet).unwrap();
+                let response = server.handle_packet(&packet, client_addr).unwrap();
                 iotry!(server.socket.send_to(response.bytes().as_slice(), server.connected_to));
             },
             Err(e) => panic!("{}", e),
