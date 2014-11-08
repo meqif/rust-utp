@@ -207,10 +207,7 @@ impl UtpSocket {
 
         // Receive JAKE
         while self.state != SocketClosed {
-            match self.recv_from(buf) {
-                Ok(_) => {},
-                Err(e) => return Err(e),
-            };
+            try!(self.recv_from(buf));
         }
 
         Ok(())
