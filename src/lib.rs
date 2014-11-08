@@ -66,34 +66,51 @@ enum UtpSocketState {
 
 /// A uTP (Micro Transport Protocol) socket.
 pub struct UtpSocket {
+    /// The wrapped UDP socket
     socket: UdpSocket,
+    /// Remote peer
     connected_to: SocketAddr,
+    /// Sender connection identifier
     sender_connection_id: u16,
+    /// Receiver connection identifier
     receiver_connection_id: u16,
+    /// Sequence number for the next packet
     seq_nr: u16,
+    /// Sequence number of the latest acknowledged packet sent by the remote peer
     ack_nr: u16,
+    /// Socket state
     state: UtpSocketState,
-
-    // Received but not acknowledged packets
+    /// Received but not acknowledged packets
     incoming_buffer: Vec<UtpPacket>,
-    // Sent but not yet acknowledged packets
+    /// Sent but not yet acknowledged packets
     send_window: Vec<UtpPacket>,
+    /// Packets not yet sent
     unsent_queue: DList<UtpPacket>,
+    /// How many ACKs did the socket receive for packet with sequence number equal to `ack_nr`
     duplicate_ack_count: uint,
+    /// Sequence number of the latest packet the remote peer acknowledged
     last_acked: u16,
+    /// Timestamp of the latest packet the remote peer acknowledged
     last_acked_timestamp: u32,
+    /// Sequence number of the received FIN packet, if any
     fin_seq_nr: u16,
-
+    /// Round-trip time to remote peer
     rtt: int,
+    /// Variance of the round-trip time to the remote peer
     rtt_variance: int,
-
+    /// Data from the latest packet not yet returned in `recv_from`
     pending_data: Vec<u8>,
+    /// Bytes in flight
     curr_window: uint,
+    /// Window size of the remote peer
     remote_wnd_size: uint,
-
-    current_delays: Vec<(u32,u32)>,
+    /// Rolling window of packet delay to remote peer
     base_delays: Vec<(u32,u32)>,
+    /// Rolling window of the difference between sending a packet and receiving its acknowledgement
+    current_delays: Vec<(u32,u32)>,
+    /// Current congestion timeout in milliseconds
     congestion_timeout: u64,
+    /// Congestion window in bytes
     cwnd: uint,
 }
 
