@@ -62,7 +62,6 @@ enum UtpSocketState {
     SocketFinSent,
     SocketResetReceived,
     SocketClosed,
-    SocketEndOfFile,
 }
 
 /// A uTP (Micro Transport Protocol) socket.
@@ -183,10 +182,7 @@ impl UtpSocket {
                 detail: None,
             });
         }
-
-        self.ack_nr = packet.seq_nr();
-        self.state = SocketConnected;
-        self.seq_nr += 1;
+        try!(self.handle_packet(&packet, addr));
 
         debug!("connected to: {}", self.connected_to);
 
@@ -206,7 +202,7 @@ impl UtpSocket {
         }
 
         // Nothing to do if the socket's already closed
-        if self.state == SocketEndOfFile || self.state == SocketClosed {
+        if self.state == SocketClosed {
             return Ok(());
         }
 
@@ -225,7 +221,6 @@ impl UtpSocket {
         while self.state != SocketClosed {
             match self.recv_from(buf) {
                 Ok(_) => {},
-                Err(ref e) if e.kind == std::io::EndOfFile => self.state = SocketClosed,
                 Err(e) => return Err(e),
             };
         }
@@ -236,14 +231,13 @@ impl UtpSocket {
     /// Receive data from socket.
     ///
     /// On success, returns the number of bytes read and the sender's address.
-    /// Returns `SocketEndOfFile` after receiving a FIN packet when the remaining
-    /// inflight packets are consumed. Subsequent calls return `SocketClosed`.
+    /// Returns `SocketClosed` after receiving a FIN packet when the remaining
+    /// inflight packets are consumed.
     #[unstable]
     pub fn recv_from(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
         use std::io::{IoError, EndOfFile, Closed};
 
-        if self.state == SocketEndOfFile {
-            self.state = SocketClosed;
+        if self.state == SocketClosed {
             return Err(IoError {
                 kind: EndOfFile,
                 desc: "End of file reached",
@@ -251,10 +245,10 @@ impl UtpSocket {
             });
         }
 
-        if self.state == SocketClosed {
+        if self.state == SocketResetReceived {
             return Err(IoError {
                 kind: Closed,
-                desc: "Connection closed",
+                desc: "Connection reset",
                 detail: None,
             });
         }
@@ -266,7 +260,7 @@ impl UtpSocket {
     }
 
     fn recv(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
-        use std::io::{IoError, TimedOut, ConnectionReset};
+        use std::io::TimedOut;
 
         let mut b = [0, ..BUF_SIZE + HEADER_SIZE];
         if self.state != SocketNew {
@@ -287,25 +281,13 @@ impl UtpSocket {
         let packet = UtpPacket::decode(b.slice_to(read));
         debug!("received {}", packet);
 
-        if packet.get_type() == ResetPacket {
-            return Err(IoError {
-                kind: ConnectionReset,
-                desc: "Remote host aborted connection (incorrect connection id)",
-                detail: None,
-            });
-        }
-
-        if packet.get_type() == SynPacket {
-            self.connected_to = src;
-        }
-
         let shallow_clone = packet.shallow_clone();
 
         if packet.get_type() == DataPacket && self.ack_nr + 1 <= packet.seq_nr() {
             self.insert_into_buffer(packet);
         }
 
-        if let Some(pkt) = self.handle_packet(&shallow_clone) {
+        if let Some(pkt) = try!(self.handle_packet(&shallow_clone, src)) {
                 let mut pkt = pkt;
                 pkt.set_wnd_size(BUF_SIZE as u32);
                 try!(self.socket.send_to(pkt.bytes().as_slice(), src));
@@ -595,46 +577,51 @@ impl UtpSocket {
     /// Handle incoming packet, updating socket state accordingly.
     ///
     /// Returns appropriate reply packet, if needed.
-    fn handle_packet(&mut self, packet: &UtpPacket) -> Option<UtpPacket> {
-        // Reset connection if connection id doesn't match and this isn't a SYN
-        if packet.get_type() != SynPacket &&
-           !(packet.connection_id() == self.sender_connection_id ||
-           packet.connection_id() == self.receiver_connection_id) {
-            return Some(self.prepare_reply(packet, ResetPacket));
-        }
+    fn handle_packet(&mut self, packet: &UtpPacket, src: SocketAddr) -> IoResult<Option<UtpPacket>> {
+        use std::io::{IoError, ConnectionReset};
+
+        debug!("({}, {})", self.state, packet.get_type());
 
         // Acknowledge only if the packet strictly follows the previous one
-        if self.ack_nr + 1 == packet.seq_nr() {
+        if packet.seq_nr() == self.ack_nr + 1 {
             self.ack_nr = packet.seq_nr();
+        }
+
+        // Reset connection if connection id doesn't match and this isn't a SYN
+        if (self.state, packet.get_type()) != (SocketNew, SynPacket) &&
+            !(packet.connection_id() == self.sender_connection_id ||
+              packet.connection_id() == self.receiver_connection_id) {
+            return Ok(Some(self.prepare_reply(packet, ResetPacket)));
         }
 
         self.remote_wnd_size = packet.wnd_size() as uint;
         debug!("self.remote_wnd_size: {}", self.remote_wnd_size);
 
-        // Ignore packets with sequence number higher than the one in the FIN packet.
-        if self.state == SocketFinReceived && self.fin_seq_nr == self.ack_nr &&
-            packet.seq_nr() > self.fin_seq_nr
-        {
-            debug!("Ignoring packet with sequence number {} (higher than FIN: {})",
-                   packet.seq_nr(), self.fin_seq_nr);
-            return None;
-        }
-
-        match packet.get_type() {
-            SynPacket => { // Respond with an ACK and populate own fields
-                // Update socket information for new connections
+        match (self.state, packet.get_type()) {
+            (SocketNew, SynPacket) => {
+                self.connected_to = src;
                 self.ack_nr = packet.seq_nr();
                 self.seq_nr = random();
                 self.receiver_connection_id = packet.connection_id() + 1;
                 self.sender_connection_id = packet.connection_id();
                 self.state = SocketConnected;
 
-                Some(self.prepare_reply(packet, StatePacket))
-            }
-            DataPacket => {
-                self.handle_data_packet(packet)
+                Ok(Some(self.prepare_reply(packet, StatePacket)))
             },
-            FinPacket => {
+            (SocketSynSent, StatePacket) => {
+                self.ack_nr = packet.seq_nr();
+                self.seq_nr += 1;
+                self.state = SocketConnected;
+                Ok(None)
+            },
+            (SocketConnected, DataPacket) => {
+                Ok(self.handle_data_packet(packet))
+            },
+            (SocketConnected, StatePacket) => {
+                self.handle_state_packet(packet);
+                Ok(None)
+            },
+            (SocketConnected, FinPacket) => {
                 self.state = SocketFinReceived;
                 self.fin_seq_nr = packet.seq_nr();
 
@@ -643,26 +630,28 @@ impl UtpSocket {
                     self.incoming_buffer.is_empty() &&
                     self.ack_nr == self.fin_seq_nr
                 {
-                    self.state = SocketEndOfFile;
-                    Some(self.prepare_reply(packet, StatePacket))
+                    self.state = SocketClosed;
+                    Ok(Some(self.prepare_reply(packet, StatePacket)))
                 } else {
                     debug!("FIN received but there are missing packets");
-                    None
+                    Ok(None)
                 }
             }
-            StatePacket => {
-                self.handle_state_packet(packet);
-
-                if self.state == SocketFinSent && packet.ack_nr() == self.seq_nr {
+            (SocketFinSent, StatePacket) => {
+                if packet.ack_nr() == self.seq_nr {
                     self.state = SocketClosed;
                 }
-
-                None
-            },
-            ResetPacket => {
+                Ok(None)
+            }
+            (_, ResetPacket) => {
                 self.state = SocketResetReceived;
-                None
+                Err(IoError {
+                    kind: ConnectionReset,
+                    desc: "Remote host aborted connection (incorrect connection id)",
+                    detail: None,
+                })
             },
+            (state, ty) => panic!("Unimplemented handling for ({},{})", state, ty)
         }
     }
 
@@ -859,7 +848,7 @@ impl Writer for UtpStream {
 mod test {
     use super::{UtpSocket, UtpStream};
     use super::{BUF_SIZE};
-    use super::{SocketConnected, SocketNew, SocketClosed, SocketEndOfFile};
+    use super::{SocketConnected, SocketNew, SocketClosed};
     use std::rand::random;
     use std::io::test::next_test_ip4;
     use util::now_microseconds;
@@ -899,7 +888,7 @@ mod test {
 
     #[test]
     fn test_recvfrom_on_closed_socket() {
-        use std::io::{Closed, EndOfFile};
+        use std::io::EndOfFile;
 
         let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
 
@@ -926,7 +915,7 @@ mod test {
             Err(e) => panic!("{}", e),
             _ => {},
         }
-        assert_eq!(server.state, SocketEndOfFile);
+        assert_eq!(server.state, SocketClosed);
 
         // Trying to listen on the socket after closing it raises an
         // EOF error
@@ -937,10 +926,10 @@ mod test {
 
         assert_eq!(server.state, SocketClosed);
 
-        // Trying again raises a Closed error
+        // Trying again raises a EndOfFile error
         match server.recv_from(buf) {
-            Err(e) => assert_eq!(e.kind, Closed),
-            v => panic!("expected {}, got {}", Closed, v),
+            Err(e) => assert_eq!(e.kind, EndOfFile),
+            v => panic!("expected {}, got {}", EndOfFile, v),
         }
 
         drop(server);
@@ -1025,7 +1014,7 @@ mod test {
         //fn test_connection_setup() {
         let initial_connection_id: u16 = random();
         let sender_connection_id = initial_connection_id + 1;
-        let server_addr = next_test_ip4();
+        let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
         let mut socket = iotry!(UtpSocket::bind(server_addr));
 
         let mut packet = UtpPacket::new();
@@ -1034,7 +1023,9 @@ mod test {
         packet.set_connection_id(initial_connection_id);
 
         // Do we have a response?
-        let response = socket.handle_packet(&packet);
+        let response = socket.handle_packet(&packet, client_addr);
+        assert!(response.is_ok());
+        let response = response.unwrap();
         assert!(response.is_some());
 
         // Is is of the correct type?
@@ -1063,7 +1054,9 @@ mod test {
         packet.set_seq_nr(old_packet.seq_nr() + 1);
         packet.set_ack_nr(old_response.seq_nr());
 
-        let response = socket.handle_packet(&packet);
+        let response = socket.handle_packet(&packet, client_addr);
+        assert!(response.is_ok());
+        let response = response.unwrap();
         assert!(response.is_some());
 
         let response = response.unwrap();
@@ -1094,7 +1087,9 @@ mod test {
         packet.set_seq_nr(old_packet.seq_nr() + 1);
         packet.set_ack_nr(old_response.seq_nr());
 
-        let response = socket.handle_packet(&packet);
+        let response = socket.handle_packet(&packet, client_addr);
+        assert!(response.is_ok());
+        let response = response.unwrap();
         assert!(response.is_some());
 
         let response = response.unwrap();
@@ -1117,7 +1112,7 @@ mod test {
     fn test_response_to_keepalive_ack() {
         // Boilerplate test setup
         let initial_connection_id: u16 = random();
-        let server_addr = next_test_ip4();
+        let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
         let mut socket = iotry!(UtpSocket::bind(server_addr));
 
         // Establish connection
@@ -1126,7 +1121,9 @@ mod test {
         packet.set_type(SynPacket);
         packet.set_connection_id(initial_connection_id);
 
-        let response = socket.handle_packet(&packet);
+        let response = socket.handle_packet(&packet, client_addr);
+        assert!(response.is_ok());
+        let response = response.unwrap();
         assert!(response.is_some());
         let response = response.unwrap();
         assert!(response.get_type() == StatePacket);
@@ -1142,11 +1139,15 @@ mod test {
         packet.set_seq_nr(old_packet.seq_nr() + 1);
         packet.set_ack_nr(old_response.seq_nr());
 
-        let response = socket.handle_packet(&packet);
+        let response = socket.handle_packet(&packet, client_addr);
+        assert!(response.is_ok());
+        let response = response.unwrap();
         assert!(response.is_none());
 
         // Send a second keepalive packet, identical to the previous one
-        let response = socket.handle_packet(&packet);
+        let response = socket.handle_packet(&packet, client_addr);
+        assert!(response.is_ok());
+        let response = response.unwrap();
         assert!(response.is_none());
     }
 
@@ -1154,7 +1155,7 @@ mod test {
     fn test_response_to_wrong_connection_id() {
         // Boilerplate test setup
         let initial_connection_id: u16 = random();
-        let server_addr = next_test_ip4();
+        let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
         let mut socket = iotry!(UtpSocket::bind(server_addr));
 
         // Establish connection
@@ -1163,7 +1164,9 @@ mod test {
         packet.set_type(SynPacket);
         packet.set_connection_id(initial_connection_id);
 
-        let response = socket.handle_packet(&packet);
+        let response = socket.handle_packet(&packet, client_addr);
+        assert!(response.is_ok());
+        let response = response.unwrap();
         assert!(response.is_some());
         assert!(response.unwrap().get_type() == StatePacket);
 
@@ -1175,7 +1178,9 @@ mod test {
         packet.set_type(StatePacket);
         packet.set_connection_id(new_connection_id);
 
-        let response = socket.handle_packet(&packet);
+        let response = socket.handle_packet(&packet, client_addr);
+        assert!(response.is_ok());
+        let response = response.unwrap();
         assert!(response.is_some());
 
         let response = response.unwrap();
@@ -1187,7 +1192,7 @@ mod test {
     fn test_unordered_packets() {
         // Boilerplate test setup
         let initial_connection_id: u16 = random();
-        let server_addr = next_test_ip4();
+        let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
         let mut socket = iotry!(UtpSocket::bind(server_addr));
 
         // Establish connection
@@ -1196,7 +1201,9 @@ mod test {
         packet.set_type(SynPacket);
         packet.set_connection_id(initial_connection_id);
 
-        let response = socket.handle_packet(&packet);
+        let response = socket.handle_packet(&packet, client_addr);
+        assert!(response.is_ok());
+        let response = response.unwrap();
         assert!(response.is_some());
         let response = response.unwrap();
         assert!(response.get_type() == StatePacket);
@@ -1226,12 +1233,16 @@ mod test {
         window.push(packet);
 
         // Send packets in reverse order
-        let response = socket.handle_packet(&window[1]);
+        let response = socket.handle_packet(&window[1], client_addr);
+        assert!(response.is_ok());
+        let response = response.unwrap();
         assert!(response.is_some());
         let response = response.unwrap();
         assert!(response.ack_nr() != window[1].seq_nr());
 
-        let response = socket.handle_packet(&window[0]);
+        let response = socket.handle_packet(&window[0], client_addr);
+        assert!(response.is_ok());
+        let response = response.unwrap();
         assert!(response.is_some());
     }
 
@@ -1399,7 +1410,11 @@ mod test {
                 assert_eq!(packet.get_type(), DataPacket);
                 assert_eq!(packet.seq_nr(), data_packet.seq_nr());
                 assert!(packet.payload == data_packet.payload);
-                let response = server.handle_packet(&packet).unwrap();
+                let response = server.handle_packet(&packet, client_addr);
+                assert!(response.is_ok());
+                let response = response.unwrap();
+                assert!(response.is_some());
+                let response = response.unwrap();
                 iotry!(server.socket.send_to(response.bytes().as_slice(), server.connected_to));
             },
             Err(e) => panic!("{}", e),
