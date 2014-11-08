@@ -17,25 +17,40 @@ fn main() {
     use std::from_str::FromStr;
     use std::io::{stdin, stdout, stderr};
 
-    // Defaults
+    enum Mode {
+        Server,
+        Client
+    }
+    let mut mode: Mode;
+
+    // Provide a default address
     let mut addr = SocketAddr { ip: Ipv4Addr(127,0,0,1), port: 8080 };
 
     let args = std::os::args();
+    let mut args = args.iter().map(|arg| arg.as_slice());
 
-    if args.len() != 2 && args.len() != 4 {
-        usage();
-        return;
+    // Skip program name
+    args.next();
+
+    match args.next() {
+        Some("-s") => mode = Server,
+        Some("-c") => mode = Client,
+        _ => { usage(); return; }
     }
 
-    if args.len() == 4 {
-        addr = SocketAddr {
-            ip:   FromStr::from_str(args[2].as_slice()).expect("Invalid address"),
-            port: FromStr::from_str(args[3].as_slice()).expect("Invalid port"),
-        };
+    match args.collect::<Vec<_>>().as_slice() {
+        [] => (),
+        [ip, port] => {
+            addr = SocketAddr {
+                ip:   FromStr::from_str(ip).expect("Invalid address"),
+                port: FromStr::from_str(port).expect("Invalid port"),
+            };
+        }
+        _ => { usage(); return; }
     }
 
-    match args[1].as_slice() {
-        "-s" => {
+    match mode {
+        Server => {
             let mut stream = UtpStream::bind(addr);
             let mut writer = stdout();
             let _ = writeln!(stderr(), "Serving on {}", addr);
@@ -43,7 +58,7 @@ fn main() {
             let payload = iotry!(stream.read_to_end());
             iotry!(writer.write(payload.as_slice()));
         }
-        "-c" => {
+        Client => {
             let mut stream = iotry!(UtpStream::connect(addr));
             let mut reader = stdin();
 
@@ -52,6 +67,5 @@ fn main() {
             iotry!(stream.close());
             drop(stream);
         }
-        _ => usage(),
     }
 }
