@@ -260,7 +260,7 @@ impl UtpSocket {
     }
 
     fn recv(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
-        use std::io::{IoError, TimedOut, ConnectionReset};
+        use std::io::TimedOut;
 
         let mut b = [0, ..BUF_SIZE + HEADER_SIZE];
         if self.state != SocketNew {
@@ -280,14 +280,6 @@ impl UtpSocket {
         };
         let packet = UtpPacket::decode(b.slice_to(read));
         debug!("received {}", packet);
-
-        if packet.get_type() == ResetPacket {
-            return Err(IoError {
-                kind: ConnectionReset,
-                desc: "Remote host aborted connection (incorrect connection id)",
-                detail: None,
-            });
-        }
 
         let shallow_clone = packet.shallow_clone();
 
@@ -586,6 +578,8 @@ impl UtpSocket {
     ///
     /// Returns appropriate reply packet, if needed.
     fn handle_packet(&mut self, packet: &UtpPacket, src: SocketAddr) -> IoResult<Option<UtpPacket>> {
+        use std::io::{IoError, ConnectionReset};
+
         debug!("({}, {})", self.state, packet.get_type());
 
         // Acknowledge only if the packet strictly follows the previous one
@@ -651,7 +645,11 @@ impl UtpSocket {
             }
             (_, ResetPacket) => {
                 self.state = SocketResetReceived;
-                Ok(None)
+                Err(IoError {
+                    kind: ConnectionReset,
+                    desc: "Remote host aborted connection (incorrect connection id)",
+                    detail: None,
+                })
             },
             (state, ty) => panic!("Unimplemented handling for ({},{})", state, ty)
         }
