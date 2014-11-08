@@ -863,11 +863,12 @@ impl Writer for UtpStream {
 
 #[cfg(test)]
 mod test {
-    use super::{UtpSocket, UtpStream};
-    use super::{BUF_SIZE};
+    use super::UtpSocket;
+    use super::BUF_SIZE;
     use super::{SocketConnected, SocketNew, SocketClosed};
     use std::rand::random;
     use std::io::test::next_test_ip4;
+    use std::io::EndOfFile;
     use util::now_microseconds;
     use packet::{UtpPacket, StatePacket, FinPacket, DataPacket, ResetPacket, SynPacket};
 
@@ -905,8 +906,6 @@ mod test {
 
     #[test]
     fn test_recvfrom_on_closed_socket() {
-        use std::io::EndOfFile;
-
         let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
 
         let client = iotry!(UtpSocket::bind(client_addr));
@@ -1325,16 +1324,17 @@ mod test {
 
         assert!(server.state == SocketConnected);
 
-        let mut stream = UtpStream { socket: server };
         let expected: Vec<u8> = Vec::from_fn(12, |idx| idx as u8 + 1);
-
-        match stream.read_to_end() {
-            Ok(data) => {
-                assert_eq!(data.len(), expected.len());
-                assert_eq!(data, expected);
-            },
-            Err(e) => panic!("{}", e),
+        let mut received: Vec<u8> = vec!();
+        loop {
+            match server.recv_from(buf) {
+                Ok((len, _src)) => received.push_all(buf.slice_to(len)),
+                Err(ref e) if e.kind == EndOfFile => break,
+                Err(e) => panic!("{}", e)
+            }
         }
+        assert_eq!(received.len(), expected.len());
+        assert_eq!(received, expected);
     }
 
     #[test]
@@ -1585,33 +1585,33 @@ mod test {
 
         assert!(server.state == SocketConnected);
 
-        let mut stream = UtpStream { socket: server };
         let expected: Vec<u8> = vec!(1,2,3);
-
-        match stream.read_to_end() {
-            Ok(data) => {
-                println!("{}", data);
-                assert_eq!(data.len(), expected.len());
-                assert_eq!(data, expected);
-            },
-            Err(e) => panic!("{}", e),
+        let mut received: Vec<u8> = vec!();
+        loop {
+            match server.recv_from(buf) {
+                Ok((len, _src)) => received.push_all(buf.slice_to(len)),
+                Err(ref e) if e.kind == EndOfFile => break,
+                Err(e) => panic!("{}", e)
+            }
         }
+        assert_eq!(received.len(), expected.len());
+        assert_eq!(received, expected);
     }
 
     #[test]
     fn test_selective_ack_response() {
-        let server_addr = next_test_ip4();
+        let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
         let len = 1024 * 10;
         let data = Vec::from_fn(len, |idx| idx as u8);
         let to_send = data.clone();
 
         // Client
         spawn(proc() {
-            let mut client = iotry!(UtpStream::connect(server_addr));
-            client.socket.congestion_timeout = 50;
+            let client = iotry!(UtpSocket::bind(client_addr));
+            let mut client = iotry!(client.connect(server_addr));
+            client.congestion_timeout = 50;
 
-            // Stream.write
-            iotry!(client.write(to_send.as_slice()));
+            iotry!(client.send_to(to_send.as_slice()));
             iotry!(client.close());
         });
 
@@ -1641,18 +1641,24 @@ mod test {
         iotry!(server.socket.send_to(packet.bytes().as_slice(), server.connected_to.clone()));
 
         // Expect to receive "missing" packets
-        let mut stream = UtpStream { socket: server };
-        let read = iotry!(stream.read_to_end());
-        assert!(!read.is_empty());
-        assert_eq!(read.len(), data.len());
-        assert_eq!(read, data);
+        let mut received: Vec<u8> = vec!();
+        loop {
+            match server.recv_from(buf) {
+                Ok((len, _src)) => received.push_all(buf.slice_to(len)),
+                Err(ref e) if e.kind == EndOfFile => break,
+                Err(e) => panic!("{}", e)
+            }
+        }
+        assert!(!received.is_empty());
+        assert_eq!(received.len(), data.len());
+        assert_eq!(received, data);
     }
 
     #[test]
     fn test_correct_packet_loss() {
         let (client_addr, server_addr) = (next_test_ip4(), next_test_ip4());
 
-        let mut server = iotry!(UtpStream::bind(server_addr));
+        let mut server = iotry!(UtpSocket::bind(server_addr));
         let client = iotry!(UtpSocket::bind(client_addr));
         let len = 1024 * 10;
         let data = Vec::from_fn(len, |idx| idx as u8);
@@ -1684,24 +1690,33 @@ mod test {
             iotry!(client.close());
         });
 
-        let read = iotry!(server.read_to_end());
-        assert_eq!(read.len(), data.len());
-        assert_eq!(read, data);
+        let mut buf = [0, ..BUF_SIZE];
+        let mut received: Vec<u8> = vec!();
+        loop {
+            match server.recv_from(buf) {
+                Ok((len, _src)) => received.push_all(buf.slice_to(len)),
+                Err(ref e) if e.kind == EndOfFile => break,
+                Err(e) => panic!("{}", e)
+            }
+        }
+        assert_eq!(received.len(), data.len());
+        assert_eq!(received, data);
     }
 
     #[test]
     fn test_tolerance_to_small_buffers() {
         use std::io::EndOfFile;
 
-        let server_addr = next_test_ip4();
+        let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
         let mut server = iotry!(UtpSocket::bind(server_addr));
         let len = 1024;
         let data = Vec::from_fn(len, |idx| idx as u8);
         let to_send = data.clone();
 
         spawn(proc() {
-            let mut client = iotry!(UtpStream::connect(server_addr));
-            iotry!(client.write(to_send.as_slice()));
+            let client = iotry!(UtpSocket::bind(client_addr));
+            let mut client = iotry!(client.connect(server_addr));
+            iotry!(client.send_to(to_send.as_slice()));
             iotry!(client.close());
         });
 
@@ -1724,29 +1739,36 @@ mod test {
     fn test_sequence_number_rollover() {
         let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
 
-        let mut server = UtpStream::bind(server_addr);
+        let mut server = iotry!(UtpSocket::bind(server_addr));
 
         let len = BUF_SIZE * 4;
         let data = Vec::from_fn(len, |idx| idx as u8);
         let to_send = data.clone();
 
         spawn(proc() {
-            let mut socket = iotry!(UtpSocket::bind(client_addr));
+            let mut client = iotry!(UtpSocket::bind(client_addr));
 
             // Advance socket's sequence number
-            socket.seq_nr = ::std::u16::MAX - (to_send.len() / (BUF_SIZE * 2)) as u16;
+            client.seq_nr = ::std::u16::MAX - (to_send.len() / (BUF_SIZE * 2)) as u16;
 
-            let socket = iotry!(socket.connect(server_addr));
-            let mut client = UtpStream { socket: socket };
+            let mut client = iotry!(client.connect(server_addr));
             // Send enough data to rollover
-            iotry!(client.write(to_send.as_slice()));
+            iotry!(client.send_to(to_send.as_slice()));
             // Check that the sequence number did rollover
-            assert!(client.socket.seq_nr < 50);
+            assert!(client.seq_nr < 50);
             // Close connection
             iotry!(client.close());
         });
 
-        let received = iotry!(server.read_to_end());
+        let mut buf = [0, ..BUF_SIZE];
+        let mut received: Vec<u8> = vec!();
+        loop {
+            match server.recv_from(buf) {
+                Ok((len, _src)) => received.push_all(buf.slice_to(len)),
+                Err(ref e) if e.kind == EndOfFile => break,
+                Err(e) => panic!("{}", e)
+            }
+        }
         assert_eq!(received.len(), data.len());
         assert_eq!(received, data);
     }
