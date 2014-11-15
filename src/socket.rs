@@ -4,8 +4,8 @@ use std::io::net::ip::SocketAddr;
 use std::io::net::udp::UdpSocket;
 use std::io::{IoResult, TimedOut};
 use std::iter::range_inclusive;
-use std::num::abs;
 use std::rand::random;
+use std::num::SignedInt;
 use util::*;
 use packet::*;
 
@@ -476,7 +476,7 @@ impl UtpSocket {
 
     fn update_congestion_timeout(&mut self, current_delay: int) {
         let delta = self.rtt - current_delay;
-        self.rtt_variance += (abs(delta) - self.rtt_variance) / 4;
+        self.rtt_variance += (delta.abs() - self.rtt_variance) / 4;
         self.rtt += (current_delay - self.rtt) / 8;
         self.congestion_timeout = max((self.rtt + self.rtt_variance * 4) as u64, 500);
         self.congestion_timeout = min(self.congestion_timeout, 60_000);

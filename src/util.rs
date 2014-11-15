@@ -31,8 +31,8 @@ mod test {
     #[test]
     fn test_exponential_smoothed_moving_average() {
         use super::exponential_weighted_moving_average;
-        use std::num::abs_sub;
         use std::iter::range_inclusive;
+        use std::num::FloatMath;
 
         let input = range_inclusive(1u, 10).map(|x| x as f64).collect();
         let alpha = 1.0/3.0;
@@ -41,7 +41,7 @@ mod test {
         46439.0/6561.0, 158488.0/19683.0].to_vec();
         let output = exponential_weighted_moving_average(input, alpha);
         let result = expected.iter().zip(output.iter())
-            .fold(0.0 as f64, |acc, (&a, &b)| acc + abs_sub(a, b));
+            .fold(0.0 as f64, |acc, (&a, &b)| acc + a.abs_sub(b));
         assert!(result == 0.0);
     }
 }

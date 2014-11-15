@@ -1,6 +1,7 @@
 use std::mem::transmute;
 use std::fmt;
 use std::iter::range_inclusive;
+use std::num::Int;
 use bit_iterator::BitIterator;
 
 pub const HEADER_SIZE: uint = 20;
@@ -352,6 +353,7 @@ mod test {
     use super::UtpPacket;
     use super::{StatePacket, DataPacket};
     use super::HEADER_SIZE;
+    use std::num::Int;
 
     #[test]
     fn test_packet_decode() {
