@@ -4,6 +4,13 @@ name = "utp"
 version = "0.1.0"
 authors = ["Ricardo Martins <ricardo@scarybox.net>"]
 
+description = "A µTP (Micro/uTorrent Transport Library) library implemented in Rust"
+homepage = "https://github.com/meqif/rust-utp"
+repository = "https://github.com/meqif/rust-utp"
+readme = "README.md"
+license = "MIT/Apache-2.0"
+keywords = ["utp", "networking", "protocol", "transport"]
+
 [dependencies]
 time = "~0.0.3"
 
