@@ -362,14 +362,14 @@ mod test {
     fn test_packet_decode() {
         let buf = [0x21, 0x00, 0x41, 0xa8, 0x99, 0x2f, 0xd0, 0x2a, 0x9f, 0x4a,
                    0x26, 0x21, 0x00, 0x10, 0x00, 0x00, 0x3a, 0xf2, 0x6c, 0x79];
-        let pkt = UtpPacket::decode(buf);
+        let pkt = UtpPacket::decode(&buf);
         assert_eq!(pkt.header.get_version(), 1);
         assert_eq!(pkt.header.get_type(), StatePacket);
         assert_eq!(pkt.header.extension, 0);
         assert_eq!(pkt.connection_id(), 16808);
         assert_eq!(Int::from_be(pkt.header.timestamp_microseconds), 2570047530);
         assert_eq!(Int::from_be(pkt.header.timestamp_difference_microseconds), 2672436769);
-        assert_eq!(Int::from_be(pkt.header.wnd_size), ::std::num::pow(2u32, 20));
+        assert_eq!(Int::from_be(pkt.header.wnd_size), 2u32.pow(20));
         assert_eq!(pkt.seq_nr(), 15090);
         assert_eq!(pkt.ack_nr(), 27769);
         assert_eq!(pkt.len(), buf.len());
@@ -381,7 +381,7 @@ mod test {
         let buf = [0x21, 0x01, 0x41, 0xa7, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                    0x00, 0x00, 0x00, 0x00, 0x05, 0xdc, 0xab, 0x53, 0x3a, 0xf5,
                    0x00, 0x04, 0x00, 0x00, 0x00, 0x00];
-        let packet = UtpPacket::decode(buf);
+        let packet = UtpPacket::decode(&buf);
         assert_eq!(packet.header.get_version(), 1);
         assert_eq!(packet.header.get_type(), StatePacket);
         assert_eq!(packet.header.extension, 1);
@@ -406,7 +406,7 @@ mod test {
                    0x00, 0x00, 0x00, 0x00, 0x05, 0xdc, 0xab, 0x53, 0x3a, 0xf5,
                    0xff, 0x04, 0x00, 0x00, 0x00, 0x00, // Imaginary extension
                    0x00, 0x04, 0x00, 0x00, 0x00, 0x00];
-        let packet = UtpPacket::decode(buf);
+        let packet = UtpPacket::decode(&buf);
         assert_eq!(packet.header.get_version(), 1);
         assert_eq!(packet.header.get_type(), StatePacket);
         assert_eq!(packet.header.extension, 1);
@@ -440,10 +440,10 @@ mod test {
         pkt.header.wnd_size = window_size.to_be();
         pkt.payload = payload.clone();
         let header = pkt.header;
-        let buf: &[u8] = [0x01, 0x00, 0x41, 0xa8, 0x00, 0xe9, 0x03, 0x89,
-                    0x65, 0xbf, 0x5d, 0xba, 0x00, 0x10, 0x00, 0x00,
-                    0x3a, 0xf2, 0x42, 0xc8, 0x48, 0x65, 0x6c, 0x6c,
-                    0x6f, 0x0a];
+        let buf = [0x01, 0x00, 0x41, 0xa8, 0x00, 0xe9, 0x03, 0x89,
+                   0x65, 0xbf, 0x5d, 0xba, 0x00, 0x10, 0x00, 0x00,
+                   0x3a, 0xf2, 0x42, 0xc8, 0x48, 0x65, 0x6c, 0x6c,
+                   0x6f, 0x0a];
 
         assert_eq!(pkt.len(), buf.len());
         assert_eq!(pkt.len(), HEADER_SIZE + payload.len());
@@ -462,11 +462,11 @@ mod test {
 
     #[test]
     fn test_reversible() {
-        let buf: &[u8] = [0x01, 0x00, 0x41, 0xa8, 0x00, 0xe9, 0x03, 0x89,
-                    0x65, 0xbf, 0x5d, 0xba, 0x00, 0x10, 0x00, 0x00,
-                    0x3a, 0xf2, 0x42, 0xc8, 0x48, 0x65, 0x6c, 0x6c,
-                    0x6f, 0x0a];
-        assert_eq!(UtpPacket::decode(buf).bytes().as_slice(), buf);
+        let buf = [0x01, 0x00, 0x41, 0xa8, 0x00, 0xe9, 0x03, 0x89,
+                   0x65, 0xbf, 0x5d, 0xba, 0x00, 0x10, 0x00, 0x00,
+                   0x3a, 0xf2, 0x42, 0xc8, 0x48, 0x65, 0x6c, 0x6c,
+                   0x6f, 0x0a];
+        assert_eq!(UtpPacket::decode(&buf).bytes().as_slice(), buf.as_slice());
     }
 
 }

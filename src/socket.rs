@@ -152,7 +152,7 @@ impl UtpSocket {
 
             // Validate response
             self.socket.set_read_timeout(Some(syn_timeout));
-            match self.socket.recv_from(buf) {
+            match self.socket.recv_from(&mut buf) {
                 Ok((read, src)) => { len = read; addr = src; break; },
                 Err(ref e) if e.kind == TimedOut => {
                     debug!("Timed out, retrying");
@@ -189,7 +189,7 @@ impl UtpSocket {
         // Wait for acknowledgment on pending sent packets
         let mut buf = [0u8, ..BUF_SIZE];
         while !self.send_window.is_empty() {
-            try!(self.recv_from(buf));
+            try!(self.recv_from(&mut buf));
         }
 
         // Nothing to do if the socket's already closed
@@ -210,7 +210,7 @@ impl UtpSocket {
 
         // Receive JAKE
         while self.state != SocketClosed {
-            try!(self.recv_from(buf));
+            try!(self.recv_from(&mut buf));
         }
 
         Ok(())
@@ -253,7 +253,7 @@ impl UtpSocket {
             debug!("setting read timeout of {} ms", self.congestion_timeout);
             self.socket.set_read_timeout(Some(self.congestion_timeout));
         }
-        let (read, src) = match self.socket.recv_from(b) {
+        let (read, src) = match self.socket.recv_from(&mut b) {
             Err(ref e) if e.kind == TimedOut => {
                 debug!("recv_from timed out");
                 self.congestion_timeout = self.congestion_timeout * 2;
@@ -408,7 +408,7 @@ impl UtpSocket {
         // Consume acknowledgements until latest packet
         let mut buf = [0, ..BUF_SIZE];
         while self.last_acked < self.seq_nr - 1 {
-            try!(self.recv_from(buf));
+            try!(self.recv_from(&mut buf));
         }
 
         Ok(())
@@ -423,7 +423,7 @@ impl UtpSocket {
             let max_inflight = max(MIN_CWND * MSS, max_inflight);
             while self.curr_window + packet.len() > max_inflight {
                 let mut buf = [0, ..BUF_SIZE];
-                iotry!(self.recv_from(buf));
+                iotry!(self.recv_from(&mut buf));
             }
 
             try!(self.socket.send_to(packet.bytes().as_slice(), dst));
@@ -804,7 +804,7 @@ mod test {
         });
 
         let mut buf = [0u8, ..BUF_SIZE];
-        match server.recv_from(buf) {
+        match server.recv_from(&mut buf) {
             e => println!("{}", e),
         }
         // After establishing a new connection, the server's ids are a mirror of the client's.
@@ -834,11 +834,11 @@ mod test {
 
         // Make the server listen for incoming connections
         let mut buf = [0u8, ..BUF_SIZE];
-        let _resp = server.recv_from(buf);
+        let _resp = server.recv_from(&mut buf);
         assert!(server.state == SocketConnected);
 
         // Closing the connection is fine
-        match server.recv_from(buf) {
+        match server.recv_from(&mut buf) {
             Err(e) => panic!("{}", e),
             _ => {},
         }
@@ -846,7 +846,7 @@ mod test {
 
         // Trying to listen on the socket after closing it raises an
         // EOF error
-        match server.recv_from(buf) {
+        match server.recv_from(&mut buf) {
             Err(e) => assert_eq!(e.kind, EndOfFile),
             v => panic!("expected {}, got {}", EndOfFile, v),
         }
@@ -854,7 +854,7 @@ mod test {
         assert_eq!(server.state, SocketClosed);
 
         // Trying again raises a EndOfFile error
-        match server.recv_from(buf) {
+        match server.recv_from(&mut buf) {
             Err(e) => assert_eq!(e.kind, EndOfFile),
             v => panic!("expected {}, got {}", EndOfFile, v),
         }
@@ -879,12 +879,12 @@ mod test {
             assert!(client.state == SocketConnected);
             let mut buf = [0u8, ..BUF_SIZE];
             let mut client = client;
-            iotry!(client.recv_from(buf));
+            iotry!(client.recv_from(&mut buf));
         });
 
         // Make the server listen for incoming connections
         let mut buf = [0u8, ..BUF_SIZE];
-        let (_read, _src) = iotry!(server.recv_from(buf));
+        let (_read, _src) = iotry!(server.recv_from(&mut buf));
         assert!(server.state == SocketConnected);
 
         iotry!(server.close());
@@ -892,7 +892,7 @@ mod test {
 
         // Trying to send to the socket after closing it raises an
         // error
-        match server.send_to(buf) {
+        match server.send_to(&buf) {
             Err(e) => assert_eq!(e.kind, Closed),
             v => panic!("expected {}, got {}", Closed, v),
         }
@@ -912,11 +912,11 @@ mod test {
             // Make the server listen for incoming connections
             let mut server = server;
             let mut buf = [0u8, ..BUF_SIZE];
-            let _resp = server.recv_from(buf);
+            let _resp = server.recv_from(&mut buf);
             tx.send(server.seq_nr);
 
             // Close the connection
-            iotry!(server.recv_from(buf));
+            iotry!(server.recv_from(&mut buf));
 
             drop(server);
         });
@@ -1222,12 +1222,12 @@ mod test {
 
             for _ in range(0u, 2) {
                 let mut buf = [0, ..BUF_SIZE];
-                iotry!(s.recv_from(buf));
+                iotry!(s.recv_from(&mut buf));
             }
         });
 
         let mut buf = [0u8, ..BUF_SIZE];
-        match server.recv_from(buf) {
+        match server.recv_from(&mut buf) {
             e => println!("{}", e),
         }
         // After establishing a new connection, the server's ids are a mirror of the client's.
@@ -1238,7 +1238,7 @@ mod test {
         let expected: Vec<u8> = Vec::from_fn(12, |idx| idx as u8 + 1);
         let mut received: Vec<u8> = vec!();
         loop {
-            match server.recv_from(buf) {
+            match server.recv_from(&mut buf) {
                 Ok((len, _src)) => received.push_all(buf.slice_to(len)),
                 Err(ref e) if e.kind == EndOfFile => break,
                 Err(e) => panic!("{}", e)
@@ -1259,15 +1259,15 @@ mod test {
         let test_syn_raw = [0x41, 0x00, 0x41, 0xa7, 0x00, 0x00, 0x00,
         0x27, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x3a,
         0xf1, 0x00, 0x00];
-        let test_syn_pkt = UtpPacket::decode(test_syn_raw);
+        let test_syn_pkt = UtpPacket::decode(&test_syn_raw);
         let seq_nr = test_syn_pkt.seq_nr();
 
         spawn(proc() {
             let mut client = client;
-            iotry!(client.send_to(test_syn_raw, server_addr));
+            iotry!(client.send_to(&test_syn_raw, server_addr));
             client.set_timeout(Some(10));
             let mut buf = [0, ..BUF_SIZE];
-            let packet = match client.recv_from(buf) {
+            let packet = match client.recv_from(&mut buf) {
                 Ok((nread, _src)) => UtpPacket::decode(buf.slice_to(nread)),
                 Err(e) => panic!("{}", e),
             };
@@ -1277,7 +1277,7 @@ mod test {
 
         let mut server = server;
         let mut buf = [0, ..20];
-        iotry!(server.recv_from(buf));
+        iotry!(server.recv_from(&mut buf));
         assert!(server.ack_nr != 0);
         assert_eq!(server.ack_nr, seq_nr);
         assert!(server.incoming_buffer.is_empty());
@@ -1303,11 +1303,11 @@ mod test {
 
         let mut buf = [0, ..BUF_SIZE];
         // Expect SYN
-        iotry!(server.recv_from(buf));
+        iotry!(server.recv_from(&mut buf));
 
         // Receive data
         let mut data_packet;
-        match server.socket.recv_from(buf) {
+        match server.socket.recv_from(&mut buf) {
             Ok((read, _src)) => {
                 data_packet = UtpPacket::decode(buf.slice_to(read));
                 assert!(data_packet.get_type() == DataPacket);
@@ -1331,7 +1331,7 @@ mod test {
         }
 
         // Receive data again and check that it's the same we reported as missing
-        match server.socket.recv_from(buf) {
+        match server.socket.recv_from(&mut buf) {
             Ok((0, _)) => panic!("Received 0 bytes from socket"),
             Ok((read, _src)) => {
                 let packet = UtpPacket::decode(buf.slice_to(read));
@@ -1349,7 +1349,7 @@ mod test {
         }
 
         // Receive close
-        iotry!(server.recv_from(buf));
+        iotry!(server.recv_from(&mut buf));
     }
 
     #[test]
@@ -1377,7 +1377,7 @@ mod test {
         });
 
         let mut buf = [0u8, ..BUF_SIZE];
-        match server.recv_from(buf) {
+        match server.recv_from(&mut buf) {
             e => println!("{}", e),
         }
         // After establishing a new connection, the server's ids are a mirror of the client's.
@@ -1389,14 +1389,14 @@ mod test {
         // Purposefully read from UDP socket directly and discard it, in order
         // to behave as if the packet was lost and thus trigger the timeout
         // handling in the *next* call to `UtpSocket.recv_from`.
-        iotry!(server.socket.recv_from(buf));
+        iotry!(server.socket.recv_from(&mut buf));
 
         // Set a much smaller than usual timeout, for quicker test completion
         server.congestion_timeout = 50;
 
         // Now wait for the previously discarded packet
         loop {
-            match server.recv_from(buf) {
+            match server.recv_from(&mut buf) {
                 Ok((0, _)) => continue,
                 Ok(_) => break,
                 Err(e) => panic!("{}", e),
@@ -1481,14 +1481,14 @@ mod test {
             // Receive one ACK
             for _ in range(0u, 1) {
                 let mut buf = [0, ..BUF_SIZE];
-                iotry!(s.recv_from(buf));
+                iotry!(s.recv_from(&mut buf));
             }
 
             iotry!(client.close());
         });
 
         let mut buf = [0u8, ..BUF_SIZE];
-        match server.recv_from(buf) {
+        match server.recv_from(&mut buf) {
             e => println!("{}", e),
         }
         // After establishing a new connection, the server's ids are a mirror of the client's.
@@ -1499,7 +1499,7 @@ mod test {
         let expected: Vec<u8> = vec!(1,2,3);
         let mut received: Vec<u8> = vec!();
         loop {
-            match server.recv_from(buf) {
+            match server.recv_from(&mut buf) {
                 Ok((len, _src)) => received.push_all(buf.slice_to(len)),
                 Err(ref e) if e.kind == EndOfFile => break,
                 Err(e) => panic!("{}", e)
@@ -1532,12 +1532,12 @@ mod test {
         let mut buf = [0, ..BUF_SIZE];
 
         // Connect
-        iotry!(server.recv_from(buf));
+        iotry!(server.recv_from(&mut buf));
 
         // Discard packets
-        iotry!(server.socket.recv_from(buf));
-        iotry!(server.socket.recv_from(buf));
-        iotry!(server.socket.recv_from(buf));
+        iotry!(server.socket.recv_from(&mut buf));
+        iotry!(server.socket.recv_from(&mut buf));
+        iotry!(server.socket.recv_from(&mut buf));
 
         // Generate SACK
         let mut packet = UtpPacket::new();
@@ -1554,7 +1554,7 @@ mod test {
         // Expect to receive "missing" packets
         let mut received: Vec<u8> = vec!();
         loop {
-            match server.recv_from(buf) {
+            match server.recv_from(&mut buf) {
                 Ok((len, _src)) => received.push_all(buf.slice_to(len)),
                 Err(ref e) if e.kind == EndOfFile => break,
                 Err(e) => panic!("{}", e)
@@ -1604,7 +1604,7 @@ mod test {
         let mut buf = [0, ..BUF_SIZE];
         let mut received: Vec<u8> = vec!();
         loop {
-            match server.recv_from(buf) {
+            match server.recv_from(&mut buf) {
                 Ok((len, _src)) => received.push_all(buf.slice_to(len)),
                 Err(ref e) if e.kind == EndOfFile => break,
                 Err(e) => panic!("{}", e)
@@ -1634,7 +1634,7 @@ mod test {
         let mut read = Vec::new();
         while server.state != SocketClosed {
             let mut small_buffer = [0, ..512];
-            match server.recv_from(small_buffer) {
+            match server.recv_from(&mut small_buffer) {
                 Ok((0, _src)) => (),
                 Ok((len, _src)) => read.push_all(small_buffer.slice_to(len)),
                 Err(ref e) if e.kind == EndOfFile => break,
@@ -1674,7 +1674,7 @@ mod test {
         let mut buf = [0, ..BUF_SIZE];
         let mut received: Vec<u8> = vec!();
         loop {
-            match server.recv_from(buf) {
+            match server.recv_from(&mut buf) {
                 Ok((len, _src)) => received.push_all(buf.slice_to(len)),
                 Err(ref e) if e.kind == EndOfFile => break,
                 Err(e) => panic!("{}", e)
