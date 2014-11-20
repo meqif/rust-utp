@@ -8,6 +8,9 @@ use std::rand::random;
 use std::num::SignedInt;
 use util::*;
 use packet::*;
+use packet::UtpPacketType::*;
+use packet::UtpExtensionType::SelectiveAckExtension;
+use self::UtpSocketState::*;
 
 // For simplicity's sake, let us assume no packet will ever exceed the
 // Ethernet maximum transfer unit of 1500 bytes.
@@ -774,8 +777,10 @@ mod test {
     use std::rand::random;
     use std::io::test::next_test_ip4;
     use std::io::EndOfFile;
-    use super::{UtpSocket, BUF_SIZE, SocketConnected, SocketNew, SocketClosed};
-    use packet::{UtpPacket, StatePacket, FinPacket, DataPacket, ResetPacket, SynPacket};
+    use super::{UtpSocket, BUF_SIZE};
+    use super::UtpSocketState::{SocketConnected, SocketNew, SocketClosed};
+    use packet::{UtpPacket};
+    use packet::UtpPacketType::{StatePacket, FinPacket, DataPacket, ResetPacket, SynPacket};
     use util::now_microseconds;
 
     #[test]

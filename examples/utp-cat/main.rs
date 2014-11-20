@@ -33,8 +33,8 @@ fn main() {
     args.next();
 
     match args.next() {
-        Some("-s") => mode = Server,
-        Some("-c") => mode = Client,
+        Some("-s") => mode = Mode::Server,
+        Some("-c") => mode = Mode::Client,
         _ => { usage(); return; }
     }
 
@@ -50,7 +50,7 @@ fn main() {
     }
 
     match mode {
-        Server => {
+        Mode::Server => {
             let mut stream = UtpStream::bind(addr);
             let mut writer = stdout();
             let _ = writeln!(stderr(), "Serving on {}", addr);
@@ -58,7 +58,7 @@ fn main() {
             let payload = iotry!(stream.read_to_end());
             iotry!(writer.write(payload.as_slice()));
         }
-        Client => {
+        Mode::Client => {
             let mut stream = iotry!(UtpStream::connect(addr));
             let mut reader = stdin();
 

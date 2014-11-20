@@ -3,6 +3,8 @@ use std::fmt;
 use std::iter::range_inclusive;
 use std::num::Int;
 use bit_iterator::BitIterator;
+use self::UtpPacketType::*;
+use self::UtpExtensionType::SelectiveAckExtension;
 
 pub const HEADER_SIZE: uint = 20;
 
@@ -351,7 +353,8 @@ impl fmt::Show for UtpPacket {
 #[cfg(test)]
 mod test {
     use super::UtpPacket;
-    use super::{StatePacket, DataPacket};
+    use super::UtpPacketType::{StatePacket, DataPacket};
+    use super::UtpExtensionType::SelectiveAckExtension;
     use super::HEADER_SIZE;
     use std::num::Int;
 
@@ -375,8 +378,6 @@ mod test {
 
     #[test]
     fn test_decode_packet_with_extension() {
-        use super::SelectiveAckExtension;
-
         let buf = [0x21, 0x01, 0x41, 0xa7, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                    0x00, 0x00, 0x00, 0x00, 0x05, 0xdc, 0xab, 0x53, 0x3a, 0xf5,
                    0x00, 0x04, 0x00, 0x00, 0x00, 0x00];
@@ -401,8 +402,6 @@ mod test {
 
     #[test]
     fn test_decode_packet_with_unknown_extensions() {
-        use super::SelectiveAckExtension;
-
         let buf = [0x21, 0x01, 0x41, 0xa7, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                    0x00, 0x00, 0x00, 0x00, 0x05, 0xdc, 0xab, 0x53, 0x3a, 0xf5,
                    0xff, 0x04, 0x00, 0x00, 0x00, 0x00, // Imaginary extension
