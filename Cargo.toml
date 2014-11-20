@@ -4,8 +4,8 @@ name = "utp"
 version = "0.1.0"
 authors = ["Ricardo Martins <ricardo@scarybox.net>"]
 
-[dependencies.time]
-git = "https://github.com/rust-lang/time"
+[dependencies]
+time = "~0.0.3"
 
 [lib]
 name = "utp"
