@@ -18,7 +18,7 @@ presents a stream interface (`UtpStream`).
 
 ## Building
 
-```
+```sh
 git clone https://github.com/meqif/rust-utp.git
 cd rust-utp
 cargo test
@@ -31,23 +31,32 @@ Note that non-release builds are *much* slower.
 
 Check the `examples` directory. The simplest example would be:
 
-```rust
+```rust,no_run
 extern crate utp;
 
 use utp::UtpStream;
 use std::io::net::ip::{Ipv4Addr, SocketAddr};
 
 fn main() {
-    let addr = SocketAddr { ip: Ipv4Addr(0,0,0,0), port: 8080 };
+    let addr = SocketAddr { ip: Ipv4Addr(127,0,0,1), port: 8080 };
 
+    // Connect to an hypothetical local server running on port 8080
     let mut stream = match UtpStream::connect(addr) {
         Ok(stream) => stream,
         Err(e) => panic!("{}", e),
     };
 
-    // Ignoring the result of both calls below for the sake of brevity
-    stream.write("Hi there!".as_bytes());
-    stream.close();
+    // Send a string
+    match stream.write("Hi there!".as_bytes()) {
+        Ok(()) => (),
+        Err(e) => println!("Write failed with {}", e)
+    }
+
+    // Close the stream
+    match stream.close() {
+        Ok(()) => println!("Connection closed"),
+        Err(e) => println!("{}", e)
+    }
 }
 ```
 
