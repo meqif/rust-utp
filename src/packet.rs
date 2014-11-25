@@ -3,7 +3,6 @@ use std::fmt;
 use std::iter::range_inclusive;
 use std::num::Int;
 use bit_iterator::BitIterator;
-use self::UtpPacketType::*;
 
 pub const HEADER_SIZE: uint = 20;
 
@@ -18,12 +17,12 @@ macro_rules! u8_to_unsigned_be(
 )
 
 #[deriving(PartialEq,Eq,Show)]
-pub enum UtpPacketType {
-    DataPacket  = 0,
-    FinPacket   = 1,
-    StatePacket = 2,
-    ResetPacket = 3,
-    SynPacket   = 4,
+pub enum PacketType {
+    Data  = 0,
+    Fin   = 1,
+    State = 2,
+    Reset = 3,
+    Syn   = 4,
 }
 
 #[deriving(PartialEq,Eq,Show,Clone)]
@@ -72,12 +71,12 @@ struct UtpPacketHeader {
 
 impl UtpPacketHeader {
     /// Set type of packet to the specified type.
-    pub fn set_type(&mut self, t: UtpPacketType) {
+    pub fn set_type(&mut self, t: PacketType) {
         let version = 0x0F & self.type_ver;
         self.type_ver = t as u8 << 4 | version;
     }
 
-    pub fn get_type(&self) -> UtpPacketType {
+    pub fn get_type(&self) -> PacketType {
         unsafe { transmute(self.type_ver >> 4) }
     }
 
@@ -142,7 +141,7 @@ impl UtpPacket {
     pub fn new() -> UtpPacket {
         UtpPacket {
             header: UtpPacketHeader {
-                type_ver: DataPacket as u8 << 4 | 1,
+                type_ver: PacketType::Data as u8 << 4 | 1,
                 extension: 0,
                 connection_id: 0,
                 timestamp_microseconds: 0,
@@ -157,12 +156,12 @@ impl UtpPacket {
     }
 
     #[inline]
-    pub fn set_type(&mut self, t: UtpPacketType) {
+    pub fn set_type(&mut self, t: PacketType) {
         self.header.set_type(t);
     }
 
     #[inline]
-    pub fn get_type(&self) -> UtpPacketType {
+    pub fn get_type(&self) -> PacketType {
         self.header.get_type()
     }
 
@@ -352,7 +351,7 @@ impl fmt::Show for UtpPacket {
 #[cfg(test)]
 mod test {
     use super::UtpPacket;
-    use super::UtpPacketType::{StatePacket, DataPacket};
+    use super::PacketType::{State, Data};
     use super::ExtensionType;
     use super::HEADER_SIZE;
     use std::num::Int;
@@ -363,7 +362,7 @@ mod test {
                    0x26, 0x21, 0x00, 0x10, 0x00, 0x00, 0x3a, 0xf2, 0x6c, 0x79];
         let pkt = UtpPacket::decode(&buf);
         assert_eq!(pkt.header.get_version(), 1);
-        assert_eq!(pkt.header.get_type(), StatePacket);
+        assert_eq!(pkt.header.get_type(), State);
         assert_eq!(pkt.header.extension, 0);
         assert_eq!(pkt.connection_id(), 16808);
         assert_eq!(Int::from_be(pkt.header.timestamp_microseconds), 2570047530);
@@ -382,7 +381,7 @@ mod test {
                    0x00, 0x04, 0x00, 0x00, 0x00, 0x00];
         let packet = UtpPacket::decode(&buf);
         assert_eq!(packet.header.get_version(), 1);
-        assert_eq!(packet.header.get_type(), StatePacket);
+        assert_eq!(packet.header.get_type(), State);
         assert_eq!(packet.header.extension, 1);
         assert_eq!(packet.connection_id(), 16807);
         assert_eq!(Int::from_be(packet.header.timestamp_microseconds), 0);
@@ -407,7 +406,7 @@ mod test {
                    0x00, 0x04, 0x00, 0x00, 0x00, 0x00];
         let packet = UtpPacket::decode(&buf);
         assert_eq!(packet.header.get_version(), 1);
-        assert_eq!(packet.header.get_type(), StatePacket);
+        assert_eq!(packet.header.get_type(), State);
         assert_eq!(packet.header.extension, 1);
         assert_eq!(packet.connection_id(), 16807);
         assert_eq!(Int::from_be(packet.header.timestamp_microseconds), 0);
@@ -430,7 +429,7 @@ mod test {
         let (connection_id, seq_nr, ack_nr): (u16, u16, u16) = (16808, 15090, 17096);
         let window_size: u32 = 1048576;
         let mut pkt = UtpPacket::new();
-        pkt.set_type(DataPacket);
+        pkt.set_type(Data);
         pkt.header.timestamp_microseconds = timestamp.to_be();
         pkt.header.timestamp_difference_microseconds = timestamp_diff.to_be();
         pkt.header.connection_id = connection_id.to_be();
@@ -448,7 +447,7 @@ mod test {
         assert_eq!(pkt.len(), HEADER_SIZE + payload.len());
         assert_eq!(pkt.payload, payload);
         assert_eq!(header.get_version(), 1);
-        assert_eq!(header.get_type(), DataPacket);
+        assert_eq!(header.get_type(), Data);
         assert_eq!(header.extension, 0);
         assert_eq!(Int::from_be(header.connection_id), connection_id);
         assert_eq!(Int::from_be(header.seq_nr), seq_nr);

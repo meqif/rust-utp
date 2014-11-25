@@ -8,7 +8,6 @@ use std::rand::random;
 use std::num::SignedInt;
 use util::*;
 use packet::*;
-use packet::UtpPacketType::*;
 
 // For simplicity's sake, let us assume no packet will ever exceed the
 // Ethernet maximum transfer unit of 1500 bytes.
@@ -131,7 +130,7 @@ impl UtpSocket {
         assert_eq!(self.receiver_connection_id + 1, self.sender_connection_id);
 
         let mut packet = UtpPacket::new();
-        packet.set_type(SynPacket);
+        packet.set_type(PacketType::Syn);
         packet.set_connection_id(self.receiver_connection_id);
         packet.set_seq_nr(self.seq_nr);
 
@@ -164,7 +163,7 @@ impl UtpSocket {
         assert!(addr == self.connected_to);
 
         let packet = UtpPacket::decode(buf.slice_to(len));
-        if packet.get_type() != StatePacket {
+        if packet.get_type() != PacketType::State {
             return Err(IoError {
                 kind: ConnectionFailed,
                 desc: "The remote peer sent an invalid reply",
@@ -200,7 +199,7 @@ impl UtpSocket {
         packet.set_seq_nr(self.seq_nr);
         packet.set_ack_nr(self.ack_nr);
         packet.set_timestamp_microseconds(now_microseconds());
-        packet.set_type(FinPacket);
+        packet.set_type(PacketType::Fin);
 
         // Send FIN
         try!(self.socket.send_to(packet.bytes().as_slice(), self.connected_to));
@@ -267,7 +266,7 @@ impl UtpSocket {
 
         let shallow_clone = packet.shallow_clone();
 
-        if packet.get_type() == DataPacket && self.ack_nr + 1 <= packet.seq_nr() {
+        if packet.get_type() == PacketType::Data && self.ack_nr + 1 <= packet.seq_nr() {
             self.insert_into_buffer(packet);
         }
 
@@ -284,7 +283,7 @@ impl UtpSocket {
         Ok((read, src))
     }
 
-    fn prepare_reply(&self, original: &UtpPacket, t: UtpPacketType) -> UtpPacket {
+    fn prepare_reply(&self, original: &UtpPacket, t: PacketType) -> UtpPacket {
         let mut resp = UtpPacket::new();
         resp.set_type(t);
         let self_t_micro: u32 = now_microseconds();
@@ -389,7 +388,7 @@ impl UtpSocket {
 
         for chunk in buf.chunks(MSS - HEADER_SIZE) {
             let mut packet = UtpPacket::new();
-            packet.set_type(DataPacket);
+            packet.set_type(PacketType::Data);
             packet.payload = chunk.to_vec();
             packet.set_timestamp_microseconds(now_microseconds());
             packet.set_seq_nr(self.seq_nr);
@@ -439,7 +438,7 @@ impl UtpSocket {
     fn send_fast_resend_request(&mut self) {
         let mut packet = UtpPacket::new();
         packet.set_wnd_size(BUF_SIZE as u32);
-        packet.set_type(StatePacket);
+        packet.set_type(PacketType::State);
         packet.set_ack_nr(self.ack_nr);
         packet.set_seq_nr(self.seq_nr);
         packet.set_connection_id(self.sender_connection_id);
@@ -572,17 +571,17 @@ impl UtpSocket {
         }
 
         // Reset connection if connection id doesn't match and this isn't a SYN
-        if (self.state, packet.get_type()) != (SocketState::New, SynPacket) &&
+        if (self.state, packet.get_type()) != (SocketState::New, PacketType::Syn) &&
             !(packet.connection_id() == self.sender_connection_id ||
               packet.connection_id() == self.receiver_connection_id) {
-            return Ok(Some(self.prepare_reply(packet, ResetPacket)));
+            return Ok(Some(self.prepare_reply(packet, PacketType::Reset)));
         }
 
         self.remote_wnd_size = packet.wnd_size() as uint;
         debug!("self.remote_wnd_size: {}", self.remote_wnd_size);
 
         match (self.state, packet.get_type()) {
-            (SocketState::New, SynPacket) => {
+            (SocketState::New, PacketType::Syn) => {
                 self.connected_to = src;
                 self.ack_nr = packet.seq_nr();
                 self.seq_nr = random();
@@ -590,22 +589,22 @@ impl UtpSocket {
                 self.sender_connection_id = packet.connection_id();
                 self.state = SocketState::Connected;
 
-                Ok(Some(self.prepare_reply(packet, StatePacket)))
+                Ok(Some(self.prepare_reply(packet, PacketType::State)))
             },
-            (SocketState::SynSent, StatePacket) => {
+            (SocketState::SynSent, PacketType::State) => {
                 self.ack_nr = packet.seq_nr();
                 self.seq_nr += 1;
                 self.state = SocketState::Connected;
                 Ok(None)
             },
-            (SocketState::Connected, DataPacket) => {
+            (SocketState::Connected, PacketType::Data) => {
                 Ok(self.handle_data_packet(packet))
             },
-            (SocketState::Connected, StatePacket) => {
+            (SocketState::Connected, PacketType::State) => {
                 self.handle_state_packet(packet);
                 Ok(None)
             },
-            (SocketState::Connected, FinPacket) => {
+            (SocketState::Connected, PacketType::Fin) => {
                 self.state = SocketState::FinReceived;
                 self.fin_seq_nr = packet.seq_nr();
 
@@ -615,19 +614,19 @@ impl UtpSocket {
                     self.ack_nr == self.fin_seq_nr
                 {
                     self.state = SocketState::Closed;
-                    Ok(Some(self.prepare_reply(packet, StatePacket)))
+                    Ok(Some(self.prepare_reply(packet, PacketType::State)))
                 } else {
                     debug!("FIN received but there are missing packets");
                     Ok(None)
                 }
             }
-            (SocketState::FinSent, StatePacket) => {
+            (SocketState::FinSent, PacketType::State) => {
                 if packet.ack_nr() == self.seq_nr {
                     self.state = SocketState::Closed;
                 }
                 Ok(None)
             }
-            (_, ResetPacket) => {
+            (_, PacketType::Reset) => {
                 self.state = SocketState::ResetReceived;
                 Err(IoError {
                     kind: ConnectionReset,
@@ -640,7 +639,7 @@ impl UtpSocket {
     }
 
     fn handle_data_packet(&mut self, packet: &UtpPacket) -> Option<UtpPacket> {
-        let mut reply = self.prepare_reply(packet, StatePacket);
+        let mut reply = self.prepare_reply(packet, PacketType::State);
 
         if self.ack_nr + 1 < packet.seq_nr() {
             debug!("current ack_nr ({}) is behind received packet seq_nr ({})",
@@ -776,8 +775,7 @@ mod test {
     use std::io::test::next_test_ip4;
     use std::io::EndOfFile;
     use super::{UtpSocket, SocketState, BUF_SIZE};
-    use packet::{UtpPacket};
-    use packet::UtpPacketType::{StatePacket, FinPacket, DataPacket, ResetPacket, SynPacket};
+    use packet::{UtpPacket, PacketType};
     use util::now_microseconds;
 
     #[test]
@@ -943,7 +941,7 @@ mod test {
 
         let mut packet = UtpPacket::new();
         packet.set_wnd_size(BUF_SIZE as u32);
-        packet.set_type(SynPacket);
+        packet.set_type(PacketType::Syn);
         packet.set_connection_id(initial_connection_id);
 
         // Do we have a response?
@@ -954,7 +952,7 @@ mod test {
 
         // Is is of the correct type?
         let response = response.unwrap();
-        assert!(response.get_type() == StatePacket);
+        assert!(response.get_type() == PacketType::State);
 
         // Same connection id on both ends during connection establishment
         assert!(response.connection_id() == packet.connection_id());
@@ -973,7 +971,7 @@ mod test {
         let old_response = response;
 
         let mut packet = UtpPacket::new();
-        packet.set_type(DataPacket);
+        packet.set_type(PacketType::Data);
         packet.set_connection_id(sender_connection_id);
         packet.set_seq_nr(old_packet.seq_nr() + 1);
         packet.set_ack_nr(old_response.seq_nr());
@@ -984,7 +982,7 @@ mod test {
         assert!(response.is_some());
 
         let response = response.unwrap();
-        assert!(response.get_type() == StatePacket);
+        assert!(response.get_type() == PacketType::State);
 
         // Sender (i.e., who initated connection and sent SYN) has connection id
         // equal to initial connection id + 1
@@ -1006,7 +1004,7 @@ mod test {
         let old_response = response;
 
         let mut packet = UtpPacket::new();
-        packet.set_type(FinPacket);
+        packet.set_type(PacketType::Fin);
         packet.set_connection_id(sender_connection_id);
         packet.set_seq_nr(old_packet.seq_nr() + 1);
         packet.set_ack_nr(old_response.seq_nr());
@@ -1018,7 +1016,7 @@ mod test {
 
         let response = response.unwrap();
 
-        assert!(response.get_type() == StatePacket);
+        assert!(response.get_type() == PacketType::State);
 
         // FIN packets have no payload but the sequence number shouldn't increase
         assert!(packet.seq_nr() == old_packet.seq_nr() + 1);
@@ -1042,7 +1040,7 @@ mod test {
         // Establish connection
         let mut packet = UtpPacket::new();
         packet.set_wnd_size(BUF_SIZE as u32);
-        packet.set_type(SynPacket);
+        packet.set_type(PacketType::Syn);
         packet.set_connection_id(initial_connection_id);
 
         let response = socket.handle_packet(&packet, client_addr);
@@ -1050,7 +1048,7 @@ mod test {
         let response = response.unwrap();
         assert!(response.is_some());
         let response = response.unwrap();
-        assert!(response.get_type() == StatePacket);
+        assert!(response.get_type() == PacketType::State);
 
         let old_packet = packet;
         let old_response = response;
@@ -1058,7 +1056,7 @@ mod test {
         // Now, send a keepalive packet
         let mut packet = UtpPacket::new();
         packet.set_wnd_size(BUF_SIZE as u32);
-        packet.set_type(StatePacket);
+        packet.set_type(PacketType::State);
         packet.set_connection_id(initial_connection_id);
         packet.set_seq_nr(old_packet.seq_nr() + 1);
         packet.set_ack_nr(old_response.seq_nr());
@@ -1085,21 +1083,21 @@ mod test {
         // Establish connection
         let mut packet = UtpPacket::new();
         packet.set_wnd_size(BUF_SIZE as u32);
-        packet.set_type(SynPacket);
+        packet.set_type(PacketType::Syn);
         packet.set_connection_id(initial_connection_id);
 
         let response = socket.handle_packet(&packet, client_addr);
         assert!(response.is_ok());
         let response = response.unwrap();
         assert!(response.is_some());
-        assert!(response.unwrap().get_type() == StatePacket);
+        assert!(response.unwrap().get_type() == PacketType::State);
 
         // Now, disrupt connection with a packet with an incorrect connection id
         let new_connection_id = initial_connection_id * 2;
 
         let mut packet = UtpPacket::new();
         packet.set_wnd_size(BUF_SIZE as u32);
-        packet.set_type(StatePacket);
+        packet.set_type(PacketType::State);
         packet.set_connection_id(new_connection_id);
 
         let response = socket.handle_packet(&packet, client_addr);
@@ -1108,7 +1106,7 @@ mod test {
         assert!(response.is_some());
 
         let response = response.unwrap();
-        assert!(response.get_type() == ResetPacket);
+        assert!(response.get_type() == PacketType::Reset);
         assert!(response.ack_nr() == packet.seq_nr());
     }
 
@@ -1122,7 +1120,7 @@ mod test {
         // Establish connection
         let mut packet = UtpPacket::new();
         packet.set_wnd_size(BUF_SIZE as u32);
-        packet.set_type(SynPacket);
+        packet.set_type(PacketType::Syn);
         packet.set_connection_id(initial_connection_id);
 
         let response = socket.handle_packet(&packet, client_addr);
@@ -1130,7 +1128,7 @@ mod test {
         let response = response.unwrap();
         assert!(response.is_some());
         let response = response.unwrap();
-        assert!(response.get_type() == StatePacket);
+        assert!(response.get_type() == PacketType::State);
 
         let old_packet = packet;
         let old_response = response;
@@ -1140,7 +1138,7 @@ mod test {
         // Now, send a keepalive packet
         let mut packet = UtpPacket::new();
         packet.set_wnd_size(BUF_SIZE as u32);
-        packet.set_type(DataPacket);
+        packet.set_type(PacketType::Data);
         packet.set_connection_id(initial_connection_id);
         packet.set_seq_nr(old_packet.seq_nr() + 1);
         packet.set_ack_nr(old_response.seq_nr());
@@ -1149,7 +1147,7 @@ mod test {
 
         let mut packet = UtpPacket::new();
         packet.set_wnd_size(BUF_SIZE as u32);
-        packet.set_type(DataPacket);
+        packet.set_type(PacketType::Data);
         packet.set_connection_id(initial_connection_id);
         packet.set_seq_nr(old_packet.seq_nr() + 2);
         packet.set_ack_nr(old_response.seq_nr());
@@ -1192,7 +1190,7 @@ mod test {
             for data in Vec::from_fn(12, |idx| idx as u8 + 1).as_slice().chunks(3) {
                 let mut packet = UtpPacket::new();
                 packet.set_wnd_size(BUF_SIZE as u32);
-                packet.set_type(DataPacket);
+                packet.set_type(PacketType::Data);
                 packet.set_connection_id(client.sender_connection_id);
                 packet.set_seq_nr(client.seq_nr);
                 packet.set_ack_nr(client.ack_nr);
@@ -1204,7 +1202,7 @@ mod test {
 
             let mut packet = UtpPacket::new();
             packet.set_wnd_size(BUF_SIZE as u32);
-            packet.set_type(FinPacket);
+            packet.set_type(PacketType::Fin);
             packet.set_connection_id(client.sender_connection_id);
             packet.set_seq_nr(client.seq_nr);
             packet.set_ack_nr(client.ack_nr);
@@ -1307,7 +1305,7 @@ mod test {
         match server.socket.recv_from(&mut buf) {
             Ok((read, _src)) => {
                 data_packet = UtpPacket::decode(buf.slice_to(read));
-                assert!(data_packet.get_type() == DataPacket);
+                assert!(data_packet.get_type() == PacketType::Data);
                 assert_eq!(data_packet.payload, data);
                 assert_eq!(data_packet.payload.len(), data.len());
             },
@@ -1318,7 +1316,7 @@ mod test {
         // Send triple ACK
         let mut packet = UtpPacket::new();
         packet.set_wnd_size(BUF_SIZE as u32);
-        packet.set_type(StatePacket);
+        packet.set_type(PacketType::State);
         packet.set_seq_nr(server.seq_nr);
         packet.set_ack_nr(data_packet.seq_nr() - 1);
         packet.set_connection_id(server.sender_connection_id);
@@ -1332,7 +1330,7 @@ mod test {
             Ok((0, _)) => panic!("Received 0 bytes from socket"),
             Ok((read, _src)) => {
                 let packet = UtpPacket::decode(buf.slice_to(read));
-                assert_eq!(packet.get_type(), DataPacket);
+                assert_eq!(packet.get_type(), PacketType::Data);
                 assert_eq!(packet.seq_nr(), data_packet.seq_nr());
                 assert!(packet.payload == data_packet.payload);
                 let response = server.handle_packet(&packet, client_addr);
@@ -1462,7 +1460,7 @@ mod test {
 
             let mut packet = UtpPacket::new();
             packet.set_wnd_size(BUF_SIZE as u32);
-            packet.set_type(DataPacket);
+            packet.set_type(PacketType::Data);
             packet.set_connection_id(client.sender_connection_id);
             packet.set_seq_nr(client.seq_nr);
             packet.set_ack_nr(client.ack_nr);
@@ -1542,7 +1540,7 @@ mod test {
         packet.set_ack_nr(server.ack_nr - 1);
         packet.set_connection_id(server.sender_connection_id);
         packet.set_timestamp_microseconds(now_microseconds());
-        packet.set_type(StatePacket);
+        packet.set_type(PacketType::State);
         packet.set_sack(Some(vec!(12, 0, 0, 0)));
 
         // Send SACK
@@ -1585,7 +1583,7 @@ mod test {
                 packet.set_connection_id(client.sender_connection_id);
                 packet.set_timestamp_microseconds(now_microseconds());
                 packet.payload = chunk.to_vec();
-                packet.set_type(DataPacket);
+                packet.set_type(PacketType::Data);
 
                 if index % 2 == 0 {
                     iotry!(client.socket.send_to(packet.bytes().as_slice(), dst));
