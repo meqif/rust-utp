@@ -9,7 +9,6 @@ use std::num::SignedInt;
 use util::*;
 use packet::*;
 use packet::UtpPacketType::*;
-use self::UtpSocketState::*;
 
 // For simplicity's sake, let us assume no packet will ever exceed the
 // Ethernet maximum transfer unit of 1500 bytes.
@@ -27,14 +26,14 @@ macro_rules! iotry(
 )
 
 #[deriving(PartialEq,Eq,Show)]
-enum UtpSocketState {
-    SocketNew,
-    SocketConnected,
-    SocketSynSent,
-    SocketFinReceived,
-    SocketFinSent,
-    SocketResetReceived,
-    SocketClosed,
+enum SocketState {
+    New,
+    Connected,
+    SynSent,
+    FinReceived,
+    FinSent,
+    ResetReceived,
+    Closed,
 }
 
 /// A uTP (Micro Transport Protocol) socket.
@@ -52,7 +51,7 @@ pub struct UtpSocket {
     /// Sequence number of the latest acknowledged packet sent by the remote peer
     ack_nr: u16,
     /// Socket state
-    state: UtpSocketState,
+    state: SocketState,
     /// Received but not acknowledged packets
     incoming_buffer: Vec<UtpPacket>,
     /// Sent but not yet acknowledged packets
@@ -101,7 +100,7 @@ impl UtpSocket {
                 sender_connection_id: connection_id + 1,
                 seq_nr: 1,
                 ack_nr: 0,
-                state: SocketNew,
+                state: SocketState::New,
                 incoming_buffer: Vec::new(),
                 send_window: Vec::new(),
                 unsent_queue: DList::new(),
@@ -147,7 +146,7 @@ impl UtpSocket {
             // Send packet
             debug!("Connecting to {}", other);
             try!(self.socket.send_to(packet.bytes().as_slice(), other));
-            self.state = SocketSynSent;
+            self.state = SocketState::SynSent;
 
             // Validate response
             self.socket.set_read_timeout(Some(syn_timeout));
@@ -192,7 +191,7 @@ impl UtpSocket {
         }
 
         // Nothing to do if the socket's already closed
-        if self.state == SocketClosed {
+        if self.state == SocketState::Closed {
             return Ok(());
         }
 
@@ -205,10 +204,10 @@ impl UtpSocket {
 
         // Send FIN
         try!(self.socket.send_to(packet.bytes().as_slice(), self.connected_to));
-        self.state = SocketFinSent;
+        self.state = SocketState::FinSent;
 
         // Receive JAKE
-        while self.state != SocketClosed {
+        while self.state != SocketState::Closed {
             try!(self.recv_from(&mut buf));
         }
 
@@ -218,13 +217,13 @@ impl UtpSocket {
     /// Receive data from socket.
     ///
     /// On success, returns the number of bytes read and the sender's address.
-    /// Returns `SocketClosed` after receiving a FIN packet when the remaining
+    /// Returns `Closed` after receiving a FIN packet when the remaining
     /// inflight packets are consumed.
     #[unstable]
     pub fn recv_from(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
         use std::io::{IoError, EndOfFile, Closed};
 
-        if self.state == SocketClosed {
+        if self.state == SocketState::Closed {
             return Err(IoError {
                 kind: EndOfFile,
                 desc: "End of file reached",
@@ -232,7 +231,7 @@ impl UtpSocket {
             });
         }
 
-        if self.state == SocketResetReceived {
+        if self.state == SocketState::ResetReceived {
             return Err(IoError {
                 kind: Closed,
                 desc: "Connection reset",
@@ -248,7 +247,7 @@ impl UtpSocket {
 
     fn recv(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
         let mut b = [0, ..BUF_SIZE + HEADER_SIZE];
-        if self.state != SocketNew {
+        if self.state != SocketState::New {
             debug!("setting read timeout of {} ms", self.congestion_timeout);
             self.socket.set_read_timeout(Some(self.congestion_timeout));
         }
@@ -380,7 +379,7 @@ impl UtpSocket {
     pub fn send_to(&mut self, buf: &[u8]) -> IoResult<()> {
         use std::io::{IoError, Closed};
 
-        if self.state == SocketClosed {
+        if self.state == SocketState::Closed {
             return Err(IoError {
                 kind: Closed,
                 desc: "Connection closed",
@@ -573,7 +572,7 @@ impl UtpSocket {
         }
 
         // Reset connection if connection id doesn't match and this isn't a SYN
-        if (self.state, packet.get_type()) != (SocketNew, SynPacket) &&
+        if (self.state, packet.get_type()) != (SocketState::New, SynPacket) &&
             !(packet.connection_id() == self.sender_connection_id ||
               packet.connection_id() == self.receiver_connection_id) {
             return Ok(Some(self.prepare_reply(packet, ResetPacket)));
@@ -583,31 +582,31 @@ impl UtpSocket {
         debug!("self.remote_wnd_size: {}", self.remote_wnd_size);
 
         match (self.state, packet.get_type()) {
-            (SocketNew, SynPacket) => {
+            (SocketState::New, SynPacket) => {
                 self.connected_to = src;
                 self.ack_nr = packet.seq_nr();
                 self.seq_nr = random();
                 self.receiver_connection_id = packet.connection_id() + 1;
                 self.sender_connection_id = packet.connection_id();
-                self.state = SocketConnected;
+                self.state = SocketState::Connected;
 
                 Ok(Some(self.prepare_reply(packet, StatePacket)))
             },
-            (SocketSynSent, StatePacket) => {
+            (SocketState::SynSent, StatePacket) => {
                 self.ack_nr = packet.seq_nr();
                 self.seq_nr += 1;
-                self.state = SocketConnected;
+                self.state = SocketState::Connected;
                 Ok(None)
             },
-            (SocketConnected, DataPacket) => {
+            (SocketState::Connected, DataPacket) => {
                 Ok(self.handle_data_packet(packet))
             },
-            (SocketConnected, StatePacket) => {
+            (SocketState::Connected, StatePacket) => {
                 self.handle_state_packet(packet);
                 Ok(None)
             },
-            (SocketConnected, FinPacket) => {
-                self.state = SocketFinReceived;
+            (SocketState::Connected, FinPacket) => {
+                self.state = SocketState::FinReceived;
                 self.fin_seq_nr = packet.seq_nr();
 
                 // If all packets are received and handled
@@ -615,21 +614,21 @@ impl UtpSocket {
                     self.incoming_buffer.is_empty() &&
                     self.ack_nr == self.fin_seq_nr
                 {
-                    self.state = SocketClosed;
+                    self.state = SocketState::Closed;
                     Ok(Some(self.prepare_reply(packet, StatePacket)))
                 } else {
                     debug!("FIN received but there are missing packets");
                     Ok(None)
                 }
             }
-            (SocketFinSent, StatePacket) => {
+            (SocketState::FinSent, StatePacket) => {
                 if packet.ack_nr() == self.seq_nr {
-                    self.state = SocketClosed;
+                    self.state = SocketState::Closed;
                 }
                 Ok(None)
             }
             (_, ResetPacket) => {
-                self.state = SocketResetReceived;
+                self.state = SocketState::ResetReceived;
                 Err(IoError {
                     kind: ConnectionReset,
                     desc: "Remote host aborted connection (incorrect connection id)",
@@ -776,8 +775,7 @@ mod test {
     use std::rand::random;
     use std::io::test::next_test_ip4;
     use std::io::EndOfFile;
-    use super::{UtpSocket, BUF_SIZE};
-    use super::UtpSocketState::{SocketConnected, SocketNew, SocketClosed};
+    use super::{UtpSocket, SocketState, BUF_SIZE};
     use packet::{UtpPacket};
     use packet::UtpPacketType::{StatePacket, FinPacket, DataPacket, ResetPacket, SynPacket};
     use util::now_microseconds;
@@ -789,15 +787,15 @@ mod test {
         let client = iotry!(UtpSocket::bind(client_addr));
         let mut server = iotry!(UtpSocket::bind(server_addr));
 
-        assert!(server.state == SocketNew);
-        assert!(client.state == SocketNew);
+        assert!(server.state == SocketState::New);
+        assert!(client.state == SocketState::New);
 
         // Check proper difference in client's send connection id and receive connection id
         assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
 
         spawn(proc() {
             let client = iotry!(client.connect(server_addr));
-            assert!(client.state == SocketConnected);
+            assert!(client.state == SocketState::Connected);
             assert_eq!(client.connected_to, server_addr);
             drop(client);
         });
@@ -810,7 +808,7 @@ mod test {
         assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
         assert_eq!(server.connected_to, client_addr);
 
-        assert!(server.state == SocketConnected);
+        assert!(server.state == SocketState::Connected);
         drop(server);
     }
 
@@ -821,12 +819,12 @@ mod test {
         let client = iotry!(UtpSocket::bind(client_addr));
         let mut server = iotry!(UtpSocket::bind(server_addr));
 
-        assert!(server.state == SocketNew);
-        assert!(client.state == SocketNew);
+        assert!(server.state == SocketState::New);
+        assert!(client.state == SocketState::New);
 
         spawn(proc() {
             let mut client = iotry!(client.connect(server_addr));
-            assert!(client.state == SocketConnected);
+            assert!(client.state == SocketState::Connected);
             assert_eq!(client.close(), Ok(()));
             drop(client);
         });
@@ -834,14 +832,14 @@ mod test {
         // Make the server listen for incoming connections
         let mut buf = [0u8, ..BUF_SIZE];
         let _resp = server.recv_from(&mut buf);
-        assert!(server.state == SocketConnected);
+        assert!(server.state == SocketState::Connected);
 
         // Closing the connection is fine
         match server.recv_from(&mut buf) {
             Err(e) => panic!("{}", e),
             _ => {},
         }
-        assert_eq!(server.state, SocketClosed);
+        assert_eq!(server.state, SocketState::Closed);
 
         // Trying to listen on the socket after closing it raises an
         // EOF error
@@ -850,7 +848,7 @@ mod test {
             v => panic!("expected {}, got {}", EndOfFile, v),
         }
 
-        assert_eq!(server.state, SocketClosed);
+        assert_eq!(server.state, SocketState::Closed);
 
         // Trying again raises a EndOfFile error
         match server.recv_from(&mut buf) {
@@ -870,12 +868,12 @@ mod test {
         let client = iotry!(UtpSocket::bind(client_addr));
         let mut server = iotry!(UtpSocket::bind(server_addr));
 
-        assert!(server.state == SocketNew);
-        assert!(client.state == SocketNew);
+        assert!(server.state == SocketState::New);
+        assert!(client.state == SocketState::New);
 
         spawn(proc() {
             let client = iotry!(client.connect(server_addr));
-            assert!(client.state == SocketConnected);
+            assert!(client.state == SocketState::Connected);
             let mut buf = [0u8, ..BUF_SIZE];
             let mut client = client;
             iotry!(client.recv_from(&mut buf));
@@ -884,10 +882,10 @@ mod test {
         // Make the server listen for incoming connections
         let mut buf = [0u8, ..BUF_SIZE];
         let (_read, _src) = iotry!(server.recv_from(&mut buf));
-        assert!(server.state == SocketConnected);
+        assert!(server.state == SocketState::Connected);
 
         iotry!(server.close());
-        assert_eq!(server.state, SocketClosed);
+        assert_eq!(server.state, SocketState::Closed);
 
         // Trying to send to the socket after closing it raises an
         // error
@@ -921,7 +919,7 @@ mod test {
         });
 
         let mut client = iotry!(client.connect(server_addr));
-        assert!(client.state == SocketConnected);
+        assert!(client.state == SocketState::Connected);
         let sender_seq_nr = rx.recv();
         let ack_nr = client.ack_nr;
         assert!(ack_nr != 0);
@@ -1179,15 +1177,15 @@ mod test {
         let client = iotry!(UtpSocket::bind(client_addr));
         let mut server = iotry!(UtpSocket::bind(server_addr));
 
-        assert!(server.state == SocketNew);
-        assert!(client.state == SocketNew);
+        assert!(server.state == SocketState::New);
+        assert!(client.state == SocketState::New);
 
         // Check proper difference in client's send connection id and receive connection id
         assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
 
         spawn(proc() {
             let mut client = iotry!(client.connect(server_addr));
-            assert!(client.state == SocketConnected);
+            assert!(client.state == SocketState::Connected);
             let mut s = client.socket;
             let mut window: Vec<UtpPacket> = Vec::new();
 
@@ -1232,7 +1230,7 @@ mod test {
         // After establishing a new connection, the server's ids are a mirror of the client's.
         assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
 
-        assert!(server.state == SocketConnected);
+        assert!(server.state == SocketState::Connected);
 
         let expected: Vec<u8> = Vec::from_fn(12, |idx| idx as u8 + 1);
         let mut received: Vec<u8> = vec!();
@@ -1361,15 +1359,15 @@ mod test {
         let data = Vec::from_fn(len, |idx| idx as u8);
         let d = data.clone();
 
-        assert!(server.state == SocketNew);
-        assert!(client.state == SocketNew);
+        assert!(server.state == SocketState::New);
+        assert!(client.state == SocketState::New);
 
         // Check proper difference in client's send connection id and receive connection id
         assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
 
         spawn(proc() {
             let mut client = iotry!(client.connect(server_addr));
-            assert!(client.state == SocketConnected);
+            assert!(client.state == SocketState::Connected);
             assert_eq!(client.connected_to, server_addr);
             iotry!(client.send_to(d.as_slice()));
             drop(client);
@@ -1383,7 +1381,7 @@ mod test {
         assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
         assert_eq!(server.connected_to, client_addr);
 
-        assert!(server.state == SocketConnected);
+        assert!(server.state == SocketState::Connected);
 
         // Purposefully read from UDP socket directly and discard it, in order
         // to behave as if the packet was lost and thus trigger the timeout
@@ -1451,15 +1449,15 @@ mod test {
         let client = iotry!(UtpSocket::bind(client_addr));
         let mut server = iotry!(UtpSocket::bind(server_addr));
 
-        assert!(server.state == SocketNew);
-        assert!(client.state == SocketNew);
+        assert!(server.state == SocketState::New);
+        assert!(client.state == SocketState::New);
 
         // Check proper difference in client's send connection id and receive connection id
         assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
 
         spawn(proc() {
             let mut client = iotry!(client.connect(server_addr));
-            assert!(client.state == SocketConnected);
+            assert!(client.state == SocketState::Connected);
             let mut s = client.socket.clone();
 
             let mut packet = UtpPacket::new();
@@ -1493,7 +1491,7 @@ mod test {
         // After establishing a new connection, the server's ids are a mirror of the client's.
         assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
 
-        assert!(server.state == SocketConnected);
+        assert!(server.state == SocketState::Connected);
 
         let expected: Vec<u8> = vec!(1,2,3);
         let mut received: Vec<u8> = vec!();
@@ -1631,7 +1629,7 @@ mod test {
         });
 
         let mut read = Vec::new();
-        while server.state != SocketClosed {
+        while server.state != SocketState::Closed {
             let mut small_buffer = [0, ..512];
             match server.recv_from(&mut small_buffer) {
                 Ok((0, _src)) => (),
