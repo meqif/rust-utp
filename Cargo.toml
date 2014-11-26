@@ -16,8 +16,10 @@ time = "~0.0.3"
 
 [lib]
 name = "utp"
+bench = false
 
 [[bin]]
 name = "utp-cat"
 path = "examples/utp-cat/main.rs"
 test = false
+bench = false
