@@ -44,4 +44,5 @@ fn bench_transfer_one_megabyte(b: &mut Bencher) {
         iotry!(server.read_to_end());
         iotry!(server.close());
     });
+    b.bytes = len as u64;
 }
