@@ -29,6 +29,29 @@ fn bench_connection_setup_and_teardown(b: &mut Bencher) {
 }
 
 #[bench]
+fn bench_transfer_one_packet(b: &mut Bencher) {
+    let len = 1024;
+    let server_addr = next_test_ip4();
+    let data = Vec::from_fn(len, |idx| idx as u8);
+    let data_arc = Arc::new(data);
+
+    b.iter(|| {
+        let data = data_arc.clone();
+        let mut server = iotry!(UtpStream::bind(server_addr));
+
+        spawn(proc() {
+            let mut client = iotry!(UtpStream::connect(server_addr));
+            iotry!(client.write(data.as_slice()));
+            iotry!(client.close());
+        });
+
+        iotry!(server.read_to_end());
+        iotry!(server.close());
+    });
+    b.bytes = len as u64;
+}
+
+#[bench]
 fn bench_transfer_one_megabyte(b: &mut Bencher) {
     let len = 1024 * 1024;
     let server_addr = next_test_ip4();
