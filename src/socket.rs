@@ -390,7 +390,6 @@ impl UtpSocket {
             let mut packet = UtpPacket::new();
             packet.set_type(PacketType::Data);
             packet.payload = chunk.to_vec();
-            packet.set_timestamp_microseconds(now_microseconds());
             packet.set_seq_nr(self.seq_nr);
             packet.set_ack_nr(self.ack_nr);
             packet.set_connection_id(self.sender_connection_id);
@@ -423,6 +422,8 @@ impl UtpSocket {
                 iotry!(self.recv_from(&mut buf));
             }
 
+            let mut packet = packet;
+            packet.set_timestamp_microseconds(now_microseconds());
             try!(self.socket.send_to(packet.bytes().as_slice(), dst));
             debug!("sent {}", packet);
             self.curr_window += packet.len();
