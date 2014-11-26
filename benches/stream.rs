@@ -6,6 +6,7 @@ extern crate utp;
 use test::Bencher;
 use std::io::test::next_test_ip4;
 use utp::UtpStream;
+use std::sync::Arc;
 
 macro_rules! iotry(
     ($e:expr) => (match $e { Ok(e) => e, Err(e) => panic!("{}", e) })
@@ -31,8 +32,11 @@ fn bench_connection_setup_and_teardown(b: &mut Bencher) {
 fn bench_transfer_one_megabyte(b: &mut Bencher) {
     let len = 1024 * 1024;
     let server_addr = next_test_ip4();
+    let data = Vec::from_fn(len, |idx| idx as u8);
+    let data_arc = Arc::new(data);
+
     b.iter(|| {
-        let data = Vec::from_fn(len, |idx| idx as u8);
+        let data = data_arc.clone();
         let mut server = iotry!(UtpStream::bind(server_addr));
 
         spawn(proc() {
