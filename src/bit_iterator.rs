@@ -24,3 +24,16 @@ impl Iterator<u8> for BitIterator {
         }
     }
 }
+
+#[test]
+fn test_iterator() {
+    let bytes = vec!(0xCA, 0xFE);
+    let expected_bits = vec!(0,1,0,1, 0,0,1,1, 0,1,1,1, 1,1,1,1);
+    let mut i = 0;
+
+    for bit in BitIterator::new(bytes) {
+        println!("{} == {}", bit, expected_bits[i]);
+        assert_eq!(bit, expected_bits[i]);
+        i += 1;
+    }
+}
