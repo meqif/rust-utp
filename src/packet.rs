@@ -4,7 +4,6 @@ use std::iter::range_inclusive;
 use std::num::Int;
 use bit_iterator::BitIterator;
 use self::UtpPacketType::*;
-use self::UtpExtensionType::SelectiveAckExtension;
 
 pub const HEADER_SIZE: uint = 20;
 
@@ -28,13 +27,13 @@ pub enum UtpPacketType {
 }
 
 #[deriving(PartialEq,Eq,Show,Clone)]
-pub enum UtpExtensionType {
-    SelectiveAckExtension = 1,
+pub enum ExtensionType {
+    SelectiveAck = 1,
 }
 
 #[deriving(Clone)]
 pub struct UtpExtension {
-    ty: UtpExtensionType,
+    ty: ExtensionType,
     pub data: Vec<u8>,
 }
 
@@ -43,7 +42,7 @@ impl UtpExtension {
         1 + self.data.len()
     }
 
-    pub fn get_type(&self) -> UtpExtensionType {
+    pub fn get_type(&self) -> ExtensionType {
         self.ty
     }
 
@@ -248,11 +247,11 @@ impl UtpPacket {
                 assert!(bv.len() % 4 == 0);
 
                 let extension = UtpExtension {
-                    ty: SelectiveAckExtension,
+                    ty: ExtensionType::SelectiveAck,
                     data: bv,
                 };
                 self.extensions.push(extension);
-                self.header.extension |= SelectiveAckExtension as u8;
+                self.header.extension |= ExtensionType::SelectiveAck as u8;
             }
         }
     }
@@ -298,9 +297,9 @@ impl UtpPacket {
             let extension_start = idx + 2;
             let payload_start = extension_start + len;
 
-            if kind == SelectiveAckExtension as u8 { // or more generally, a known kind
+            if kind == ExtensionType::SelectiveAck as u8 { // or more generally, a known kind
                 let extension = UtpExtension {
-                    ty: SelectiveAckExtension,
+                    ty: ExtensionType::SelectiveAck,
                     data: buf.slice(extension_start, payload_start).to_vec(),
                 };
                 extensions.push(extension);
@@ -354,7 +353,7 @@ impl fmt::Show for UtpPacket {
 mod test {
     use super::UtpPacket;
     use super::UtpPacketType::{StatePacket, DataPacket};
-    use super::UtpExtensionType::SelectiveAckExtension;
+    use super::ExtensionType;
     use super::HEADER_SIZE;
     use std::num::Int;
 
@@ -394,7 +393,7 @@ mod test {
         assert_eq!(packet.len(), buf.len());
         assert!(packet.payload.is_empty());
         assert!(packet.extensions.len() == 1);
-        assert!(packet.extensions[0].ty == SelectiveAckExtension);
+        assert!(packet.extensions[0].ty == ExtensionType::SelectiveAck);
         assert!(packet.extensions[0].data == vec!(0,0,0,0));
         assert!(packet.extensions[0].len() == 1 + packet.extensions[0].data.len());
         assert!(packet.extensions[0].len() == 5);
@@ -418,7 +417,7 @@ mod test {
         assert_eq!(packet.ack_nr(), 15093);
         assert!(packet.payload.is_empty());
         assert!(packet.extensions.len() == 1);
-        assert!(packet.extensions[0].ty == SelectiveAckExtension);
+        assert!(packet.extensions[0].ty == ExtensionType::SelectiveAck);
         assert!(packet.extensions[0].data == vec!(0,0,0,0));
         assert!(packet.extensions[0].len() == 1 + packet.extensions[0].data.len());
         assert!(packet.extensions[0].len() == 5);

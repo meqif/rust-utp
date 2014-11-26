@@ -9,7 +9,6 @@ use std::num::SignedInt;
 use util::*;
 use packet::*;
 use packet::UtpPacketType::*;
-use packet::UtpExtensionType::SelectiveAckExtension;
 use self::UtpSocketState::*;
 
 // For simplicity's sake, let us assume no packet will ever exceed the
@@ -695,7 +694,7 @@ impl UtpSocket {
 
         // Process extensions, if any
         for extension in packet.extensions.iter() {
-            if extension.get_type() == SelectiveAckExtension {
+            if extension.get_type() == ExtensionType::SelectiveAck {
                 let bits = extension.iter();
                 // If three or more packets are acknowledged past the implicit missing one,
                 // assume it was lost.
