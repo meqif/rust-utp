@@ -6,7 +6,7 @@ use std::io::{IoResult, TimedOut};
 use std::iter::range_inclusive;
 use std::rand::random;
 use std::num::SignedInt;
-use util::*;
+use util::{now_microseconds, ewma};
 use packet::{Packet, PacketType, ExtensionType, HEADER_SIZE};
 
 // For simplicity's sake, let us assume no packet will ever exceed the
@@ -496,7 +496,7 @@ impl UtpSocket {
     /// current delays in the current window.
     fn filtered_current_delay(&self) -> u32 {
         let input = self.current_delays.iter().map(|&(_,x)| x as f64).collect();
-        let output = exponential_weighted_moving_average(input, 0.333);
+        let output = ewma(input, 0.333);
         output[output.len() - 1] as u32
     }
 

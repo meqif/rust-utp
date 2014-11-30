@@ -6,7 +6,9 @@ pub fn now_microseconds() -> u32 {
     (t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32
 }
 
-pub fn exponential_weighted_moving_average(samples: Vec<f64>, alpha: f64) -> Vec<f64> {
+/// Calculate the exponential weighted moving average of a sample vector,
+/// with a given alpha parameter.
+pub fn ewma(samples: Vec<f64>, alpha: f64) -> Vec<f64> {
     let mut average = Vec::new();
 
     if samples.is_empty() {
@@ -30,7 +32,7 @@ pub fn exponential_weighted_moving_average(samples: Vec<f64>, alpha: f64) -> Vec
 mod test {
     #[test]
     fn test_exponential_smoothed_moving_average() {
-        use super::exponential_weighted_moving_average;
+        use super::ewma;
         use std::iter::range_inclusive;
         use std::num::FloatMath;
 
@@ -39,7 +41,7 @@ mod test {
         let expected: Vec<f64> = [1.0, 4.0/3.0, 17.0/9.0,
         70.0/27.0, 275.0/81.0, 1036.0/243.0, 3773.0/729.0, 13378.0/2187.0,
         46439.0/6561.0, 158488.0/19683.0].to_vec();
-        let output = exponential_weighted_moving_average(input, alpha);
+        let output = ewma(input, alpha);
         let result = expected.iter().zip(output.iter())
             .fold(0.0 as f64, |acc, (&a, &b)| acc + a.abs_sub(b));
         assert!(result == 0.0);
