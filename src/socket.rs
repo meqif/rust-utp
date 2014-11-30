@@ -2,7 +2,7 @@ use std::cmp::{min, max};
 use std::collections::DList;
 use std::io::net::ip::SocketAddr;
 use std::io::net::udp::UdpSocket;
-use std::io::{IoResult, TimedOut};
+use std::io::{IoResult, IoError, TimedOut, ConnectionFailed, EndOfFile, Closed, ConnectionReset};
 use std::iter::range_inclusive;
 use std::rand::random;
 use std::num::SignedInt;
@@ -124,8 +124,6 @@ impl UtpSocket {
     /// Open a uTP connection to a remote host by hostname or IP address.
     #[unstable]
     pub fn connect(mut self, other: SocketAddr) -> IoResult<UtpSocket> {
-        use std::io::{IoError, ConnectionFailed};
-
         self.connected_to = other;
         assert_eq!(self.receiver_connection_id + 1, self.sender_connection_id);
 
@@ -220,8 +218,6 @@ impl UtpSocket {
     /// inflight packets are consumed.
     #[unstable]
     pub fn recv_from(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
-        use std::io::{IoError, EndOfFile, Closed};
-
         if self.state == SocketState::Closed {
             return Err(IoError {
                 kind: EndOfFile,
@@ -376,8 +372,6 @@ impl UtpSocket {
     // size, which will result in the data being split over several packets.
     #[unstable]
     pub fn send_to(&mut self, buf: &[u8]) -> IoResult<()> {
-        use std::io::{IoError, Closed};
-
         if self.state == SocketState::Closed {
             return Err(IoError {
                 kind: Closed,
@@ -562,8 +556,6 @@ impl UtpSocket {
     ///
     /// Returns appropriate reply packet, if needed.
     fn handle_packet(&mut self, packet: &Packet, src: SocketAddr) -> IoResult<Option<Packet>> {
-        use std::io::{IoError, ConnectionReset};
-
         debug!("({}, {})", self.state, packet.get_type());
 
         // Acknowledge only if the packet strictly follows the previous one
@@ -774,7 +766,8 @@ impl UtpSocket {
 mod test {
     use std::rand::random;
     use std::io::test::next_test_ip4;
-    use std::io::EndOfFile;
+    use std::io::{EndOfFile, Closed};
+    use std::io::net::udp::UdpSocket;
     use super::{UtpSocket, SocketState, BUF_SIZE};
     use packet::{Packet, PacketType};
     use util::now_microseconds;
@@ -860,8 +853,6 @@ mod test {
 
     #[test]
     fn test_sendto_on_closed_socket() {
-        use std::io::Closed;
-
         let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
 
         let client = iotry!(UtpSocket::bind(client_addr));
@@ -1246,8 +1237,6 @@ mod test {
 
     #[test]
     fn test_socket_should_not_buffer_syn_packets() {
-        use std::io::net::udp::UdpSocket;
-
         let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
         let server = iotry!(UtpSocket::bind(server_addr));
         let client = iotry!(UdpSocket::bind(client_addr));
@@ -1612,8 +1601,6 @@ mod test {
 
     #[test]
     fn test_tolerance_to_small_buffers() {
-        use std::io::EndOfFile;
-
         let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
         let mut server = iotry!(UtpSocket::bind(server_addr));
         let len = 1024;
