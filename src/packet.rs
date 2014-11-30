@@ -31,12 +31,12 @@ pub enum ExtensionType {
 }
 
 #[deriving(Clone)]
-pub struct UtpExtension {
+pub struct Extension {
     ty: ExtensionType,
     pub data: Vec<u8>,
 }
 
-impl UtpExtension {
+impl Extension {
     pub fn len(&self) -> uint {
         1 + self.data.len()
     }
@@ -58,7 +58,7 @@ impl UtpExtension {
 
 #[deriving(Clone)]
 #[packed]
-struct UtpPacketHeader {
+struct PacketHeader {
     type_ver: u8, // type: u4, ver: u4
     extension: u8,
     connection_id: u16,
@@ -69,7 +69,7 @@ struct UtpPacketHeader {
     ack_nr: u16,
 }
 
-impl UtpPacketHeader {
+impl PacketHeader {
     /// Set type of packet to the specified type.
     pub fn set_type(&mut self, t: PacketType) {
         let version = 0x0F & self.type_ver;
@@ -97,8 +97,8 @@ impl UtpPacketHeader {
     /// Read byte buffer and return corresponding packet header.
     /// It assumes the fields are in network (big-endian) byte order,
     /// preserving it.
-    pub fn decode(buf: &[u8]) -> UtpPacketHeader {
-        UtpPacketHeader {
+    pub fn decode(buf: &[u8]) -> PacketHeader {
+        PacketHeader {
             type_ver: buf[0],
             extension: buf[1],
             connection_id: u8_to_unsigned_be!(buf[2..3] -> u16),
@@ -111,7 +111,7 @@ impl UtpPacketHeader {
     }
 }
 
-impl fmt::Show for UtpPacketHeader {
+impl fmt::Show for PacketHeader {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "(type: {}, version: {}, extension: {}, \
                 connection_id: {}, timestamp_microseconds: {}, \
@@ -130,17 +130,17 @@ impl fmt::Show for UtpPacketHeader {
     }
 }
 
-pub struct UtpPacket {
-    header: UtpPacketHeader,
-    pub extensions: Vec<UtpExtension>,
+pub struct Packet {
+    header: PacketHeader,
+    pub extensions: Vec<Extension>,
     pub payload: Vec<u8>,
 }
 
-impl UtpPacket {
+impl Packet {
     /// Construct a new, empty packet.
-    pub fn new() -> UtpPacket {
-        UtpPacket {
-            header: UtpPacketHeader {
+    pub fn new() -> Packet {
+        Packet {
+            header: PacketHeader {
                 type_ver: PacketType::Data as u8 << 4 | 1,
                 extension: 0,
                 connection_id: 0,
@@ -245,7 +245,7 @@ impl UtpPacket {
                 assert!(bv.len() >= 4);
                 assert!(bv.len() % 4 == 0);
 
-                let extension = UtpExtension {
+                let extension = Extension {
                     ty: ExtensionType::SelectiveAck,
                     data: bv,
                 };
@@ -278,13 +278,13 @@ impl UtpPacket {
         self.header.len() + self.payload.len() + ext_len
     }
 
-    /// Decode a byte slice and construct the equivalent UtpPacket.
+    /// Decode a byte slice and construct the equivalent Packet.
     ///
     /// Note that this method makes no attempt to guess the payload size, saving
     /// all except the initial 20 bytes corresponding to the header as payload.
     /// It's the caller's responsability to use an appropriately sized buffer.
-    pub fn decode(buf: &[u8]) -> UtpPacket {
-        let header = UtpPacketHeader::decode(buf);
+    pub fn decode(buf: &[u8]) -> Packet {
+        let header = PacketHeader::decode(buf);
 
         let mut extensions = Vec::new();
         let mut idx = HEADER_SIZE;
@@ -297,7 +297,7 @@ impl UtpPacket {
             let payload_start = extension_start + len;
 
             if kind == ExtensionType::SelectiveAck as u8 { // or more generally, a known kind
-                let extension = UtpExtension {
+                let extension = Extension {
                     ty: ExtensionType::SelectiveAck,
                     data: buf.slice(extension_start, payload_start).to_vec(),
                 };
@@ -315,7 +315,7 @@ impl UtpPacket {
             payload = Vec::new();
         }
 
-        UtpPacket {
+        Packet {
             header: header,
             extensions: extensions,
             payload: payload,
@@ -323,8 +323,8 @@ impl UtpPacket {
     }
 
     /// Return a clone of this object without the payload
-    pub fn shallow_clone(&self) -> UtpPacket {
-        UtpPacket {
+    pub fn shallow_clone(&self) -> Packet {
+        Packet {
             header: self.header.clone(),
             extensions: self.extensions.clone(),
             payload: Vec::new(),
@@ -332,9 +332,9 @@ impl UtpPacket {
     }
 }
 
-impl Clone for UtpPacket {
-    fn clone(&self) -> UtpPacket {
-        UtpPacket {
+impl Clone for Packet {
+    fn clone(&self) -> Packet {
+        Packet {
             header: self.header,
             extensions: self.extensions.clone(),
             payload: self.payload.clone(),
@@ -342,7 +342,7 @@ impl Clone for UtpPacket {
     }
 }
 
-impl fmt::Show for UtpPacket {
+impl fmt::Show for Packet {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.header.fmt(f)
     }
@@ -350,7 +350,7 @@ impl fmt::Show for UtpPacket {
 
 #[cfg(test)]
 mod test {
-    use super::UtpPacket;
+    use super::Packet;
     use super::PacketType::{State, Data};
     use super::ExtensionType;
     use super::HEADER_SIZE;
@@ -360,7 +360,7 @@ mod test {
     fn test_packet_decode() {
         let buf = [0x21, 0x00, 0x41, 0xa8, 0x99, 0x2f, 0xd0, 0x2a, 0x9f, 0x4a,
                    0x26, 0x21, 0x00, 0x10, 0x00, 0x00, 0x3a, 0xf2, 0x6c, 0x79];
-        let pkt = UtpPacket::decode(&buf);
+        let pkt = Packet::decode(&buf);
         assert_eq!(pkt.header.get_version(), 1);
         assert_eq!(pkt.header.get_type(), State);
         assert_eq!(pkt.header.extension, 0);
@@ -379,7 +379,7 @@ mod test {
         let buf = [0x21, 0x01, 0x41, 0xa7, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                    0x00, 0x00, 0x00, 0x00, 0x05, 0xdc, 0xab, 0x53, 0x3a, 0xf5,
                    0x00, 0x04, 0x00, 0x00, 0x00, 0x00];
-        let packet = UtpPacket::decode(&buf);
+        let packet = Packet::decode(&buf);
         assert_eq!(packet.header.get_version(), 1);
         assert_eq!(packet.header.get_type(), State);
         assert_eq!(packet.header.extension, 1);
@@ -404,7 +404,7 @@ mod test {
                    0x00, 0x00, 0x00, 0x00, 0x05, 0xdc, 0xab, 0x53, 0x3a, 0xf5,
                    0xff, 0x04, 0x00, 0x00, 0x00, 0x00, // Imaginary extension
                    0x00, 0x04, 0x00, 0x00, 0x00, 0x00];
-        let packet = UtpPacket::decode(&buf);
+        let packet = Packet::decode(&buf);
         assert_eq!(packet.header.get_version(), 1);
         assert_eq!(packet.header.get_type(), State);
         assert_eq!(packet.header.extension, 1);
@@ -428,7 +428,7 @@ mod test {
         let (timestamp, timestamp_diff): (u32, u32) = (15270793, 1707040186);
         let (connection_id, seq_nr, ack_nr): (u16, u16, u16) = (16808, 15090, 17096);
         let window_size: u32 = 1048576;
-        let mut pkt = UtpPacket::new();
+        let mut pkt = Packet::new();
         pkt.set_type(Data);
         pkt.header.timestamp_microseconds = timestamp.to_be();
         pkt.header.timestamp_difference_microseconds = timestamp_diff.to_be();
@@ -464,7 +464,7 @@ mod test {
                    0x65, 0xbf, 0x5d, 0xba, 0x00, 0x10, 0x00, 0x00,
                    0x3a, 0xf2, 0x42, 0xc8, 0x48, 0x65, 0x6c, 0x6c,
                    0x6f, 0x0a];
-        assert_eq!(UtpPacket::decode(&buf).bytes().as_slice(), buf.as_slice());
+        assert_eq!(Packet::decode(&buf).bytes().as_slice(), buf.as_slice());
     }
 
 }
