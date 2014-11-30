@@ -603,9 +603,7 @@ impl UtpSocket {
                 self.fin_seq_nr = packet.seq_nr();
 
                 // If all packets are received and handled
-                if self.pending_data.is_empty() &&
-                    self.incoming_buffer.is_empty() &&
-                    self.ack_nr == self.fin_seq_nr
+                if self.no_pending_data() && self.ack_nr == self.fin_seq_nr
                 {
                     self.state = SocketState::Closed;
                     Ok(Some(self.prepare_reply(packet, PacketType::State)))
@@ -761,6 +759,11 @@ impl UtpSocket {
             self.incoming_buffer.remove(i);
         }
         self.incoming_buffer.insert(i, packet);
+    }
+
+    /// Checks whether there is pending data (to be returned on a `recv_from` call) on the socket
+    fn no_pending_data(&self) -> bool {
+        self.pending_data.is_empty() && self.incoming_buffer.is_empty()
     }
 }
 
