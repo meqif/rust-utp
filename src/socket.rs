@@ -79,9 +79,9 @@ pub struct UtpSocket {
     /// Window size of the remote peer
     remote_wnd_size: uint,
     /// Rolling window of packet delay to remote peer
-    base_delays: Vec<(TimestampSender, TimestampReceived)>,
+    base_delays: Vec<(TimestampReceived, TimestampSender)>,
     /// Rolling window of the difference between sending a packet and receiving its acknowledgement
-    current_delays: Vec<(TimestampSender, TimestampReceived)>,
+    current_delays: Vec<(TimestampReceived, TimestampSender)>,
     /// Current congestion timeout in milliseconds
     congestion_timeout: u64,
     /// Congestion window in bytes
@@ -452,7 +452,7 @@ impl UtpSocket {
 
     fn update_base_delay(&mut self, v: u32, now: u32) {
         // Remove measurements more than 2 minutes old
-        while !self.base_delays.is_empty() && now - self.base_delays[0].val1() > DELAY_MAX_AGE {
+        while !self.base_delays.is_empty() && now - self.base_delays[0].val0() > DELAY_MAX_AGE {
             self.base_delays.remove(0);
         }
 
@@ -462,7 +462,7 @@ impl UtpSocket {
 
     fn update_current_delay(&mut self, v: u32, now: u32) {
         // Remove measurements more than 2 minutes old
-        while !self.current_delays.is_empty() && now - self.current_delays[0].val1() > DELAY_MAX_AGE {
+        while !self.current_delays.is_empty() && now - self.current_delays[0].val0() > DELAY_MAX_AGE {
             self.current_delays.remove(0);
         }
 
@@ -497,8 +497,8 @@ impl UtpSocket {
 
     /// Calculate the lowest base delay in the current window.
     fn min_base_delay(&self) -> u32 {
-        match self.base_delays.iter().min() {
-            Some(&(sent,_received)) => sent,
+        match self.base_delays.iter().min_by(|&&(received,sent)| received - sent) {
+            Some(&(received,sent)) => received - sent,
             None => 0
         }
     }
