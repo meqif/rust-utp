@@ -35,6 +35,9 @@ enum SocketState {
     Closed,
 }
 
+type TimestampSender = u32;
+type TimestampReceived = u32;
+
 /// A uTP (Micro Transport Protocol) socket.
 pub struct UtpSocket {
     /// The wrapped UDP socket
@@ -76,9 +79,9 @@ pub struct UtpSocket {
     /// Window size of the remote peer
     remote_wnd_size: uint,
     /// Rolling window of packet delay to remote peer
-    base_delays: Vec<(u32,u32)>,
+    base_delays: Vec<(TimestampSender, TimestampReceived)>,
     /// Rolling window of the difference between sending a packet and receiving its acknowledgement
-    current_delays: Vec<(u32,u32)>,
+    current_delays: Vec<(TimestampSender, TimestampReceived)>,
     /// Current congestion timeout in milliseconds
     congestion_timeout: u64,
     /// Congestion window in bytes
