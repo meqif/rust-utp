@@ -497,7 +497,10 @@ impl UtpSocket {
 
     /// Calculate the lowest base delay in the current window.
     fn min_base_delay(&self) -> u32 {
-        self.base_delays.iter().min().unwrap().val1()
+        match self.base_delays.iter().min() {
+            Some(&(sent,_received)) => sent,
+            None => 0
+        }
     }
 
     /// Build the selective acknowledgment payload for usage in packets.
