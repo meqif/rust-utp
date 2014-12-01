@@ -450,9 +450,8 @@ impl UtpSocket {
         }
     }
 
-    fn update_base_delay(&mut self, v: u32) {
+    fn update_base_delay(&mut self, v: u32, now: u32) {
         // Remove measurements more than 2 minutes old
-        let now = now_microseconds();
         while !self.base_delays.is_empty() && now - self.base_delays[0].val0() > DELAY_MAX_AGE {
             self.base_delays.remove(0);
         }
@@ -461,9 +460,8 @@ impl UtpSocket {
         self.base_delays.push((now_microseconds(), v));
     }
 
-    fn update_current_delay(&mut self, v: u32) {
+    fn update_current_delay(&mut self, v: u32, now: u32) {
         // Remove measurements more than 2 minutes old
-        let now = now_microseconds();
         while !self.current_delays.is_empty() && now - self.current_delays[0].val0() > DELAY_MAX_AGE {
             self.current_delays.remove(0);
         }
@@ -661,8 +659,9 @@ impl UtpSocket {
             self.duplicate_ack_count = 1;
         }
 
-        self.update_base_delay(packet.timestamp_microseconds());
-        self.update_current_delay(packet.timestamp_difference_microseconds());
+        let now = now_microseconds();
+        self.update_base_delay(packet.timestamp_microseconds(), now);
+        self.update_current_delay(packet.timestamp_difference_microseconds(), now);
 
         let bytes_newly_acked = packet.len();
         let flightsize = self.curr_window;
