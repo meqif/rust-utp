@@ -490,9 +490,8 @@ impl UtpSocket {
     /// weighted moving average filter with smoothing factor 0.333 over the
     /// current delays in the current window.
     fn filtered_current_delay(&self) -> u32 {
-        let input = self.current_delays.iter().map(|&(_,x)| x as f64).collect();
-        let output = ewma(input, 0.333);
-        output[output.len() - 1] as u32
+        let input = self.current_delays.iter().map(|&(_,x)| x).collect();
+        ewma(input, 0.333) as u32
     }
 
     /// Calculate the lowest base delay in the current window.
