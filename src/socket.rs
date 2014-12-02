@@ -12,10 +12,10 @@ use packet::{Packet, PacketType, ExtensionType, HEADER_SIZE};
 // For simplicity's sake, let us assume no packet will ever exceed the
 // Ethernet maximum transfer unit of 1500 bytes.
 const BUF_SIZE: uint = 1500;
-const DELAY_MAX_AGE: u32 = 2 * 60 * 1_000_000;
+const DELAY_MAX_AGE: i64 = 2 * 60 * 1_000_000;
 const GAIN: uint = 1;
 const ALLOWED_INCREASE: uint = 1;
-const TARGET: uint = 100_000; // 100 milliseconds
+const TARGET: i64 = 100_000; // 100 milliseconds
 const MSS: uint = 1400;
 const MIN_CWND: uint = 2;
 const INIT_CWND: uint = 2;
@@ -35,8 +35,8 @@ enum SocketState {
     Closed,
 }
 
-type TimestampSender = u32;
-type TimestampReceived = u32;
+type TimestampSender = i64;
+type TimestampReceived = i64;
 
 /// A uTP (Micro Transport Protocol) socket.
 pub struct UtpSocket {
@@ -450,24 +450,24 @@ impl UtpSocket {
         }
     }
 
-    fn update_base_delay(&mut self, v: u32, now: u32) {
+    fn update_base_delay(&mut self, v: i64, now: i64) {
         // Remove measurements more than 2 minutes old
         while !self.base_delays.is_empty() && now - self.base_delays[0].val0() > DELAY_MAX_AGE {
             self.base_delays.remove(0);
         }
 
         // Insert new measurement
-        self.base_delays.push((now_microseconds(), v));
+        self.base_delays.push((now, v));
     }
 
-    fn update_current_delay(&mut self, v: u32, now: u32) {
+    fn update_current_delay(&mut self, v: i64, now: i64) {
         // Remove measurements more than 2 minutes old
         while !self.current_delays.is_empty() && now - self.current_delays[0].val0() > DELAY_MAX_AGE {
             self.current_delays.remove(0);
         }
 
         // Insert new measurement
-        self.current_delays.push((now_microseconds(), v));
+        self.current_delays.push((now, v));
     }
 
     fn update_congestion_timeout(&mut self, current_delay: int) {
@@ -489,14 +489,14 @@ impl UtpSocket {
     /// The current delay is calculated through application of the exponential
     /// weighted moving average filter with smoothing factor 0.333 over the
     /// current delays in the current window.
-    fn filtered_current_delay(&self) -> u32 {
+    fn filtered_current_delay(&self) -> i64 {
         let input = self.current_delays.iter().map(|&(_,x)| x).collect();
-        ewma(input, 0.333) as u32
+        ewma(input, 0.333) as i64
     }
 
     /// Calculate the lowest base delay in the current window.
-    fn min_base_delay(&self) -> u32 {
-        match self.base_delays.iter().min_by(|&&(received,sent)| received - sent) {
+    fn min_base_delay(&self) -> i64 {
+        match self.base_delays.iter().min_by(|&&(received,sent)| (received - sent).abs()) {
             Some(&(received,sent)) => received - sent,
             None => 0
         }
@@ -659,24 +659,27 @@ impl UtpSocket {
             self.duplicate_ack_count = 1;
         }
 
-        let now = now_microseconds();
-        self.update_base_delay(packet.timestamp_microseconds(), now);
-        self.update_current_delay(packet.timestamp_difference_microseconds(), now);
+        let now = now_microseconds() as i64;
+        self.update_base_delay(packet.timestamp_microseconds() as i64, now);
+        self.update_current_delay(packet.timestamp_difference_microseconds() as i64, now);
 
         let bytes_newly_acked = packet.len();
         let flightsize = self.curr_window;
 
-        let queuing_delay = self.filtered_current_delay() - self.min_base_delay();
-        let target = TARGET as u32;
-        let off_target: u32 = (target - queuing_delay) / target;
+        let filtered_current_delay = self.filtered_current_delay();
+        let min_base_delay = self.min_base_delay();
+        let queuing_delay = filtered_current_delay.abs() - min_base_delay.abs();
+        let off_target: i64 = (TARGET - queuing_delay) / TARGET;
         self.cwnd += GAIN * off_target as uint * bytes_newly_acked * MSS / self.cwnd;
         let max_allowed_cwnd = flightsize + ALLOWED_INCREASE * MSS;
         self.cwnd = min(self.cwnd, max_allowed_cwnd);
         self.cwnd = max(self.cwnd, MIN_CWND * MSS);
 
-        let rtt = (target - off_target) / 1000; // in milliseconds
+        let rtt = (TARGET - off_target) / 1000; // in milliseconds
         self.update_congestion_timeout(rtt as int);
 
+        debug!("filtered_current_delay: {}", filtered_current_delay);
+        debug!("min_base_delay: {}", min_base_delay);
         debug!("queuing_delay: {}", queuing_delay);
         debug!("off_target: {}", off_target);
         debug!("cwnd: {}", self.cwnd);
