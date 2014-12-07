@@ -12,7 +12,7 @@ license = "MIT/Apache-2.0"
 keywords = ["utp", "networking", "protocol", "transport"]
 
 [dependencies]
-time = "~0.0.3"
+time = "*"
 
 [lib]
 name = "utp"
