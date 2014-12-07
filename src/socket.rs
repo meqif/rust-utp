@@ -650,6 +650,18 @@ impl UtpSocket {
         Some(reply)
     }
 
+    fn queuing_delay(&self) -> i64 {
+        let filtered_current_delay = self.filtered_current_delay();
+        let min_base_delay = self.min_base_delay();
+        let queuing_delay = filtered_current_delay.abs() - min_base_delay.abs();
+
+        debug!("filtered_current_delay: {}", filtered_current_delay);
+        debug!("min_base_delay: {}", min_base_delay);
+        debug!("queuing_delay: {}", queuing_delay);
+
+        return queuing_delay;
+    }
+
     fn handle_state_packet(&mut self, packet: &Packet) {
         if packet.ack_nr() == self.last_acked {
             self.duplicate_ack_count += 1;
@@ -666,10 +678,7 @@ impl UtpSocket {
         let bytes_newly_acked = packet.len();
         let flightsize = self.curr_window;
 
-        let filtered_current_delay = self.filtered_current_delay();
-        let min_base_delay = self.min_base_delay();
-        let queuing_delay = filtered_current_delay.abs() - min_base_delay.abs();
-        let off_target: i64 = (TARGET - queuing_delay) / TARGET;
+        let off_target: i64 = (TARGET - self.queuing_delay()) / TARGET;
         self.cwnd += GAIN * off_target as uint * bytes_newly_acked * MSS / self.cwnd;
         let max_allowed_cwnd = flightsize + ALLOWED_INCREASE * MSS;
         self.cwnd = min(self.cwnd, max_allowed_cwnd);
@@ -678,9 +687,6 @@ impl UtpSocket {
         let rtt = (TARGET - off_target) / 1000; // in milliseconds
         self.update_congestion_timeout(rtt as int);
 
-        debug!("filtered_current_delay: {}", filtered_current_delay);
-        debug!("min_base_delay: {}", min_base_delay);
-        debug!("queuing_delay: {}", queuing_delay);
         debug!("off_target: {}", off_target);
         debug!("cwnd: {}", self.cwnd);
         debug!("max_allowed_cwnd: {}", max_allowed_cwnd);
