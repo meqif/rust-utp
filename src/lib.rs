@@ -17,8 +17,6 @@
 #![experimental]
 #![feature(macro_rules)]
 #![feature(phase)]
-#![feature(if_let)]
-#![feature(while_let)]
 #![feature(globs)]
 #![deny(missing_docs)]
 
