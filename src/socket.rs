@@ -682,6 +682,7 @@ impl UtpSocket {
             self.duplicate_ack_count = 1;
         }
 
+        // Update base and current delay
         let now = now_microseconds() as i64;
         self.update_base_delay(packet.timestamp_microseconds() as i64, now);
         self.update_current_delay(packet.timestamp_difference_microseconds() as i64, now);
@@ -689,8 +690,10 @@ impl UtpSocket {
         let off_target: i64 = (TARGET - self.queuing_delay()) / TARGET;
         debug!("off_target: {}", off_target);
 
+        // Update congestion window size
         self.update_congestion_window(off_target as uint, packet.len());
 
+        // Update congestion timeout
         let rtt = (TARGET - off_target) / 1000; // in milliseconds
         self.update_congestion_timeout(rtt as int);
 
