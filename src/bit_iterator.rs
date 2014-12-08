@@ -1,14 +1,18 @@
 /// Lazy iterator over bits of a vector of bytes, starting with the LSB
 /// (least-significat bit) of the first element of the vector.
-pub struct BitIterator { object: Vec<u8>, current_byte: uint, current_bit: uint }
+pub struct BitIterator<'a> {
+    object: &'a Vec<u8>,
+    current_byte: uint,
+    current_bit: uint
+}
 
-impl BitIterator {
-    pub fn new(obj: Vec<u8>) -> BitIterator {
+impl<'a> BitIterator<'a> {
+    pub fn new<'a>(obj: &'a Vec<u8>) -> BitIterator {
         BitIterator { object: obj, current_byte: 0, current_bit: 0 }
     }
 }
 
-impl Iterator<u8> for BitIterator {
+impl<'a> Iterator<u8> for BitIterator<'a> {
     fn next(&mut self) -> Option<u8> {
         let result = self.object[self.current_byte] >> self.current_bit & 0x1;
 
@@ -31,7 +35,7 @@ fn test_iterator() {
     let expected_bits = vec!(0,1,0,1, 0,0,1,1, 0,1,1,1, 1,1,1,1);
     let mut i = 0;
 
-    for bit in BitIterator::new(bytes) {
+    for bit in BitIterator::new(&bytes) {
         println!("{} == {}", bit, expected_bits[i]);
         assert_eq!(bit, expected_bits[i]);
         i += 1;

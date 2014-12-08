@@ -52,7 +52,7 @@ impl Extension {
     }
 
     pub fn iter(&self) -> BitIterator {
-        BitIterator::new(self.data.clone())
+        BitIterator::new(&self.data)
     }
 }
 
