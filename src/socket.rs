@@ -19,6 +19,9 @@ const TARGET: i64 = 100_000; // 100 milliseconds
 const MSS: uint = 1400;
 const MIN_CWND: uint = 2;
 const INIT_CWND: uint = 2;
+const INITIAL_CONGESTION_TIMEOUT: u64 = 1000; // one second
+const MIN_CONGESTION_TIMEOUT: u64 = 500; // 500 ms
+const MAX_CONGESTION_TIMEOUT: u64 = 60_000; // one minute
 
 macro_rules! iotry(
     ($e:expr) => (match $e { Ok(e) => e, Err(e) => panic!("{}", e) })
@@ -117,7 +120,7 @@ impl UtpSocket {
                 remote_wnd_size: 0,
                 current_delays: Vec::new(),
                 base_delays: Vec::new(),
-                congestion_timeout: 1000, // 1 second
+                congestion_timeout: INITIAL_CONGESTION_TIMEOUT,
                 cwnd: INIT_CWND * MSS,
             }),
             Err(e) => Err(e)
@@ -477,8 +480,8 @@ impl UtpSocket {
         let delta = self.rtt - current_delay;
         self.rtt_variance += (delta.abs() - self.rtt_variance) / 4;
         self.rtt += (current_delay - self.rtt) / 8;
-        self.congestion_timeout = max((self.rtt + self.rtt_variance * 4) as u64, 500);
-        self.congestion_timeout = min(self.congestion_timeout, 60_000);
+        self.congestion_timeout = max((self.rtt + self.rtt_variance * 4) as u64, MIN_CONGESTION_TIMEOUT);
+        self.congestion_timeout = min(self.congestion_timeout, MAX_CONGESTION_TIMEOUT);
 
         debug!("current_delay: {}", current_delay);
         debug!("delta: {}", delta);
