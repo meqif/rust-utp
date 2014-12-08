@@ -460,9 +460,12 @@ impl UtpSocket {
         self.base_delays.push((now, v));
     }
 
+    /// Insert a new sample in the current delay list after removing samples older than one RTT, as
+    /// specified in RFC6817.
     fn update_current_delay(&mut self, v: i64, now: i64) {
-        // Remove measurements more than 2 minutes old
-        while !self.current_delays.is_empty() && now - self.current_delays[0].val0() > DELAY_MAX_AGE {
+        // Remove samples more than one RTT old
+        let rtt = self.rtt as i64 * 100;
+        while !self.current_delays.is_empty() && now - self.current_delays[0].val0() > rtt {
             self.current_delays.remove(0);
         }
 
