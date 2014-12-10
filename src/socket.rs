@@ -23,9 +23,9 @@ const INITIAL_CONGESTION_TIMEOUT: u64 = 1000; // one second
 const MIN_CONGESTION_TIMEOUT: u64 = 500; // 500 ms
 const MAX_CONGESTION_TIMEOUT: u64 = 60_000; // one minute
 
-macro_rules! iotry(
+macro_rules! iotry {
     ($e:expr) => (match $e { Ok(e) => e, Err(e) => panic!("{}", e) })
-)
+}
 
 #[deriving(PartialEq,Eq,Show)]
 enum SocketState {
