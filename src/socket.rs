@@ -599,6 +599,14 @@ impl UtpSocket {
                 self.state = SocketState::Connected;
                 Ok(None)
             },
+            (SocketState::SynSent, _) => {
+                Err(IoError {
+                    kind: ConnectionFailed,
+                    desc: "The remote peer sent an invalid reply",
+                    detail: None,
+                })
+            }
+            (SocketState::Connected, PacketType::Syn) => Ok(None), // ignore
             (SocketState::Connected, PacketType::Data) => {
                 Ok(self.handle_data_packet(packet))
             },
