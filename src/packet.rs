@@ -25,7 +25,7 @@ pub enum PacketType {
     Syn   = 4,
 }
 
-#[deriving(PartialEq,Eq,Show,Clone)]
+#[deriving(PartialEq,Eq,Show,Clone,Copy)]
 pub enum ExtensionType {
     SelectiveAck = 1,
 }
@@ -56,7 +56,7 @@ impl Extension {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone,Copy)]
 #[packed]
 struct PacketHeader {
     type_ver: u8, // type: u4, ver: u4
