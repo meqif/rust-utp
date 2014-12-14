@@ -1,5 +1,5 @@
 use std::cmp::{min, max};
-use std::collections::DList;
+use std::collections::{DList, RingBuf};
 use std::io::net::ip::SocketAddr;
 use std::io::net::udp::UdpSocket;
 use std::io::{IoResult, IoError, TimedOut, ConnectionFailed, EndOfFile, Closed, ConnectionReset};
@@ -22,6 +22,7 @@ const INIT_CWND: uint = 2;
 const INITIAL_CONGESTION_TIMEOUT: u64 = 1000; // one second
 const MIN_CONGESTION_TIMEOUT: u64 = 500; // 500 ms
 const MAX_CONGESTION_TIMEOUT: u64 = 60_000; // one minute
+const BASE_HISTORY: uint = 10; // base delays history size
 
 macro_rules! iotry {
     ($e:expr) => (match $e { Ok(e) => e, Err(e) => panic!("{}", e) })
@@ -82,7 +83,7 @@ pub struct UtpSocket {
     /// Window size of the remote peer
     remote_wnd_size: uint,
     /// Rolling window of packet delay to remote peer
-    base_delays: Vec<(TimestampReceived, TimestampSender)>,
+    base_delays: RingBuf<(TimestampReceived, TimestampSender)>,
     /// Rolling window of the difference between sending a packet and receiving its acknowledgement
     current_delays: Vec<(TimestampReceived, TimestampSender)>,
     /// Current congestion timeout in milliseconds
@@ -119,7 +120,7 @@ impl UtpSocket {
                 curr_window: 0,
                 remote_wnd_size: 0,
                 current_delays: Vec::new(),
-                base_delays: Vec::new(),
+                base_delays: RingBuf::with_capacity(BASE_HISTORY),
                 congestion_timeout: INITIAL_CONGESTION_TIMEOUT,
                 cwnd: INIT_CWND * MSS,
             }),
@@ -454,13 +455,21 @@ impl UtpSocket {
     }
 
     fn update_base_delay(&mut self, v: i64, now: i64) {
-        // Remove measurements more than 2 minutes old
-        while !self.base_delays.is_empty() && now - self.base_delays[0].val0() > DELAY_MAX_AGE {
-            self.base_delays.remove(0);
-        }
+        use std::num::Int;
+        let minute_in_microseconds = 60 * 10.pow(6);
 
-        // Insert new measurement
-        self.base_delays.push((now, v));
+        if self.base_delays.is_empty() || now - self.base_delays[0].val0() > minute_in_microseconds {
+            // Drop the oldest sample and save minimum for current minute
+            if self.base_delays.len() == BASE_HISTORY {
+                self.base_delays.pop_back();
+            }
+            self.base_delays.push_front((now, v));
+        } else {
+            // Replace sample for the current minute if the delay is lower
+            if v < self.base_delays[0].val1() {
+                self.base_delays[0] = (now, v);
+            }
+        }
     }
 
     /// Insert a new sample in the current delay list after removing samples older than one RTT, as
