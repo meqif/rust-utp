@@ -42,6 +42,16 @@ enum SocketState {
 type TimestampSender = i64;
 type TimestampReceived = i64;
 
+struct DelaySample {
+    received_at: TimestampReceived,
+    sent_at: TimestampSender,
+}
+
+struct DelayDifferenceSample {
+    received_at: TimestampReceived,
+    difference: TimestampSender,
+}
+
 /// A uTP (Micro Transport Protocol) socket.
 pub struct UtpSocket {
     /// The wrapped UDP socket
@@ -83,9 +93,9 @@ pub struct UtpSocket {
     /// Window size of the remote peer
     remote_wnd_size: uint,
     /// Rolling window of packet delay to remote peer
-    base_delays: RingBuf<(TimestampReceived, TimestampSender)>,
+    base_delays: RingBuf<DelaySample>,
     /// Rolling window of the difference between sending a packet and receiving its acknowledgement
-    current_delays: Vec<(TimestampReceived, TimestampSender)>,
+    current_delays: Vec<DelayDifferenceSample>,
     /// Current congestion timeout in milliseconds
     congestion_timeout: u64,
     /// Congestion window in bytes
@@ -458,16 +468,16 @@ impl UtpSocket {
         use std::num::Int;
         let minute_in_microseconds = 60 * 10.pow(6);
 
-        if self.base_delays.is_empty() || now - self.base_delays[0].val0() > minute_in_microseconds {
+        if self.base_delays.is_empty() || now - self.base_delays[0].received_at > minute_in_microseconds {
             // Drop the oldest sample and save minimum for current minute
             if self.base_delays.len() == BASE_HISTORY {
                 self.base_delays.pop_back();
             }
-            self.base_delays.push_front((now, v));
+            self.base_delays.push_front(DelaySample{ received_at: now, sent_at: v });
         } else {
             // Replace sample for the current minute if the delay is lower
-            if v < self.base_delays[0].val1() {
-                self.base_delays[0] = (now, v);
+            if v < self.base_delays[0].sent_at {
+                self.base_delays[0] = DelaySample{ received_at: now, sent_at: v};
             }
         }
     }
@@ -477,12 +487,12 @@ impl UtpSocket {
     fn update_current_delay(&mut self, v: i64, now: i64) {
         // Remove samples more than one RTT old
         let rtt = self.rtt as i64 * 100;
-        while !self.current_delays.is_empty() && now - self.current_delays[0].val0() > rtt {
+        while !self.current_delays.is_empty() && now - self.current_delays[0].received_at > rtt {
             self.current_delays.remove(0);
         }
 
         // Insert new measurement
-        self.current_delays.push((now, v));
+        self.current_delays.push(DelayDifferenceSample{ received_at: now, difference: v });
     }
 
     fn update_congestion_timeout(&mut self, current_delay: int) {
@@ -505,14 +515,14 @@ impl UtpSocket {
     /// weighted moving average filter with smoothing factor 0.333 over the
     /// current delays in the current window.
     fn filtered_current_delay(&self) -> i64 {
-        let input = self.current_delays.iter().map(|&(_,x)| x).collect();
+        let input = self.current_delays.iter().map(|&ref x| x.difference).collect();
         ewma(input, 0.333) as i64
     }
 
     /// Calculate the lowest base delay in the current window.
     fn min_base_delay(&self) -> i64 {
-        match self.base_delays.iter().min_by(|&&(received,sent)| (received - sent).abs()) {
-            Some(&(received,sent)) => received - sent,
+        match self.base_delays.iter().min_by(|&x| (x.received_at - x.sent_at).abs()) {
+            Some(ref x) => x.received_at - x.sent_at,
             None => 0
         }
     }
