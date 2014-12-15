@@ -695,9 +695,9 @@ impl UtpSocket {
         return queuing_delay;
     }
 
-    fn update_congestion_window(&mut self, off_target: uint, bytes_newly_acked: uint) {
+    fn update_congestion_window(&mut self, off_target: f64, bytes_newly_acked: uint) {
         let flightsize = self.curr_window;
-        self.cwnd += GAIN * off_target * bytes_newly_acked * MSS / self.cwnd;
+        self.cwnd += (GAIN as f64 * off_target * bytes_newly_acked as f64 * MSS as f64 / self.cwnd as f64) as uint;
         let max_allowed_cwnd = flightsize + ALLOWED_INCREASE * MSS;
         self.cwnd = min(self.cwnd, max_allowed_cwnd);
         self.cwnd = max(self.cwnd, MIN_CWND * MSS);
@@ -720,14 +720,14 @@ impl UtpSocket {
         self.update_base_delay(packet.timestamp_microseconds() as i64, now);
         self.update_current_delay(packet.timestamp_difference_microseconds() as i64, now);
 
-        let off_target: i64 = (TARGET - self.queuing_delay()) / TARGET;
+        let off_target: f64 = (TARGET as f64 - self.queuing_delay() as f64) / TARGET as f64;
         debug!("off_target: {}", off_target);
 
         // Update congestion window size
-        self.update_congestion_window(off_target as uint, packet.len());
+        self.update_congestion_window(off_target, packet.len());
 
         // Update congestion timeout
-        let rtt = (TARGET - off_target) / 1000; // in milliseconds
+        let rtt = (TARGET - off_target as i64) / 1000; // in milliseconds
         self.update_congestion_timeout(rtt as int);
 
         let mut packet_loss_detected: bool = !self.send_window.is_empty() &&
