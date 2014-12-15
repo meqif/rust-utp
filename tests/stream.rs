@@ -15,7 +15,7 @@ fn test_stream_open_and_close() {
     let server_addr = next_test_ip4();
     let mut server = iotry!(UtpStream::bind(server_addr));
 
-    spawn(proc() {
+    spawn(move || {
         let mut client = iotry!(UtpStream::connect(server_addr));
         iotry!(client.close());
         drop(client);
@@ -36,7 +36,7 @@ fn test_stream_small_data() {
     let server_addr = next_test_ip4();
     let mut server = UtpStream::bind(server_addr);
 
-    spawn(proc() {
+    spawn(move || {
         let mut client = iotry!(UtpStream::connect(server_addr));
         iotry!(client.write(d.as_slice()));
         iotry!(client.close());
@@ -59,7 +59,7 @@ fn test_stream_large_data() {
     let server_addr = next_test_ip4();
     let mut server = UtpStream::bind(server_addr);
 
-    spawn(proc() {
+    spawn(move || {
         let mut client = iotry!(UtpStream::connect(server_addr));
         iotry!(client.write(d.as_slice()));
         iotry!(client.close());
@@ -83,7 +83,7 @@ fn test_stream_successive_reads() {
     let server_addr = next_test_ip4();
     let mut server = UtpStream::bind(server_addr);
 
-    spawn(proc() {
+    spawn(move || {
         let mut client = iotry!(UtpStream::connect(server_addr));
         iotry!(client.write(d.as_slice()));
         iotry!(client.close());

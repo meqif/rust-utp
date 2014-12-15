@@ -18,7 +18,7 @@ fn bench_connection_setup_and_teardown(b: &mut Bencher) {
     b.iter(|| {
         let mut server = iotry!(UtpStream::bind(server_addr));
 
-        spawn(proc() {
+        spawn(move || {
             let mut client = iotry!(UtpStream::connect(server_addr));
             iotry!(client.close());
         });
@@ -39,7 +39,7 @@ fn bench_transfer_one_packet(b: &mut Bencher) {
         let data = data_arc.clone();
         let mut server = iotry!(UtpStream::bind(server_addr));
 
-        spawn(proc() {
+        spawn(move || {
             let mut client = iotry!(UtpStream::connect(server_addr));
             iotry!(client.write(data.as_slice()));
             iotry!(client.close());
@@ -62,7 +62,7 @@ fn bench_transfer_one_megabyte(b: &mut Bencher) {
         let data = data_arc.clone();
         let mut server = iotry!(UtpStream::bind(server_addr));
 
-        spawn(proc() {
+        spawn(move || {
             let mut client = iotry!(UtpStream::connect(server_addr));
             iotry!(client.write(data.as_slice()));
             iotry!(client.close());
