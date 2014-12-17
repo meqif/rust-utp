@@ -7,7 +7,7 @@ pub struct BitIterator<'a> {
 }
 
 impl<'a> BitIterator<'a> {
-    pub fn new<'a>(obj: &'a Vec<u8>) -> BitIterator {
+    pub fn new(obj: &'a Vec<u8>) -> BitIterator {
         BitIterator { object: obj, current_byte: 0, current_bit: 0 }
     }
 }
