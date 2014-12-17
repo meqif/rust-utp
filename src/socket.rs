@@ -12,7 +12,6 @@ use packet::{Packet, PacketType, ExtensionType, HEADER_SIZE};
 // For simplicity's sake, let us assume no packet will ever exceed the
 // Ethernet maximum transfer unit of 1500 bytes.
 const BUF_SIZE: uint = 1500;
-const DELAY_MAX_AGE: i64 = 2 * 60 * 1_000_000;
 const GAIN: uint = 1;
 const ALLOWED_INCREASE: uint = 1;
 const TARGET: i64 = 100_000; // 100 milliseconds
