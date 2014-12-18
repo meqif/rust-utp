@@ -615,6 +615,8 @@ impl UtpSocket {
                 self.ack_nr = packet.seq_nr();
                 self.seq_nr += 1;
                 self.state = SocketState::Connected;
+                self.last_acked = packet.ack_nr();
+                self.last_acked_timestamp = now_microseconds();
                 Ok(None)
             },
             (SocketState::SynSent, _) => {
