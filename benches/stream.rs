@@ -8,9 +8,9 @@ use std::io::test::next_test_ip4;
 use utp::UtpStream;
 use std::sync::Arc;
 
-macro_rules! iotry(
+macro_rules! iotry {
     ($e:expr) => (match $e { Ok(e) => e, Err(e) => panic!("{}", e) })
-)
+}
 
 #[bench]
 fn bench_connection_setup_and_teardown(b: &mut Bencher) {

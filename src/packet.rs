@@ -6,7 +6,7 @@ use bit_iterator::BitIterator;
 
 pub const HEADER_SIZE: uint = 20;
 
-macro_rules! u8_to_unsigned_be(
+macro_rules! u8_to_unsigned_be {
     ($src:ident[$start:expr..$end:expr] -> $t:ty) => ({
         let mut result: $t = 0;
         for i in range_inclusive(0u, $end - $start).rev() {
@@ -14,7 +14,7 @@ macro_rules! u8_to_unsigned_be(
         }
         result
     })
-)
+}
 
 #[deriving(PartialEq,Eq,Show)]
 pub enum PacketType {

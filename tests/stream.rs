@@ -5,9 +5,9 @@ extern crate utp;
 use std::io::test::next_test_ip4;
 use utp::UtpStream;
 
-macro_rules! iotry(
+macro_rules! iotry {
     ($e:expr) => (match $e { Ok(e) => e, Err(e) => panic!("{}", e) })
-)
+}
 
 
 #[test]
