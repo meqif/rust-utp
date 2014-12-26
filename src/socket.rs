@@ -824,6 +824,7 @@ mod test {
     use std::io::test::next_test_ip4;
     use std::io::{EndOfFile, Closed};
     use std::io::net::udp::UdpSocket;
+    use std::thread::Thread;
     use super::{UtpSocket, SocketState, BUF_SIZE};
     use packet::{Packet, PacketType};
     use util::now_microseconds;
@@ -841,12 +842,12 @@ mod test {
         // Check proper difference in client's send connection id and receive connection id
         assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
 
-        spawn(move || {
+        Thread::spawn(move || {
             let client = iotry!(client.connect(server_addr));
             assert!(client.state == SocketState::Connected);
             assert_eq!(client.connected_to, server_addr);
             drop(client);
-        });
+        }).detach();
 
         let mut buf = [0u8, ..BUF_SIZE];
         match server.recv_from(&mut buf) {
@@ -870,12 +871,12 @@ mod test {
         assert!(server.state == SocketState::New);
         assert!(client.state == SocketState::New);
 
-        spawn(move || {
+        Thread::spawn(move || {
             let mut client = iotry!(client.connect(server_addr));
             assert!(client.state == SocketState::Connected);
             assert_eq!(client.close(), Ok(()));
             drop(client);
-        });
+        }).detach();
 
         // Make the server listen for incoming connections
         let mut buf = [0u8, ..BUF_SIZE];
@@ -917,13 +918,13 @@ mod test {
         assert!(server.state == SocketState::New);
         assert!(client.state == SocketState::New);
 
-        spawn(move || {
+        Thread::spawn(move || {
             let client = iotry!(client.connect(server_addr));
             assert!(client.state == SocketState::Connected);
             let mut buf = [0u8, ..BUF_SIZE];
             let mut client = client;
             iotry!(client.recv_from(&mut buf));
-        });
+        }).detach();
 
         // Make the server listen for incoming connections
         let mut buf = [0u8, ..BUF_SIZE];
@@ -951,7 +952,7 @@ mod test {
         let client = iotry!(UtpSocket::bind(client_addr));
         let server = iotry!(UtpSocket::bind(server_addr));
 
-        spawn(move || {
+        Thread::spawn(move || {
             // Make the server listen for incoming connections
             let mut server = server;
             let mut buf = [0u8, ..BUF_SIZE];
@@ -962,7 +963,7 @@ mod test {
             iotry!(server.recv_from(&mut buf));
 
             drop(server);
-        });
+        }).detach();
 
         let mut client = iotry!(client.connect(server_addr));
         assert!(client.state == SocketState::Connected);
@@ -1229,7 +1230,7 @@ mod test {
         // Check proper difference in client's send connection id and receive connection id
         assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
 
-        spawn(move || {
+        Thread::spawn(move || {
             let mut client = iotry!(client.connect(server_addr));
             assert!(client.state == SocketState::Connected);
             let mut s = client.socket;
@@ -1267,7 +1268,7 @@ mod test {
                 let mut buf = [0, ..BUF_SIZE];
                 iotry!(s.recv_from(&mut buf));
             }
-        });
+        }).detach();
 
         let mut buf = [0u8, ..BUF_SIZE];
         match server.recv_from(&mut buf) {
@@ -1303,7 +1304,7 @@ mod test {
         let test_syn_pkt = Packet::decode(&test_syn_raw);
         let seq_nr = test_syn_pkt.seq_nr();
 
-        spawn(move || {
+        Thread::spawn(move || {
             let mut client = client;
             iotry!(client.send_to(&test_syn_raw, server_addr));
             client.set_timeout(Some(10));
@@ -1314,7 +1315,7 @@ mod test {
             };
             assert_eq!(packet.ack_nr(), seq_nr);
             drop(client);
-        });
+        }).detach();
 
         let mut server = server;
         let mut buf = [0, ..20];
@@ -1336,11 +1337,11 @@ mod test {
         let d = data.clone();
         assert_eq!(LEN, data.len());
 
-        spawn(move || {
+        Thread::spawn(move || {
             let mut client = iotry!(client.connect(server_addr));
             iotry!(client.send_to(d.as_slice()));
             iotry!(client.close());
-        });
+        }).detach();
 
         let mut buf = [0, ..BUF_SIZE];
         // Expect SYN
@@ -1409,13 +1410,13 @@ mod test {
         // Check proper difference in client's send connection id and receive connection id
         assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
 
-        spawn(move || {
+        Thread::spawn(move || {
             let mut client = iotry!(client.connect(server_addr));
             assert!(client.state == SocketState::Connected);
             assert_eq!(client.connected_to, server_addr);
             iotry!(client.send_to(d.as_slice()));
             drop(client);
-        });
+        }).detach();
 
         let mut buf = [0u8, ..BUF_SIZE];
         match server.recv_from(&mut buf) {
@@ -1499,7 +1500,7 @@ mod test {
         // Check proper difference in client's send connection id and receive connection id
         assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
 
-        spawn(move || {
+        Thread::spawn(move || {
             let mut client = iotry!(client.connect(server_addr));
             assert!(client.state == SocketState::Connected);
             let mut s = client.socket.clone();
@@ -1526,7 +1527,7 @@ mod test {
             }
 
             iotry!(client.close());
-        });
+        }).detach();
 
         let mut buf = [0u8, ..BUF_SIZE];
         match server.recv_from(&mut buf) {
@@ -1558,14 +1559,14 @@ mod test {
         let to_send = data.clone();
 
         // Client
-        spawn(move || {
+        Thread::spawn(move || {
             let client = iotry!(UtpSocket::bind(client_addr));
             let mut client = iotry!(client.connect(server_addr));
             client.congestion_timeout = 50;
 
             iotry!(client.send_to(to_send.as_slice()));
             iotry!(client.close());
-        });
+        }).detach();
 
         // Server
         let mut server = iotry!(UtpSocket::bind(server_addr));
@@ -1616,7 +1617,7 @@ mod test {
         let data = Vec::from_fn(len, |idx| idx as u8);
         let to_send = data.clone();
 
-        spawn(move || {
+        Thread::spawn(move || {
             let mut client = iotry!(client.connect(server_addr));
 
             // Send everything except the odd chunks
@@ -1640,7 +1641,7 @@ mod test {
             }
 
             iotry!(client.close());
-        });
+        }).detach();
 
         let mut buf = [0, ..BUF_SIZE];
         let mut received: Vec<u8> = vec!();
@@ -1663,12 +1664,12 @@ mod test {
         let data = Vec::from_fn(len, |idx| idx as u8);
         let to_send = data.clone();
 
-        spawn(move || {
+        Thread::spawn(move || {
             let client = iotry!(UtpSocket::bind(client_addr));
             let mut client = iotry!(client.connect(server_addr));
             iotry!(client.send_to(to_send.as_slice()));
             iotry!(client.close());
-        });
+        }).detach();
 
         let mut read = Vec::new();
         while server.state != SocketState::Closed {
@@ -1695,7 +1696,7 @@ mod test {
         let data = Vec::from_fn(len, |idx| idx as u8);
         let to_send = data.clone();
 
-        spawn(move || {
+        Thread::spawn(move || {
             let mut client = iotry!(UtpSocket::bind(client_addr));
 
             // Advance socket's sequence number
@@ -1708,7 +1709,7 @@ mod test {
             assert!(client.seq_nr < 50);
             // Close connection
             iotry!(client.close());
-        });
+        }).detach();
 
         let mut buf = [0, ..BUF_SIZE];
         let mut received: Vec<u8> = vec!();

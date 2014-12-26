@@ -7,6 +7,7 @@ use test::Bencher;
 use std::io::test::next_test_ip4;
 use utp::UtpStream;
 use std::sync::Arc;
+use std::thread::Thread;
 
 macro_rules! iotry {
     ($e:expr) => (match $e { Ok(e) => e, Err(e) => panic!("{}", e) })
@@ -18,10 +19,10 @@ fn bench_connection_setup_and_teardown(b: &mut Bencher) {
     b.iter(|| {
         let mut server = iotry!(UtpStream::bind(server_addr));
 
-        spawn(move || {
+        Thread::spawn(move || {
             let mut client = iotry!(UtpStream::connect(server_addr));
             iotry!(client.close());
-        });
+        }).detach();
 
         iotry!(server.read_to_end());
         iotry!(server.close());
@@ -39,11 +40,11 @@ fn bench_transfer_one_packet(b: &mut Bencher) {
         let data = data_arc.clone();
         let mut server = iotry!(UtpStream::bind(server_addr));
 
-        spawn(move || {
+        Thread::spawn(move || {
             let mut client = iotry!(UtpStream::connect(server_addr));
             iotry!(client.write(data.as_slice()));
             iotry!(client.close());
-        });
+        }).detach();
 
         iotry!(server.read_to_end());
         iotry!(server.close());
@@ -62,11 +63,11 @@ fn bench_transfer_one_megabyte(b: &mut Bencher) {
         let data = data_arc.clone();
         let mut server = iotry!(UtpStream::bind(server_addr));
 
-        spawn(move || {
+        Thread::spawn(move || {
             let mut client = iotry!(UtpStream::connect(server_addr));
             iotry!(client.write(data.as_slice()));
             iotry!(client.close());
-        });
+        }).detach();
 
         iotry!(server.read_to_end());
         iotry!(server.close());
