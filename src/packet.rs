@@ -7,7 +7,7 @@ use bit_iterator::BitIterator;
 pub const HEADER_SIZE: uint = 20;
 
 macro_rules! u8_to_unsigned_be {
-    ($src:ident[$start:expr..$end:expr] -> $t:ty) => ({
+    ($src:ident, $start:expr, $end:expr -> $t:ty) => ({
         let mut result: $t = 0;
         for i in range_inclusive(0u, $end - $start).rev() {
             result = result | $src[$start+i] as $t << i*8;
@@ -101,12 +101,12 @@ impl PacketHeader {
         PacketHeader {
             type_ver: buf[0],
             extension: buf[1],
-            connection_id: u8_to_unsigned_be!(buf[2..3] -> u16),
-            timestamp_microseconds: u8_to_unsigned_be!(buf[4..7] -> u32),
-            timestamp_difference_microseconds: u8_to_unsigned_be!(buf[8..11] -> u32),
-            wnd_size: u8_to_unsigned_be!(buf[12..15] -> u32),
-            seq_nr: u8_to_unsigned_be!(buf[16..17] -> u16),
-            ack_nr: u8_to_unsigned_be!(buf[18..19] -> u16),
+            connection_id: u8_to_unsigned_be!(buf, 2, 3 -> u16),
+            timestamp_microseconds: u8_to_unsigned_be!(buf, 4, 7 -> u32),
+            timestamp_difference_microseconds: u8_to_unsigned_be!(buf, 8, 11 -> u32),
+            wnd_size: u8_to_unsigned_be!(buf, 12, 15 -> u32),
+            seq_nr: u8_to_unsigned_be!(buf, 16, 17 -> u16),
+            ack_nr: u8_to_unsigned_be!(buf, 18, 19 -> u16),
         }
     }
 }
