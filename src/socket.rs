@@ -3,7 +3,7 @@ use std::collections::{DList, RingBuf};
 use std::io::net::ip::SocketAddr;
 use std::io::net::udp::UdpSocket;
 use std::io::{IoResult, IoError, TimedOut, ConnectionFailed, EndOfFile, Closed, ConnectionReset};
-use std::iter::range_inclusive;
+use std::iter::{range_inclusive, repeat};
 use std::rand::random;
 use std::num::SignedInt;
 use util::{now_microseconds, ewma};
@@ -312,13 +312,13 @@ impl UtpSocket {
     /// Remove packet in incoming buffer and update current acknowledgement
     /// number.
     fn advance_incoming_buffer(&mut self) -> Option<Packet> {
-        match self.incoming_buffer.remove(0) {
-            Some(packet) => {
-                debug!("Removed packet from incoming buffer: {}", packet);
-                self.ack_nr = packet.seq_nr();
-                Some(packet)
-            },
-            None => None
+        if !self.incoming_buffer.is_empty() {
+            let packet = self.incoming_buffer.remove(0);
+            debug!("Removed packet from incoming buffer: {}", packet);
+            self.ack_nr = packet.seq_nr();
+            Some(packet)
+        } else {
+            None
         }
     }
 
@@ -550,7 +550,7 @@ impl UtpSocket {
         // multiple of 4
         if sack.len() % 4 != 0 {
             let len = sack.len();
-            sack.grow((len / 4 + 1) * 4 - len, 0);
+            sack.extend(repeat(0).take((len / 4 + 1) * 4 - len));
         }
 
         return sack;
@@ -572,7 +572,7 @@ impl UtpSocket {
             .position(|pkt| pkt.seq_nr() == self.last_acked)
         {
             for _ in range_inclusive(0, position) {
-                let packet = self.send_window.remove(0).unwrap();
+                let packet = self.send_window.remove(0);
                 self.curr_window -= packet.len();
             }
         }
@@ -1236,7 +1236,7 @@ mod test {
             let mut s = client.socket;
             let mut window: Vec<Packet> = Vec::new();
 
-            for data in Vec::from_fn(12, |idx| idx as u8 + 1).as_slice().chunks(3) {
+            for data in range(1, 13u8).collect::<Vec<u8>>().as_slice().chunks(3) {
                 let mut packet = Packet::new();
                 packet.set_wnd_size(BUF_SIZE as u32);
                 packet.set_type(PacketType::Data);
@@ -1279,7 +1279,7 @@ mod test {
 
         assert!(server.state == SocketState::Connected);
 
-        let expected: Vec<u8> = Vec::from_fn(12, |idx| idx as u8 + 1);
+        let expected: Vec<u8> = range(1, 13u8).collect();
         let mut received: Vec<u8> = vec!();
         loop {
             match server.recv_from(&mut buf) {
@@ -1333,7 +1333,7 @@ mod test {
 
         // Fits in a packet
         const LEN: uint = 1024;
-        let data = Vec::from_fn(LEN, |idx| idx as u8);
+        let data = range(0, LEN).map(|idx| idx as u8).collect::<Vec<u8>>();
         let d = data.clone();
         assert_eq!(LEN, data.len());
 
@@ -1400,8 +1400,8 @@ mod test {
 
         let client = iotry!(UtpSocket::bind(client_addr));
         let mut server = iotry!(UtpSocket::bind(server_addr));
-        let len = 512;
-        let data = Vec::from_fn(len, |idx| idx as u8);
+        let len: uint = 512;
+        let data = range(0, len).map(|idx| idx as u8).collect::<Vec<u8>>();
         let d = data.clone();
 
         assert!(server.state == SocketState::New);
@@ -1554,8 +1554,8 @@ mod test {
     #[test]
     fn test_selective_ack_response() {
         let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
-        let len = 1024 * 10;
-        let data = Vec::from_fn(len, |idx| idx as u8);
+        let len: uint = 1024 * 10;
+        let data = range(0, len).map(|idx| idx as u8).collect::<Vec<u8>>();
         let to_send = data.clone();
 
         // Client
@@ -1613,8 +1613,8 @@ mod test {
 
         let mut server = iotry!(UtpSocket::bind(server_addr));
         let client = iotry!(UtpSocket::bind(client_addr));
-        let len = 1024 * 10;
-        let data = Vec::from_fn(len, |idx| idx as u8);
+        let len: uint = 1024 * 10;
+        let data = range(0, len).map(|idx| idx as u8).collect::<Vec<u8>>();
         let to_send = data.clone();
 
         Thread::spawn(move || {
@@ -1660,8 +1660,8 @@ mod test {
     fn test_tolerance_to_small_buffers() {
         let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
         let mut server = iotry!(UtpSocket::bind(server_addr));
-        let len = 1024;
-        let data = Vec::from_fn(len, |idx| idx as u8);
+        let len: uint = 1024;
+        let data = range(0, len).map(|idx| idx as u8).collect::<Vec<u8>>();
         let to_send = data.clone();
 
         Thread::spawn(move || {
@@ -1692,8 +1692,8 @@ mod test {
 
         let mut server = iotry!(UtpSocket::bind(server_addr));
 
-        let len = BUF_SIZE * 4;
-        let data = Vec::from_fn(len, |idx| idx as u8);
+        let len: uint = BUF_SIZE * 4;
+        let data = range(0, len).map(|idx| idx as u8).collect::<Vec<u8>>();
         let to_send = data.clone();
 
         Thread::spawn(move || {
