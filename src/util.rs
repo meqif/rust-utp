@@ -1,5 +1,7 @@
 extern crate time;
 
+use std::num::ToPrimitive;
+
 /// Return current time in microseconds since the UNIX epoch.
 pub fn now_microseconds() -> u32 {
     let t = time::get_time();
