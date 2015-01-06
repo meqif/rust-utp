@@ -86,7 +86,7 @@ impl PacketHeader {
 
     /// Return packet header as a slice of bytes.
     pub fn bytes(&self) -> &[u8] {
-        let buf: &[u8, ..HEADER_SIZE] = unsafe { transmute(self) };
+        let buf: &[u8; HEADER_SIZE] = unsafe { transmute(self) };
         return buf.as_slice();
     }
 
