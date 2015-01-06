@@ -92,7 +92,7 @@ fn test_stream_successive_reads() {
 
     iotry!(server.read_to_end());
 
-    let mut buf = [0u8, ..4096];
+    let mut buf = [0u8; 4096];
     match server.read(&mut buf) {
         Err(ref e) if e.kind == EndOfFile => {},
         e => panic!("should have failed with Closed, got {}", e),
