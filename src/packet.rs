@@ -16,7 +16,7 @@ macro_rules! u8_to_unsigned_be {
     })
 }
 
-#[deriving(PartialEq,Eq,Show)]
+#[derive(PartialEq,Eq,Show)]
 pub enum PacketType {
     Data  = 0,
     Fin   = 1,
@@ -25,12 +25,12 @@ pub enum PacketType {
     Syn   = 4,
 }
 
-#[deriving(PartialEq,Eq,Show,Clone,Copy)]
+#[derive(PartialEq,Eq,Show,Clone,Copy)]
 pub enum ExtensionType {
     SelectiveAck = 1,
 }
 
-#[deriving(Clone)]
+#[derive(Clone)]
 pub struct Extension {
     ty: ExtensionType,
     pub data: Vec<u8>,
@@ -56,7 +56,7 @@ impl Extension {
     }
 }
 
-#[deriving(Clone,Copy)]
+#[derive(Clone,Copy)]
 #[packed]
 struct PacketHeader {
     type_ver: u8, // type: u4, ver: u4
