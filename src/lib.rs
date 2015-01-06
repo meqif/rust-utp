@@ -18,6 +18,7 @@
 #![feature(macro_rules)]
 #![feature(phase)]
 #![feature(globs)]
+#![feature(associated_types)]
 #![deny(missing_docs)]
 
 extern crate time;

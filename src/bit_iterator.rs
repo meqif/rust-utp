@@ -12,7 +12,9 @@ impl<'a> BitIterator<'a> {
     }
 }
 
-impl<'a> Iterator<u8> for BitIterator<'a> {
+impl<'a> Iterator for BitIterator<'a> {
+    type Item = u8;
+
     fn next(&mut self) -> Option<u8> {
         let result = self.object[self.current_byte] >> self.current_bit & 0x1;
 
