@@ -946,6 +946,7 @@ mod test {
 
     #[test]
     fn test_acks_on_socket() {
+        use std::sync::mpsc::channel;
         let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
         let (tx, rx) = channel();
 
@@ -967,7 +968,7 @@ mod test {
 
         let mut client = iotry!(client.connect(server_addr));
         assert!(client.state == SocketState::Connected);
-        let sender_seq_nr = rx.recv();
+        let sender_seq_nr = rx.recv().unwrap();
         let ack_nr = client.ack_nr;
         assert!(ack_nr != 0);
         assert!(ack_nr == sender_seq_nr);
