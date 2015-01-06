@@ -73,7 +73,7 @@ impl PacketHeader {
     /// Set type of packet to the specified type.
     pub fn set_type(&mut self, t: PacketType) {
         let version = 0x0F & self.type_ver;
-        self.type_ver = t as u8 << 4 | version;
+        self.type_ver = (t as u8) << 4 | version;
     }
 
     pub fn get_type(&self) -> PacketType {
@@ -141,7 +141,7 @@ impl Packet {
     pub fn new() -> Packet {
         Packet {
             header: PacketHeader {
-                type_ver: PacketType::Data as u8 << 4 | 1,
+                type_ver: (PacketType::Data as u8) << 4 | 1,
                 extension: 0,
                 connection_id: 0,
                 timestamp_microseconds: 0,
