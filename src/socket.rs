@@ -958,7 +958,7 @@ mod test {
             let mut server = server;
             let mut buf = [0u8; BUF_SIZE];
             let _resp = server.recv_from(&mut buf);
-            tx.send(server.seq_nr);
+            tx.send(server.seq_nr).unwrap();
 
             // Close the connection
             iotry!(server.recv_from(&mut buf));
