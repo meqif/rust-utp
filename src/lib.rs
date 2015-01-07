@@ -15,14 +15,11 @@
 // - Path MTU discovery (RFC4821)
 
 #![experimental]
-#![feature(macro_rules)]
 #![feature(phase)]
-#![feature(globs)]
-#![feature(associated_types)]
 #![deny(missing_docs)]
 
 extern crate time;
-#[phase(plugin, link)] extern crate log;
+#[macro_use] extern crate log;
 
 // Public API
 pub use socket::UtpSocket;

@@ -1,5 +1,3 @@
-#![feature(macro_rules)]
-
 extern crate utp;
 
 use std::io::test::next_test_ip4;
@@ -9,7 +7,6 @@ use utp::UtpStream;
 macro_rules! iotry {
     ($e:expr) => (match $e { Ok(e) => e, Err(e) => panic!("{}", e) })
 }
-
 
 #[test]
 fn test_stream_open_and_close() {

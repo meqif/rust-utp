@@ -1,5 +1,4 @@
 //! Implementation of a simple uTP client and server.
-#![feature(macro_rules)]
 
 extern crate utp;
 use std::io::net::ip::{Ipv4Addr, SocketAddr};
