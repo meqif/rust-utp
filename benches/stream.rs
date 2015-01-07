@@ -31,7 +31,7 @@ fn bench_connection_setup_and_teardown(b: &mut Bencher) {
 fn bench_transfer_one_packet(b: &mut Bencher) {
     let len = 1024;
     let server_addr = next_test_ip4();
-    let data = Vec::from_fn(len, |idx| idx as u8);
+    let data = range(0, len).map(|x| x as u8).collect::<Vec<u8>>();
     let data_arc = Arc::new(data);
 
     b.iter(|| {
@@ -54,7 +54,7 @@ fn bench_transfer_one_packet(b: &mut Bencher) {
 fn bench_transfer_one_megabyte(b: &mut Bencher) {
     let len = 1024 * 1024;
     let server_addr = next_test_ip4();
-    let data = Vec::from_fn(len, |idx| idx as u8);
+    let data = range(0, len).map(|x| x as u8).collect::<Vec<u8>>();
     let data_arc = Arc::new(data);
 
     b.iter(|| {
