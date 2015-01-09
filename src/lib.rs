@@ -15,7 +15,6 @@
 // - Path MTU discovery (RFC4821)
 
 #![experimental]
-#![feature(phase)]
 #![deny(missing_docs)]
 
 extern crate time;
