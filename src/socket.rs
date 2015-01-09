@@ -847,7 +847,7 @@ mod test {
             assert!(client.state == SocketState::Connected);
             assert_eq!(client.connected_to, server_addr);
             drop(client);
-        }).detach();
+        });
 
         let mut buf = [0u8; BUF_SIZE];
         match server.recv_from(&mut buf) {
@@ -876,7 +876,7 @@ mod test {
             assert!(client.state == SocketState::Connected);
             assert_eq!(client.close(), Ok(()));
             drop(client);
-        }).detach();
+        });
 
         // Make the server listen for incoming connections
         let mut buf = [0u8; BUF_SIZE];
@@ -924,7 +924,7 @@ mod test {
             let mut buf = [0u8; BUF_SIZE];
             let mut client = client;
             iotry!(client.recv_from(&mut buf));
-        }).detach();
+        });
 
         // Make the server listen for incoming connections
         let mut buf = [0u8; BUF_SIZE];
@@ -964,7 +964,7 @@ mod test {
             iotry!(server.recv_from(&mut buf));
 
             drop(server);
-        }).detach();
+        });
 
         let mut client = iotry!(client.connect(server_addr));
         assert!(client.state == SocketState::Connected);
@@ -1269,7 +1269,7 @@ mod test {
                 let mut buf = [0; BUF_SIZE];
                 iotry!(s.recv_from(&mut buf));
             }
-        }).detach();
+        });
 
         let mut buf = [0u8; BUF_SIZE];
         match server.recv_from(&mut buf) {
@@ -1316,7 +1316,7 @@ mod test {
             };
             assert_eq!(packet.ack_nr(), seq_nr);
             drop(client);
-        }).detach();
+        });
 
         let mut server = server;
         let mut buf = [0; 20];
@@ -1342,7 +1342,7 @@ mod test {
             let mut client = iotry!(client.connect(server_addr));
             iotry!(client.send_to(d.as_slice()));
             iotry!(client.close());
-        }).detach();
+        });
 
         let mut buf = [0; BUF_SIZE];
         // Expect SYN
@@ -1417,7 +1417,7 @@ mod test {
             assert_eq!(client.connected_to, server_addr);
             iotry!(client.send_to(d.as_slice()));
             drop(client);
-        }).detach();
+        });
 
         let mut buf = [0u8; BUF_SIZE];
         match server.recv_from(&mut buf) {
@@ -1528,7 +1528,7 @@ mod test {
             }
 
             iotry!(client.close());
-        }).detach();
+        });
 
         let mut buf = [0u8; BUF_SIZE];
         match server.recv_from(&mut buf) {
@@ -1567,7 +1567,7 @@ mod test {
 
             iotry!(client.send_to(to_send.as_slice()));
             iotry!(client.close());
-        }).detach();
+        });
 
         // Server
         let mut server = iotry!(UtpSocket::bind(server_addr));
@@ -1642,7 +1642,7 @@ mod test {
             }
 
             iotry!(client.close());
-        }).detach();
+        });
 
         let mut buf = [0; BUF_SIZE];
         let mut received: Vec<u8> = vec!();
@@ -1670,7 +1670,7 @@ mod test {
             let mut client = iotry!(client.connect(server_addr));
             iotry!(client.send_to(to_send.as_slice()));
             iotry!(client.close());
-        }).detach();
+        });
 
         let mut read = Vec::new();
         while server.state != SocketState::Closed {
@@ -1710,7 +1710,7 @@ mod test {
             assert!(client.seq_nr < 50);
             // Close connection
             iotry!(client.close());
-        }).detach();
+        });
 
         let mut buf = [0; BUF_SIZE];
         let mut received: Vec<u8> = vec!();

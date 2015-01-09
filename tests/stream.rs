@@ -17,7 +17,7 @@ fn test_stream_open_and_close() {
         let mut client = iotry!(UtpStream::connect(server_addr));
         iotry!(client.close());
         drop(client);
-    }).detach();
+    });
 
     iotry!(server.read_to_end());
     iotry!(server.close());
@@ -38,7 +38,7 @@ fn test_stream_small_data() {
         let mut client = iotry!(UtpStream::connect(server_addr));
         iotry!(client.write(d.as_slice()));
         iotry!(client.close());
-    }).detach();
+    });
 
     let read = iotry!(server.read_to_end());
     assert!(!read.is_empty());
@@ -61,7 +61,7 @@ fn test_stream_large_data() {
         let mut client = iotry!(UtpStream::connect(server_addr));
         iotry!(client.write(d.as_slice()));
         iotry!(client.close());
-    }).detach();
+    });
 
     let read = iotry!(server.read_to_end());
     assert!(!read.is_empty());
@@ -85,7 +85,7 @@ fn test_stream_successive_reads() {
         let mut client = iotry!(UtpStream::connect(server_addr));
         iotry!(client.write(d.as_slice()));
         iotry!(client.close());
-    }).detach();
+    });
 
     iotry!(server.read_to_end());
 
