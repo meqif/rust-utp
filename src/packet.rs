@@ -113,7 +113,7 @@ impl PacketHeader {
 
 impl fmt::Show for PacketHeader {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "(type: {}, version: {}, extension: {}, \
+        write!(f, "(type: {:?}, version: {}, extension: {}, \
                 connection_id: {}, timestamp_microseconds: {}, \
                 timestamp_difference_microseconds: {}, wnd_size: {}, \
                 seq_nr: {}, ack_nr: {})",

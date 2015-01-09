@@ -274,7 +274,7 @@ impl UtpSocket {
             Err(e) => return Err(e),
         };
         let packet = Packet::decode(b.slice_to(read));
-        debug!("received {}", packet);
+        debug!("received {:?}", packet);
 
         let shallow_clone = packet.shallow_clone();
 
@@ -286,7 +286,7 @@ impl UtpSocket {
                 let mut pkt = pkt;
                 pkt.set_wnd_size(BUF_SIZE as u32);
                 try!(self.socket.send_to(pkt.bytes().as_slice(), src));
-                debug!("sent {}", pkt);
+                debug!("sent {:?}", pkt);
         }
 
         // Flush incoming buffer if possible
@@ -314,7 +314,7 @@ impl UtpSocket {
     fn advance_incoming_buffer(&mut self) -> Option<Packet> {
         if !self.incoming_buffer.is_empty() {
             let packet = self.incoming_buffer.remove(0);
-            debug!("Removed packet from incoming buffer: {}", packet);
+            debug!("Removed packet from incoming buffer: {:?}", packet);
             self.ack_nr = packet.seq_nr();
             Some(packet)
         } else {
@@ -435,7 +435,7 @@ impl UtpSocket {
             let mut packet = packet;
             packet.set_timestamp_microseconds(now_microseconds());
             try!(self.socket.send_to(packet.bytes().as_slice(), dst));
-            debug!("sent {}", packet);
+            debug!("sent {:?}", packet);
             self.curr_window += packet.len();
             self.send_window.push(packet);
         }
@@ -459,7 +459,7 @@ impl UtpSocket {
             packet.set_timestamp_microseconds(t);
             packet.set_timestamp_difference_microseconds((t - self.last_acked_timestamp));
             iotry!(self.socket.send_to(packet.bytes().as_slice(), self.connected_to));
-            debug!("sent {}", packet);
+            debug!("sent {:?}", packet);
         }
     }
 
@@ -561,7 +561,7 @@ impl UtpSocket {
             None => debug!("Packet {} not found", lost_packet_nr),
             Some(packet) => {
                 iotry!(self.socket.send_to(packet.bytes().as_slice(), self.connected_to));
-                debug!("sent {}", packet);
+                debug!("sent {:?}", packet);
             }
         }
     }
@@ -583,7 +583,7 @@ impl UtpSocket {
     ///
     /// Returns appropriate reply packet, if needed.
     fn handle_packet(&mut self, packet: &Packet, src: SocketAddr) -> IoResult<Option<Packet>> {
-        debug!("({}, {})", self.state, packet.get_type());
+        debug!("({:?}, {:?})", self.state, packet.get_type());
 
         // Acknowledge only if the packet strictly follows the previous one
         if packet.seq_nr() == self.ack_nr + 1 {
@@ -662,7 +662,7 @@ impl UtpSocket {
                     detail: None,
                 })
             },
-            (state, ty) => panic!("Unimplemented handling for ({},{})", state, ty)
+            (state, ty) => panic!("Unimplemented handling for ({:?},{:?})", state, ty)
         }
     }
 
@@ -761,7 +761,7 @@ impl UtpSocket {
                     }
                 }
             } else {
-                debug!("Unknown extension {}, ignoring", extension.get_type());
+                debug!("Unknown extension {:?}, ignoring", extension.get_type());
             }
         }
 
@@ -851,7 +851,7 @@ mod test {
 
         let mut buf = [0u8; BUF_SIZE];
         match server.recv_from(&mut buf) {
-            e => println!("{}", e),
+            e => println!("{:?}", e),
         }
         // After establishing a new connection, the server's ids are a mirror of the client's.
         assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
@@ -894,7 +894,7 @@ mod test {
         // EOF error
         match server.recv_from(&mut buf) {
             Err(e) => assert_eq!(e.kind, EndOfFile),
-            v => panic!("expected {}, got {}", EndOfFile, v),
+            v => panic!("expected {:?}, got {:?}", EndOfFile, v),
         }
 
         assert_eq!(server.state, SocketState::Closed);
@@ -902,7 +902,7 @@ mod test {
         // Trying again raises a EndOfFile error
         match server.recv_from(&mut buf) {
             Err(e) => assert_eq!(e.kind, EndOfFile),
-            v => panic!("expected {}, got {}", EndOfFile, v),
+            v => panic!("expected {:?}, got {:?}", EndOfFile, v),
         }
 
         drop(server);
@@ -938,7 +938,7 @@ mod test {
         // error
         match server.send_to(&buf) {
             Err(e) => assert_eq!(e.kind, Closed),
-            v => panic!("expected {}, got {}", Closed, v),
+            v => panic!("expected {:?}, got {:?}", Closed, v),
         }
 
         drop(server);
@@ -1273,7 +1273,7 @@ mod test {
 
         let mut buf = [0u8; BUF_SIZE];
         match server.recv_from(&mut buf) {
-            e => println!("{}", e),
+            e => println!("{:?}", e),
         }
         // After establishing a new connection, the server's ids are a mirror of the client's.
         assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
@@ -1286,7 +1286,7 @@ mod test {
             match server.recv_from(&mut buf) {
                 Ok((len, _src)) => received.push_all(buf.slice_to(len)),
                 Err(ref e) if e.kind == EndOfFile => break,
-                Err(e) => panic!("{}", e)
+                Err(e) => panic!("{:?}", e)
             }
         }
         assert_eq!(received.len(), expected.len());
@@ -1421,7 +1421,7 @@ mod test {
 
         let mut buf = [0u8; BUF_SIZE];
         match server.recv_from(&mut buf) {
-            e => println!("{}", e),
+            e => println!("{:?}", e),
         }
         // After establishing a new connection, the server's ids are a mirror of the client's.
         assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
@@ -1442,7 +1442,7 @@ mod test {
             match server.recv_from(&mut buf) {
                 Ok((0, _)) => continue,
                 Ok(_) => break,
-                Err(e) => panic!("{}", e),
+                Err(e) => panic!("{:?}", e),
             }
         }
 
@@ -1532,7 +1532,7 @@ mod test {
 
         let mut buf = [0u8; BUF_SIZE];
         match server.recv_from(&mut buf) {
-            e => println!("{}", e),
+            e => println!("{:?}", e),
         }
         // After establishing a new connection, the server's ids are a mirror of the client's.
         assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
@@ -1545,7 +1545,7 @@ mod test {
             match server.recv_from(&mut buf) {
                 Ok((len, _src)) => received.push_all(buf.slice_to(len)),
                 Err(ref e) if e.kind == EndOfFile => break,
-                Err(e) => panic!("{}", e)
+                Err(e) => panic!("{:?}", e)
             }
         }
         assert_eq!(received.len(), expected.len());
@@ -1600,7 +1600,7 @@ mod test {
             match server.recv_from(&mut buf) {
                 Ok((len, _src)) => received.push_all(buf.slice_to(len)),
                 Err(ref e) if e.kind == EndOfFile => break,
-                Err(e) => panic!("{}", e)
+                Err(e) => panic!("{:?}", e)
             }
         }
         assert!(!received.is_empty());
