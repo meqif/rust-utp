@@ -27,7 +27,7 @@ fn test_stream_open_and_close() {
 fn test_stream_small_data() {
     // Fits in a packet
     const LEN: usize = 1024;
-    let data: Vec<u8> = range(0, LEN).map(|idx| idx as u8).collect();
+    let data: Vec<u8> = (0..LEN).map(|idx| idx as u8).collect();
     assert_eq!(LEN, data.len());
 
     let d = data.clone();
@@ -50,7 +50,7 @@ fn test_stream_small_data() {
 fn test_stream_large_data() {
     // Has to be sent over several packets
     const LEN: usize = 1024 * 1024;
-    let data: Vec<u8> = range(0, LEN).map(|idx| idx as u8).collect();
+    let data: Vec<u8> = (0..LEN).map(|idx| idx as u8).collect();
     assert_eq!(LEN, data.len());
 
     let d = data.clone();
@@ -74,7 +74,7 @@ fn test_stream_successive_reads() {
     use std::io::EndOfFile;
 
     const LEN: usize = 1024;
-    let data: Vec<u8> = range(0, LEN).map(|idx| idx as u8).collect();
+    let data: Vec<u8> = (0..LEN).map(|idx| idx as u8).collect();
     assert_eq!(LEN, data.len());
 
     let d = data.clone();
