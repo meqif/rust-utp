@@ -32,7 +32,7 @@ mod test {
     fn test_ewma_one_element() {
         use super::ewma;
 
-        let input = vec!(1u);
+        let input = vec!(1u32);
         let alpha = 1.0/3.0;
         assert_eq!(ewma(input, alpha), 1.0);
     }
@@ -42,7 +42,7 @@ mod test {
         use super::ewma;
         use std::iter::range_inclusive;
 
-        let input = range_inclusive(1u, 10).collect();
+        let input = range_inclusive(1u32, 10).collect();
         let alpha = 1.0/3.0;
         let expected = [1.0, 4.0/3.0, 17.0/9.0,
         70.0/27.0, 275.0/81.0, 1036.0/243.0, 3773.0/729.0, 13378.0/2187.0,

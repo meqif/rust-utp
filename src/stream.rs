@@ -46,7 +46,7 @@ impl UtpStream {
 }
 
 impl Reader for UtpStream {
-    fn read(&mut self, buf: &mut [u8]) -> IoResult<uint> {
+    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         match self.socket.recv_from(buf) {
             Ok((read, _src)) => Ok(read),
             Err(e) => Err(e),

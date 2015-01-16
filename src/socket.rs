@@ -11,17 +11,17 @@ use packet::{Packet, PacketType, ExtensionType, HEADER_SIZE};
 
 // For simplicity's sake, let us assume no packet will ever exceed the
 // Ethernet maximum transfer unit of 1500 bytes.
-const BUF_SIZE: uint = 1500;
-const GAIN: uint = 1;
-const ALLOWED_INCREASE: uint = 1;
+const BUF_SIZE: usize = 1500;
+const GAIN: f64 = 1.0;
+const ALLOWED_INCREASE: u32 = 1;
 const TARGET: i64 = 100_000; // 100 milliseconds
-const MSS: uint = 1400;
-const MIN_CWND: uint = 2;
-const INIT_CWND: uint = 2;
+const MSS: u32 = 1400;
+const MIN_CWND: u32 = 2;
+const INIT_CWND: u32 = 2;
 const INITIAL_CONGESTION_TIMEOUT: u64 = 1000; // one second
 const MIN_CONGESTION_TIMEOUT: u64 = 500; // 500 ms
 const MAX_CONGESTION_TIMEOUT: u64 = 60_000; // one minute
-const BASE_HISTORY: uint = 10; // base delays history size
+const BASE_HISTORY: usize = 10; // base delays history size
 
 macro_rules! iotry {
     ($e:expr) => (match $e { Ok(e) => e, Err(e) => panic!("{}", e) })
@@ -74,7 +74,7 @@ pub struct UtpSocket {
     /// Packets not yet sent
     unsent_queue: DList<Packet>,
     /// How many ACKs did the socket receive for packet with sequence number equal to `ack_nr`
-    duplicate_ack_count: uint,
+    duplicate_ack_count: u32,
     /// Sequence number of the latest packet the remote peer acknowledged
     last_acked: u16,
     /// Timestamp of the latest packet the remote peer acknowledged
@@ -82,15 +82,15 @@ pub struct UtpSocket {
     /// Sequence number of the received FIN packet, if any
     fin_seq_nr: u16,
     /// Round-trip time to remote peer
-    rtt: int,
+    rtt: i32,
     /// Variance of the round-trip time to the remote peer
-    rtt_variance: int,
+    rtt_variance: i32,
     /// Data from the latest packet not yet returned in `recv_from`
     pending_data: Vec<u8>,
     /// Bytes in flight
-    curr_window: uint,
+    curr_window: u32,
     /// Window size of the remote peer
-    remote_wnd_size: uint,
+    remote_wnd_size: u32,
     /// Rolling window of packet delay to remote peer
     base_delays: RingBuf<DelaySample>,
     /// Rolling window of the difference between sending a packet and receiving its acknowledgement
@@ -98,7 +98,7 @@ pub struct UtpSocket {
     /// Current congestion timeout in milliseconds
     congestion_timeout: u64,
     /// Congestion window in bytes
-    cwnd: uint,
+    cwnd: u32,
 }
 
 impl UtpSocket {
@@ -153,7 +153,7 @@ impl UtpSocket {
         let mut buf = [0; BUF_SIZE];
 
         let mut syn_timeout = self.congestion_timeout;
-        for _ in range(0u, 5) {
+        for _ in range(0u8, 5) {
             packet.set_timestamp_microseconds(now_microseconds());
 
             // Send packet
@@ -233,7 +233,7 @@ impl UtpSocket {
     /// Returns `Closed` after receiving a FIN packet when the remaining
     /// inflight packets are consumed.
     #[unstable]
-    pub fn recv_from(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
+    pub fn recv_from(&mut self, buf: &mut[u8]) -> IoResult<(usize,SocketAddr)> {
         if self.state == SocketState::Closed {
             return Err(IoError {
                 kind: EndOfFile,
@@ -256,7 +256,7 @@ impl UtpSocket {
         }
     }
 
-    fn recv(&mut self, buf: &mut[u8]) -> IoResult<(uint,SocketAddr)> {
+    fn recv(&mut self, buf: &mut[u8]) -> IoResult<(usize,SocketAddr)> {
         let mut b = [0; BUF_SIZE + HEADER_SIZE];
         if self.state != SocketState::New {
             debug!("setting read timeout of {} ms", self.congestion_timeout);
@@ -327,7 +327,7 @@ impl UtpSocket {
     /// no missing packets. The discarded packets' payload is written to the
     /// slice `buf`, starting in position `start`.
     /// Returns the last written index.
-    fn flush_incoming_buffer(&mut self, buf: &mut [u8]) -> uint {
+    fn flush_incoming_buffer(&mut self, buf: &mut [u8]) -> usize {
         let mut idx = 0;
 
         // Check if there is any pending data from a partially flushed packet
@@ -396,7 +396,7 @@ impl UtpSocket {
             });
         }
 
-        for chunk in buf.chunks(MSS - HEADER_SIZE) {
+        for chunk in buf.chunks(MSS as usize - HEADER_SIZE) {
             let mut packet = Packet::new();
             packet.set_type(PacketType::Data);
             packet.payload = chunk.to_vec();
@@ -427,7 +427,7 @@ impl UtpSocket {
             debug!("current window: {}", self.send_window.len());
             let max_inflight = min(self.cwnd, self.remote_wnd_size);
             let max_inflight = max(MIN_CWND * MSS, max_inflight);
-            while self.curr_window + packet.len() > max_inflight {
+            while self.curr_window + packet.len() as u32 > max_inflight {
                 let mut buf = [0; BUF_SIZE];
                 iotry!(self.recv_from(&mut buf));
             }
@@ -436,7 +436,7 @@ impl UtpSocket {
             packet.set_timestamp_microseconds(now_microseconds());
             try!(self.socket.send_to(packet.bytes().as_slice(), dst));
             debug!("sent {:?}", packet);
-            self.curr_window += packet.len();
+            self.curr_window += packet.len() as u32;
             self.send_window.push(packet);
         }
         Ok(())
@@ -454,7 +454,7 @@ impl UtpSocket {
         packet.set_seq_nr(self.seq_nr);
         packet.set_connection_id(self.sender_connection_id);
 
-        for _ in range(0u, 3) {
+        for _ in range(0u8, 3) {
             let t = now_microseconds();
             packet.set_timestamp_microseconds(t);
             packet.set_timestamp_difference_microseconds((t - self.last_acked_timestamp));
@@ -494,7 +494,7 @@ impl UtpSocket {
         self.current_delays.push(DelayDifferenceSample{ received_at: now, difference: v });
     }
 
-    fn update_congestion_timeout(&mut self, current_delay: int) {
+    fn update_congestion_timeout(&mut self, current_delay: i32) {
         let delta = self.rtt - current_delay;
         self.rtt_variance += (delta.abs() - self.rtt_variance) / 4;
         self.rtt += (current_delay - self.rtt) / 8;
@@ -534,8 +534,8 @@ impl UtpSocket {
         let mut sack = Vec::new();
         for packet in stashed {
             let diff = packet.seq_nr() - self.ack_nr - 2;
-            let byte = (diff / 8) as uint;
-            let bit = (diff % 8) as uint;
+            let byte = (diff / 8) as usize;
+            let bit = (diff % 8) as usize;
 
             if byte >= sack.len() {
                 sack.push(0u8);
@@ -573,7 +573,7 @@ impl UtpSocket {
         {
             for _ in range_inclusive(0, position) {
                 let packet = self.send_window.remove(0);
-                self.curr_window -= packet.len();
+                self.curr_window -= packet.len() as u32;
             }
         }
         debug!("self.curr_window: {}", self.curr_window);
@@ -597,7 +597,7 @@ impl UtpSocket {
             return Ok(Some(self.prepare_reply(packet, PacketType::Reset)));
         }
 
-        self.remote_wnd_size = packet.wnd_size() as uint;
+        self.remote_wnd_size = packet.wnd_size() as u32;
         debug!("self.remote_wnd_size: {}", self.remote_wnd_size);
 
         match (self.state, packet.get_type()) {
@@ -696,9 +696,9 @@ impl UtpSocket {
         return queuing_delay;
     }
 
-    fn update_congestion_window(&mut self, off_target: f64, bytes_newly_acked: uint) {
+    fn update_congestion_window(&mut self, off_target: f64, bytes_newly_acked: u32) {
         let flightsize = self.curr_window;
-        self.cwnd += (GAIN as f64 * off_target * bytes_newly_acked as f64 * MSS as f64 / self.cwnd as f64) as uint;
+        self.cwnd += (GAIN * off_target * bytes_newly_acked as f64 * MSS as f64 / self.cwnd as f64) as u32;
         let max_allowed_cwnd = flightsize + ALLOWED_INCREASE * MSS;
         self.cwnd = min(self.cwnd, max_allowed_cwnd);
         self.cwnd = max(self.cwnd, MIN_CWND * MSS);
@@ -725,11 +725,11 @@ impl UtpSocket {
         debug!("off_target: {}", off_target);
 
         // Update congestion window size
-        self.update_congestion_window(off_target, packet.len());
+        self.update_congestion_window(off_target, packet.len() as u32);
 
         // Update congestion timeout
         let rtt = (TARGET - off_target as i64) / 1000; // in milliseconds
-        self.update_congestion_timeout(rtt as int);
+        self.update_congestion_timeout(rtt as i32);
 
         let mut packet_loss_detected: bool = !self.send_window.is_empty() &&
                                              self.duplicate_ack_count == 3;
@@ -1265,7 +1265,7 @@ mod test {
             iotry!(s.send_to(window[0].bytes().as_slice(), server_addr));
             iotry!(s.send_to(window[4].bytes().as_slice(), server_addr));
 
-            for _ in range(0u, 2) {
+            for _ in range(0u8, 2) {
                 let mut buf = [0; BUF_SIZE];
                 iotry!(s.recv_from(&mut buf));
             }
@@ -1333,7 +1333,7 @@ mod test {
         let client = iotry!(UtpSocket::bind(client_addr));
 
         // Fits in a packet
-        const LEN: uint = 1024;
+        const LEN: usize = 1024;
         let data = range(0, LEN).map(|idx| idx as u8).collect::<Vec<u8>>();
         let d = data.clone();
         assert_eq!(LEN, data.len());
@@ -1369,7 +1369,7 @@ mod test {
         packet.set_ack_nr(data_packet.seq_nr() - 1);
         packet.set_connection_id(server.sender_connection_id);
 
-        for _ in range(0u, 3) {
+        for _ in range(0u8, 3) {
             iotry!(server.socket.send_to(packet.bytes().as_slice(), client_addr));
         }
 
@@ -1401,8 +1401,8 @@ mod test {
 
         let client = iotry!(UtpSocket::bind(client_addr));
         let mut server = iotry!(UtpSocket::bind(server_addr));
-        let len: uint = 512;
-        let data = range(0, len).map(|idx| idx as u8).collect::<Vec<u8>>();
+        const LEN: usize = 512;
+        let data = range(0, LEN).map(|idx| idx as u8).collect::<Vec<u8>>();
         let d = data.clone();
 
         assert!(server.state == SocketState::New);
@@ -1515,14 +1515,14 @@ mod test {
             packet.payload = vec!(1,2,3);
 
             // Send two copies of the packet, with different timestamps
-            for _ in range(0u, 2) {
+            for _ in range(0u8, 2) {
                 packet.set_timestamp_microseconds(now_microseconds());
                 iotry!(s.send_to(packet.bytes().as_slice(), server_addr));
             }
             client.seq_nr += 1;
 
             // Receive one ACK
-            for _ in range(0u, 1) {
+            for _ in range(0u8, 1) {
                 let mut buf = [0; BUF_SIZE];
                 iotry!(s.recv_from(&mut buf));
             }
@@ -1555,8 +1555,8 @@ mod test {
     #[test]
     fn test_selective_ack_response() {
         let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
-        let len: uint = 1024 * 10;
-        let data = range(0, len).map(|idx| idx as u8).collect::<Vec<u8>>();
+        const LEN: usize = 1024 * 10;
+        let data = range(0, LEN).map(|idx| idx as u8).collect::<Vec<u8>>();
         let to_send = data.clone();
 
         // Client
@@ -1614,8 +1614,8 @@ mod test {
 
         let mut server = iotry!(UtpSocket::bind(server_addr));
         let client = iotry!(UtpSocket::bind(client_addr));
-        let len: uint = 1024 * 10;
-        let data = range(0, len).map(|idx| idx as u8).collect::<Vec<u8>>();
+        const LEN: usize = 1024 * 10;
+        let data = range(0, LEN).map(|idx| idx as u8).collect::<Vec<u8>>();
         let to_send = data.clone();
 
         Thread::spawn(move || {
@@ -1661,8 +1661,8 @@ mod test {
     fn test_tolerance_to_small_buffers() {
         let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
         let mut server = iotry!(UtpSocket::bind(server_addr));
-        let len: uint = 1024;
-        let data = range(0, len).map(|idx| idx as u8).collect::<Vec<u8>>();
+        const LEN: usize = 1024;
+        let data = range(0, LEN).map(|idx| idx as u8).collect::<Vec<u8>>();
         let to_send = data.clone();
 
         Thread::spawn(move || {
@@ -1693,8 +1693,8 @@ mod test {
 
         let mut server = iotry!(UtpSocket::bind(server_addr));
 
-        let len: uint = BUF_SIZE * 4;
-        let data = range(0, len).map(|idx| idx as u8).collect::<Vec<u8>>();
+        const LEN: usize = BUF_SIZE * 4;
+        let data = range(0, LEN).map(|idx| idx as u8).collect::<Vec<u8>>();
         let to_send = data.clone();
 
         Thread::spawn(move || {

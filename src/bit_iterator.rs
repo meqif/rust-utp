@@ -2,8 +2,8 @@
 /// (least-significat bit) of the first element of the vector.
 pub struct BitIterator<'a> {
     object: &'a Vec<u8>,
-    current_byte: uint,
-    current_bit: uint
+    current_byte: usize,
+    current_bit: usize
 }
 
 impl<'a> BitIterator<'a> {

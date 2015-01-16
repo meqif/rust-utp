@@ -4,12 +4,12 @@ use std::iter::range_inclusive;
 use std::num::Int;
 use bit_iterator::BitIterator;
 
-pub const HEADER_SIZE: uint = 20;
+pub const HEADER_SIZE: usize = 20;
 
 macro_rules! u8_to_unsigned_be {
     ($src:ident, $start:expr, $end:expr, $t:ty) => ({
         let mut result: $t = 0;
-        for i in range_inclusive(0u, $end - $start).rev() {
+        for i in range_inclusive(0us, $end - $start).rev() {
             result = result | $src[$start+i] as $t << i*8;
         }
         result
@@ -37,7 +37,7 @@ pub struct Extension {
 }
 
 impl Extension {
-    pub fn len(&self) -> uint {
+    pub fn len(&self) -> usize {
         1 + self.data.len()
     }
 
@@ -90,7 +90,7 @@ impl PacketHeader {
         return buf.as_slice();
     }
 
-    pub fn len(&self) -> uint {
+    pub fn len(&self) -> usize {
         return HEADER_SIZE;
     }
 
@@ -273,7 +273,7 @@ impl Packet {
         return buf;
     }
 
-    pub fn len(&self) -> uint {
+    pub fn len(&self) -> usize {
         let ext_len = self.extensions.iter().fold(0, |acc, ext| acc + ext.len() + 1);
         self.header.len() + self.payload.len() + ext_len
     }
@@ -292,7 +292,7 @@ impl Packet {
 
         // Consume known extensions and skip over unknown ones
         while idx < buf.len() && kind != 0 {
-            let len = buf[idx + 1] as uint;
+            let len = buf[idx + 1] as usize;
             let extension_start = idx + 2;
             let payload_start = extension_start + len;
 
