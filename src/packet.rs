@@ -9,14 +9,14 @@ pub const HEADER_SIZE: usize = 20;
 macro_rules! u8_to_unsigned_be {
     ($src:ident, $start:expr, $end:expr, $t:ty) => ({
         let mut result: $t = 0;
-        for i in range_inclusive(0us, $end - $start).rev() {
+        for i in range_inclusive(0usize, $end - $start).rev() {
             result = result | $src[$start+i] as $t << i*8;
         }
         result
     })
 }
 
-#[derive(PartialEq,Eq,Show)]
+#[derive(PartialEq,Eq,Debug)]
 pub enum PacketType {
     Data  = 0,
     Fin   = 1,
@@ -25,7 +25,7 @@ pub enum PacketType {
     Syn   = 4,
 }
 
-#[derive(PartialEq,Eq,Show,Clone,Copy)]
+#[derive(PartialEq,Eq,Debug,Clone,Copy)]
 pub enum ExtensionType {
     SelectiveAck = 1,
 }

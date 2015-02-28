@@ -27,7 +27,7 @@ macro_rules! iotry {
     ($e:expr) => (match $e { Ok(e) => e, Err(e) => panic!("{}", e) })
 }
 
-#[derive(PartialEq,Eq,Show,Copy)]
+#[derive(PartialEq,Eq,Debug,Copy)]
 enum SocketState {
     New,
     Connected,
