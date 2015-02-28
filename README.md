@@ -36,7 +36,7 @@ Check the `examples` directory. The simplest example would be:
 extern crate utp;
 
 use utp::UtpStream;
-use std::io::net::ip::{Ipv4Addr, SocketAddr};
+use std::old_io::net::ip::{Ipv4Addr, SocketAddr};
 
 fn main() {
     let addr = SocketAddr { ip: Ipv4Addr(127,0,0,1), port: 8080 };
