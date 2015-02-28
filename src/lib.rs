@@ -14,7 +14,6 @@
 // - Handle packet loss
 // - Path MTU discovery (RFC4821)
 
-#![experimental]
 #![deny(missing_docs)]
 
 extern crate time;

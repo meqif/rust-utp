@@ -1,5 +1,5 @@
-use std::io::IoResult;
-use std::io::net::ip::SocketAddr;
+use std::old_io::IoResult;
+use std::old_io::net::ip::{SocketAddr, Ipv4Addr};
 use socket::UtpSocket;
 
 /// Stream interface for UtpSocket.
@@ -20,8 +20,6 @@ impl UtpStream {
     /// Open a uTP connection to a remote host by hostname or IP address.
     #[unstable]
     pub fn connect(dst: SocketAddr) -> IoResult<UtpStream> {
-        use std::io::net::ip::Ipv4Addr;
-
         // Port 0 means the operating system gets to choose it
         let my_addr = SocketAddr { ip: Ipv4Addr(0,0,0,0), port: 0 };
         let socket = match UtpSocket::bind(my_addr) {
@@ -55,7 +53,7 @@ impl Reader for UtpStream {
 }
 
 impl Writer for UtpStream {
-    fn write(&mut self, buf: &[u8]) -> IoResult<()> {
+    fn write_all(&mut self, buf: &[u8]) -> IoResult<()> {
         self.socket.send_to(buf)
     }
 }

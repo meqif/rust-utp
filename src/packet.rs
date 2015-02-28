@@ -111,7 +111,7 @@ impl PacketHeader {
     }
 }
 
-impl fmt::Show for PacketHeader {
+impl fmt::Debug for PacketHeader {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "(type: {:?}, version: {}, extension: {}, \
                 connection_id: {}, timestamp_microseconds: {}, \
@@ -342,7 +342,7 @@ impl Clone for Packet {
     }
 }
 
-impl fmt::Show for Packet {
+impl fmt::Debug for Packet {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         self.header.fmt(f)
     }

@@ -1,6 +1,6 @@
 extern crate utp;
 
-use std::io::test::next_test_ip4;
+use std::old_io::test::next_test_ip4;
 use std::thread::Thread;
 use utp::UtpStream;
 
@@ -71,7 +71,7 @@ fn test_stream_large_data() {
 
 #[test]
 fn test_stream_successive_reads() {
-    use std::io::EndOfFile;
+    use std::old_io::EndOfFile;
 
     const LEN: usize = 1024;
     let data: Vec<u8> = (0..LEN).map(|idx| idx as u8).collect();

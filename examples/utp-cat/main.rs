@@ -1,7 +1,7 @@
 //! Implementation of a simple uTP client and server.
 
 extern crate utp;
-use std::io::net::ip::{Ipv4Addr, SocketAddr};
+use std::old_io::net::ip::{Ipv4Addr, SocketAddr};
 
 macro_rules! iotry {
     ($e:expr) => (match $e { Ok(v) => v, Err(e) => panic!("{}", e), })
@@ -14,7 +14,7 @@ fn usage() {
 fn main() {
     use utp::UtpStream;
     use std::str::FromStr;
-    use std::io::{stdin, stdout, stderr};
+    use std::old_io::{stdin, stdout, stderr};
 
     enum Mode {
         Server,
@@ -40,9 +40,17 @@ fn main() {
     match args.collect::<Vec<_>>().as_slice() {
         [] => (),
         [ip, port] => {
+            let ip = match FromStr::from_str(ip) {
+                Ok(x) => x,
+                Err(_) => { println!("Invalid address"); return }
+            };
+            let port = match FromStr::from_str(port) {
+                Ok(x) => x,
+                Err(_) => { println!("Invalid port"); return }
+            };
             addr = SocketAddr {
-                ip:   FromStr::from_str(ip).expect("Invalid address"),
-                port: FromStr::from_str(port).expect("Invalid port"),
+                ip:   ip,
+                port: port,
             };
         }
         _ => { usage(); return; }

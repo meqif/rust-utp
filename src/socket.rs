@@ -1,8 +1,8 @@
 use std::cmp::{min, max};
-use std::collections::{DList, RingBuf};
-use std::io::net::ip::SocketAddr;
-use std::io::net::udp::UdpSocket;
-use std::io::{IoResult, IoError, TimedOut, ConnectionFailed, EndOfFile, Closed, ConnectionReset};
+use std::collections::{LinkedList, VecDeque};
+use std::old_io::net::ip::SocketAddr;
+use std::old_io::net::udp::UdpSocket;
+use std::old_io::{IoResult, IoError, TimedOut, ConnectionFailed, EndOfFile, Closed, ConnectionReset};
 use std::iter::{range_inclusive, repeat};
 use std::rand::random;
 use std::num::SignedInt;
@@ -72,7 +72,7 @@ pub struct UtpSocket {
     /// Sent but not yet acknowledged packets
     send_window: Vec<Packet>,
     /// Packets not yet sent
-    unsent_queue: DList<Packet>,
+    unsent_queue: LinkedList<Packet>,
     /// How many ACKs did the socket receive for packet with sequence number equal to `ack_nr`
     duplicate_ack_count: u32,
     /// Sequence number of the latest packet the remote peer acknowledged
@@ -92,7 +92,7 @@ pub struct UtpSocket {
     /// Window size of the remote peer
     remote_wnd_size: u32,
     /// Rolling window of packet delay to remote peer
-    base_delays: RingBuf<DelaySample>,
+    base_delays: VecDeque<DelaySample>,
     /// Rolling window of the difference between sending a packet and receiving its acknowledgement
     current_delays: Vec<DelayDifferenceSample>,
     /// Current congestion timeout in milliseconds
@@ -118,7 +118,7 @@ impl UtpSocket {
                 state: SocketState::New,
                 incoming_buffer: Vec::new(),
                 send_window: Vec::new(),
-                unsent_queue: DList::new(),
+                unsent_queue: LinkedList::new(),
                 duplicate_ack_count: 0,
                 last_acked: 0,
                 last_acked_timestamp: 0,
@@ -129,7 +129,7 @@ impl UtpSocket {
                 curr_window: 0,
                 remote_wnd_size: 0,
                 current_delays: Vec::new(),
-                base_delays: RingBuf::with_capacity(BASE_HISTORY),
+                base_delays: VecDeque::with_capacity(BASE_HISTORY),
                 congestion_timeout: INITIAL_CONGESTION_TIMEOUT,
                 cwnd: INIT_CWND * MSS,
             }),
@@ -821,9 +821,9 @@ impl UtpSocket {
 #[cfg(test)]
 mod test {
     use std::rand::random;
-    use std::io::test::next_test_ip4;
-    use std::io::{EndOfFile, Closed};
-    use std::io::net::udp::UdpSocket;
+    use std::old_io::test::next_test_ip4;
+    use std::old_io::{EndOfFile, Closed};
+    use std::old_io::net::udp::UdpSocket;
     use std::thread::Thread;
     use super::{UtpSocket, SocketState, BUF_SIZE};
     use packet::{Packet, PacketType};
