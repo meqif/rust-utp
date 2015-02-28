@@ -528,7 +528,7 @@ impl UtpSocket {
 
     /// Build the selective acknowledgment payload for usage in packets.
     fn build_selective_ack(&self) -> Vec<u8> {
-        let mut stashed = self.incoming_buffer.iter()
+        let stashed = self.incoming_buffer.iter()
             .filter(|&pkt| pkt.seq_nr() > self.ack_nr);
 
         let mut sack = Vec::new();
