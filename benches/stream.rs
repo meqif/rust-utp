@@ -2,7 +2,7 @@ extern crate test;
 extern crate utp;
 
 use test::Bencher;
-use std::io::test::next_test_ip4;
+use std::old_io::test::next_test_ip4;
 use utp::UtpStream;
 use std::sync::Arc;
 use std::thread::Thread;
