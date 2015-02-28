@@ -4,10 +4,10 @@ use std::old_io::net::ip::SocketAddr;
 use std::old_io::net::udp::UdpSocket;
 use std::old_io::{IoResult, IoError, TimedOut, ConnectionFailed, EndOfFile, Closed, ConnectionReset};
 use std::iter::{range_inclusive, repeat};
-use std::rand::random;
 use std::num::SignedInt;
 use util::{now_microseconds, ewma};
 use packet::{Packet, PacketType, ExtensionType, HEADER_SIZE};
+use rand;
 
 // For simplicity's sake, let us assume no packet will ever exceed the
 // Ethernet maximum transfer unit of 1500 bytes.
@@ -106,7 +106,7 @@ impl UtpSocket {
     #[unstable]
     pub fn bind(addr: SocketAddr) -> IoResult<UtpSocket> {
         let skt = UdpSocket::bind(addr);
-        let connection_id = random::<u16>();
+        let connection_id = rand::random::<u16>();
         match skt {
             Ok(x) => Ok(UtpSocket {
                 socket: x,
@@ -604,7 +604,7 @@ impl UtpSocket {
             (SocketState::New, PacketType::Syn) => {
                 self.connected_to = src;
                 self.ack_nr = packet.seq_nr();
-                self.seq_nr = random();
+                self.seq_nr = rand::random();
                 self.receiver_connection_id = packet.connection_id() + 1;
                 self.sender_connection_id = packet.connection_id();
                 self.state = SocketState::Connected;
@@ -820,7 +820,6 @@ impl UtpSocket {
 
 #[cfg(test)]
 mod test {
-    use std::rand::random;
     use std::old_io::test::next_test_ip4;
     use std::old_io::{EndOfFile, Closed};
     use std::old_io::net::udp::UdpSocket;
@@ -828,6 +827,7 @@ mod test {
     use super::{UtpSocket, SocketState, BUF_SIZE};
     use packet::{Packet, PacketType};
     use util::now_microseconds;
+    use rand;
 
     #[test]
     fn test_socket_ipv4() {
@@ -984,7 +984,7 @@ mod test {
     #[test]
     fn test_handle_packet() {
         //fn test_connection_setup() {
-        let initial_connection_id: u16 = random();
+        let initial_connection_id: u16 = rand::random();
         let sender_connection_id = initial_connection_id + 1;
         let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
         let mut socket = iotry!(UtpSocket::bind(server_addr));
@@ -1083,7 +1083,7 @@ mod test {
     #[test]
     fn test_response_to_keepalive_ack() {
         // Boilerplate test setup
-        let initial_connection_id: u16 = random();
+        let initial_connection_id: u16 = rand::random();
         let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
         let mut socket = iotry!(UtpSocket::bind(server_addr));
 
@@ -1126,7 +1126,7 @@ mod test {
     #[test]
     fn test_response_to_wrong_connection_id() {
         // Boilerplate test setup
-        let initial_connection_id: u16 = random();
+        let initial_connection_id: u16 = rand::random();
         let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
         let mut socket = iotry!(UtpSocket::bind(server_addr));
 
@@ -1163,7 +1163,7 @@ mod test {
     #[test]
     fn test_unordered_packets() {
         // Boilerplate test setup
-        let initial_connection_id: u16 = random();
+        let initial_connection_id: u16 = rand::random();
         let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
         let mut socket = iotry!(UtpSocket::bind(server_addr));
 

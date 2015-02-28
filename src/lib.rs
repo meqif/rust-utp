@@ -16,6 +16,7 @@
 
 #![deny(missing_docs)]
 
+extern crate rand;
 extern crate time;
 #[macro_use] extern crate log;
 
