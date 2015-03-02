@@ -1,6 +1,6 @@
 # rust-utp
 
-[![Crate version](http://img.shields.io/badge/crates.io-v0.1.4-blue.svg?style=flat)](https://crates.io/crates/utp)
+[![Crate version](http://img.shields.io/badge/crates.io-v0.1.5-blue.svg?style=flat)](https://crates.io/crates/utp)
 [![Build Status](http://img.shields.io/travis/meqif/rust-utp.svg?style=flat)](https://travis-ci.org/meqif/rust-utp)
 
 A [Micro Transport Protocol](http://www.bittorrent.org/beps/bep_0029.html)
