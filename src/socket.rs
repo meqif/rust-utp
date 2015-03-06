@@ -278,7 +278,7 @@ impl UtpSocket {
 
         let shallow_clone = packet.shallow_clone();
 
-        if packet.get_type() == PacketType::Data && self.ack_nr + 1 <= packet.seq_nr() {
+        if packet.get_type() == PacketType::Data && packet.seq_nr().wrapping_sub(self.ack_nr) >= 1 {
             self.insert_into_buffer(packet);
         }
 
@@ -405,7 +405,11 @@ impl UtpSocket {
             packet.set_connection_id(self.sender_connection_id);
 
             self.unsent_queue.push_back(packet);
-            self.seq_nr.wrapping_add(1);
+            if self.seq_nr == ::std::u16::MAX {
+                self.seq_nr = 0;
+            } else {
+                self.seq_nr += 1;
+            }
         }
 
         // Flush unsent packet queue
@@ -586,7 +590,7 @@ impl UtpSocket {
         debug!("({:?}, {:?})", self.state, packet.get_type());
 
         // Acknowledge only if the packet strictly follows the previous one
-        if packet.seq_nr() == self.ack_nr + 1 {
+        if packet.seq_nr().wrapping_sub(self.ack_nr) == 1 {
             self.ack_nr = packet.seq_nr();
         }
 
@@ -669,7 +673,7 @@ impl UtpSocket {
     fn handle_data_packet(&mut self, packet: &Packet) -> Option<Packet> {
         let mut reply = self.prepare_reply(packet, PacketType::State);
 
-        if self.ack_nr + 1 < packet.seq_nr() {
+        if packet.seq_nr().wrapping_sub(self.ack_nr) > 1 {
             debug!("current ack_nr ({}) is behind received packet seq_nr ({})",
                    self.ack_nr, packet.seq_nr());
 
