@@ -1,7 +1,7 @@
 extern crate utp;
 
 use std::old_io::test::next_test_ip4;
-use std::thread::Thread;
+use std::thread;
 use utp::UtpStream;
 
 macro_rules! iotry {
@@ -13,7 +13,7 @@ fn test_stream_open_and_close() {
     let server_addr = next_test_ip4();
     let mut server = iotry!(UtpStream::bind(server_addr));
 
-    Thread::spawn(move || {
+    thread::spawn(move || {
         let mut client = iotry!(UtpStream::connect(server_addr));
         iotry!(client.close());
         drop(client);
@@ -34,7 +34,7 @@ fn test_stream_small_data() {
     let server_addr = next_test_ip4();
     let mut server = UtpStream::bind(server_addr);
 
-    Thread::spawn(move || {
+    thread::spawn(move || {
         let mut client = iotry!(UtpStream::connect(server_addr));
         iotry!(client.write(d.as_slice()));
         iotry!(client.close());
@@ -57,7 +57,7 @@ fn test_stream_large_data() {
     let server_addr = next_test_ip4();
     let mut server = UtpStream::bind(server_addr);
 
-    Thread::spawn(move || {
+    thread::spawn(move || {
         let mut client = iotry!(UtpStream::connect(server_addr));
         iotry!(client.write(d.as_slice()));
         iotry!(client.close());
@@ -81,7 +81,7 @@ fn test_stream_successive_reads() {
     let server_addr = next_test_ip4();
     let mut server = UtpStream::bind(server_addr);
 
-    Thread::spawn(move || {
+    thread::spawn(move || {
         let mut client = iotry!(UtpStream::connect(server_addr));
         iotry!(client.write(d.as_slice()));
         iotry!(client.close());
