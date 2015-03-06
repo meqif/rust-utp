@@ -701,14 +701,24 @@ impl UtpSocket {
     }
 
     fn update_congestion_window(&mut self, off_target: f64, bytes_newly_acked: u32) {
-        let flightsize = self.curr_window;
-        self.cwnd += (GAIN * off_target * bytes_newly_acked as f64 * MSS as f64 / self.cwnd as f64) as u32;
-        let max_allowed_cwnd = flightsize + ALLOWED_INCREASE * MSS;
-        self.cwnd = min(self.cwnd, max_allowed_cwnd);
-        self.cwnd = max(self.cwnd, MIN_CWND * MSS);
+        use std::num::Int;
 
-        debug!("cwnd: {}", self.cwnd);
-        debug!("max_allowed_cwnd: {}", max_allowed_cwnd);
+        let flightsize = self.curr_window;
+        match self.cwnd.checked_add((GAIN * off_target * bytes_newly_acked as f64 * MSS as f64 / self.cwnd as f64) as u32) {
+            Some(_) => {
+                let max_allowed_cwnd = flightsize + ALLOWED_INCREASE * MSS;
+                self.cwnd = min(self.cwnd, max_allowed_cwnd);
+                self.cwnd = max(self.cwnd, MIN_CWND * MSS);
+
+                debug!("cwnd: {}", self.cwnd);
+                debug!("max_allowed_cwnd: {}", max_allowed_cwnd);
+            }
+            None => {
+                // FIXME: This shouldn't happen at all, more investigation is needed to ascertain the
+                // true cause of the miscalculation of the congestion window increase. For now, we
+                // simply ignore meaningly large increases.
+            }
+        }
     }
 
     fn handle_state_packet(&mut self, packet: &Packet) {
