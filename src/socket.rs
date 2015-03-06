@@ -405,7 +405,7 @@ impl UtpSocket {
             packet.set_connection_id(self.sender_connection_id);
 
             self.unsent_queue.push_back(packet);
-            self.seq_nr += 1;
+            self.seq_nr.wrapping_add(1);
         }
 
         // Flush unsent packet queue
@@ -1143,7 +1143,7 @@ mod test {
         assert!(response.unwrap().get_type() == PacketType::State);
 
         // Now, disrupt connection with a packet with an incorrect connection id
-        let new_connection_id = initial_connection_id * 2;
+        let new_connection_id = initial_connection_id.wrapping_mul(2);
 
         let mut packet = Packet::new();
         packet.set_wnd_size(BUF_SIZE as u32);
