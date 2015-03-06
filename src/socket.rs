@@ -1637,6 +1637,7 @@ mod test {
                     iotry!(client.socket.send_to(packet.bytes().as_slice(), dst));
                 }
 
+                client.curr_window += packet.len() as u32;
                 client.send_window.push(packet);
                 client.seq_nr += 1;
             }
