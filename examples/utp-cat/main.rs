@@ -14,7 +14,7 @@ fn usage() {
 fn main() {
     use utp::UtpStream;
     use std::str::FromStr;
-    use std::old_io::{stdin, stdout, stderr};
+    use std::io::{stdin, stdout, stderr, Read, Write};
 
     enum Mode {
         Server,
@@ -69,7 +69,8 @@ fn main() {
             let mut stream = iotry!(UtpStream::connect(addr));
             let mut reader = stdin();
 
-            let payload = iotry!(reader.read_to_end());
+            let mut payload = vec!();
+            iotry!(reader.read_to_end(&mut payload));
             iotry!(stream.write(payload.as_slice()));
             iotry!(stream.close());
             drop(stream);
