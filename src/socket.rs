@@ -278,7 +278,7 @@ impl UtpSocket {
 
         let shallow_clone = packet.shallow_clone();
 
-        if packet.get_type() == PacketType::Data && packet.seq_nr().wrapping_sub(self.ack_nr) >= 1 {
+        if packet.get_type() == PacketType::Data && self.ack_nr.wrapping_add(1) <= packet.seq_nr() {
             self.insert_into_buffer(packet);
         }
 
