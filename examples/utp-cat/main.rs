@@ -20,10 +20,6 @@ fn main() {
         Server,
         Client
     }
-    let mut mode: Mode;
-
-    // Provide a default address
-    let mut addr = SocketAddr { ip: Ipv4Addr(127,0,0,1), port: 8080 };
 
     let args = std::os::args();
     let mut args = args.iter().map(|arg| &arg[..]);
@@ -31,14 +27,17 @@ fn main() {
     // Skip program name
     args.next();
 
-    match args.next() {
-        Some("-s") => mode = Mode::Server,
-        Some("-c") => mode = Mode::Client,
+    let mode = match args.next() {
+        Some("-s") => Mode::Server,
+        Some("-c") => Mode::Client,
         _ => { usage(); return; }
-    }
+    };
 
-    match &args.collect::<Vec<_>>()[..] {
-        [] => (),
+    let addr = match &args.collect::<Vec<_>>()[..] {
+        [] => {
+            // Use a default address
+            SocketAddr { ip: Ipv4Addr(127,0,0,1), port: 8080 }
+        },
         [ip, port] => {
             let ip = match FromStr::from_str(ip) {
                 Ok(x) => x,
@@ -48,13 +47,13 @@ fn main() {
                 Ok(x) => x,
                 Err(_) => { println!("Invalid port"); return }
             };
-            addr = SocketAddr {
+            SocketAddr {
                 ip:   ip,
                 port: port,
-            };
+            }
         }
         _ => { usage(); return; }
-    }
+    };
 
     match mode {
         Mode::Server => {
