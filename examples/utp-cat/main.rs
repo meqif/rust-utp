@@ -26,7 +26,7 @@ fn main() {
     let mut addr = SocketAddr { ip: Ipv4Addr(127,0,0,1), port: 8080 };
 
     let args = std::os::args();
-    let mut args = args.iter().map(|arg| arg.as_slice());
+    let mut args = args.iter().map(|arg| &arg[..]);
 
     // Skip program name
     args.next();
@@ -37,7 +37,7 @@ fn main() {
         _ => { usage(); return; }
     }
 
-    match args.collect::<Vec<_>>().as_slice() {
+    match &args.collect::<Vec<_>>()[..] {
         [] => (),
         [ip, port] => {
             let ip = match FromStr::from_str(ip) {
@@ -63,7 +63,7 @@ fn main() {
             let _ = writeln!(&mut stderr(), "Serving on {}", addr);
 
             let payload = iotry!(stream.read_to_end());
-            iotry!(writer.write(payload.as_slice()));
+            iotry!(writer.write(&payload[..]));
         }
         Mode::Client => {
             let mut stream = iotry!(UtpStream::connect(addr));
@@ -71,7 +71,7 @@ fn main() {
 
             let mut payload = vec!();
             iotry!(reader.read_to_end(&mut payload));
-            iotry!(stream.write(payload.as_slice()));
+            iotry!(stream.write(&payload[..]));
             iotry!(stream.close());
             drop(stream);
         }

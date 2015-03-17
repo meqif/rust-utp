@@ -158,7 +158,7 @@ impl UtpSocket {
 
             // Send packet
             debug!("Connecting to {}", other);
-            try!(self.socket.send_to(packet.bytes().as_slice(), other));
+            try!(self.socket.send_to(&packet.bytes()[..], other));
             self.state = SocketState::SynSent;
 
             // Validate response
@@ -216,7 +216,7 @@ impl UtpSocket {
         packet.set_type(PacketType::Fin);
 
         // Send FIN
-        try!(self.socket.send_to(packet.bytes().as_slice(), self.connected_to));
+        try!(self.socket.send_to(&packet.bytes()[..], self.connected_to));
         self.state = SocketState::FinSent;
 
         // Receive JAKE
@@ -285,7 +285,7 @@ impl UtpSocket {
         if let Some(pkt) = try!(self.handle_packet(&shallow_clone, src)) {
                 let mut pkt = pkt;
                 pkt.set_wnd_size(BUF_SIZE as u32);
-                try!(self.socket.send_to(pkt.bytes().as_slice(), src));
+                try!(self.socket.send_to(&pkt.bytes()[..], src));
                 debug!("sent {:?}", pkt);
         }
 
@@ -332,7 +332,7 @@ impl UtpSocket {
 
         // Check if there is any pending data from a partially flushed packet
         if !self.pending_data.is_empty() {
-            let len = buf.clone_from_slice(self.pending_data.as_slice());
+            let len = buf.clone_from_slice(&self.pending_data[..]);
 
             // If all the data in the pending data buffer fits the given output
             // buffer, remove the corresponding packet from the incoming buffer
@@ -438,7 +438,7 @@ impl UtpSocket {
 
             let mut packet = packet;
             packet.set_timestamp_microseconds(now_microseconds());
-            try!(self.socket.send_to(packet.bytes().as_slice(), dst));
+            try!(self.socket.send_to(&packet.bytes()[..], dst));
             debug!("sent {:?}", packet);
             self.curr_window += packet.len() as u32;
             self.send_window.push(packet);
@@ -462,7 +462,7 @@ impl UtpSocket {
             let t = now_microseconds();
             packet.set_timestamp_microseconds(t);
             packet.set_timestamp_difference_microseconds((t - self.last_acked_timestamp));
-            iotry!(self.socket.send_to(packet.bytes().as_slice(), self.connected_to));
+            iotry!(self.socket.send_to(&packet.bytes()[..], self.connected_to));
             debug!("sent {:?}", packet);
         }
     }
@@ -564,7 +564,7 @@ impl UtpSocket {
         match self.send_window.iter().find(|pkt| pkt.seq_nr() == lost_packet_nr) {
             None => debug!("Packet {} not found", lost_packet_nr),
             Some(packet) => {
-                iotry!(self.socket.send_to(packet.bytes().as_slice(), self.connected_to));
+                iotry!(self.socket.send_to(&packet.bytes()[..], self.connected_to));
                 debug!("sent {:?}", packet);
             }
         }
@@ -1251,7 +1251,7 @@ mod test {
             let mut s = client.socket;
             let mut window: Vec<Packet> = Vec::new();
 
-            for data in (1..13u8).collect::<Vec<u8>>().as_slice().chunks(3) {
+            for data in (1..13u8).collect::<Vec<u8>>()[..].chunks(3) {
                 let mut packet = Packet::new();
                 packet.set_wnd_size(BUF_SIZE as u32);
                 packet.set_type(PacketType::Data);
@@ -1273,11 +1273,11 @@ mod test {
             window.push(packet);
             client.seq_nr += 1;
 
-            iotry!(s.send_to(window[3].bytes().as_slice(), server_addr));
-            iotry!(s.send_to(window[2].bytes().as_slice(), server_addr));
-            iotry!(s.send_to(window[1].bytes().as_slice(), server_addr));
-            iotry!(s.send_to(window[0].bytes().as_slice(), server_addr));
-            iotry!(s.send_to(window[4].bytes().as_slice(), server_addr));
+            iotry!(s.send_to(&window[3].bytes()[..], server_addr));
+            iotry!(s.send_to(&window[2].bytes()[..], server_addr));
+            iotry!(s.send_to(&window[1].bytes()[..], server_addr));
+            iotry!(s.send_to(&window[0].bytes()[..], server_addr));
+            iotry!(s.send_to(&window[4].bytes()[..], server_addr));
 
             for _ in (0u8..2) {
                 let mut buf = [0; BUF_SIZE];
@@ -1354,7 +1354,7 @@ mod test {
 
         thread::spawn(move || {
             let mut client = iotry!(client.connect(server_addr));
-            iotry!(client.send_to(d.as_slice()));
+            iotry!(client.send_to(&d[..]));
             iotry!(client.close());
         });
 
@@ -1384,7 +1384,7 @@ mod test {
         packet.set_connection_id(server.sender_connection_id);
 
         for _ in (0u8..3) {
-            iotry!(server.socket.send_to(packet.bytes().as_slice(), client_addr));
+            iotry!(server.socket.send_to(&packet.bytes()[..], client_addr));
         }
 
         // Receive data again and check that it's the same we reported as missing
@@ -1400,7 +1400,7 @@ mod test {
                 let response = response.unwrap();
                 assert!(response.is_some());
                 let response = response.unwrap();
-                iotry!(server.socket.send_to(response.bytes().as_slice(), server.connected_to));
+                iotry!(server.socket.send_to(&response.bytes()[..], server.connected_to));
             },
             Err(e) => panic!("{}", e),
         }
@@ -1429,7 +1429,7 @@ mod test {
             let mut client = iotry!(client.connect(server_addr));
             assert!(client.state == SocketState::Connected);
             assert_eq!(client.connected_to, server_addr);
-            iotry!(client.send_to(d.as_slice()));
+            iotry!(client.send_to(&d[..]));
             drop(client);
         });
 
@@ -1531,7 +1531,7 @@ mod test {
             // Send two copies of the packet, with different timestamps
             for _ in (0u8..2) {
                 packet.set_timestamp_microseconds(now_microseconds());
-                iotry!(s.send_to(packet.bytes().as_slice(), server_addr));
+                iotry!(s.send_to(&packet.bytes()[..], server_addr));
             }
             client.seq_nr += 1;
 
@@ -1579,7 +1579,7 @@ mod test {
             let mut client = iotry!(client.connect(server_addr));
             client.congestion_timeout = 50;
 
-            iotry!(client.send_to(to_send.as_slice()));
+            iotry!(client.send_to(&to_send[..]));
             iotry!(client.close());
         });
 
@@ -1606,7 +1606,7 @@ mod test {
         packet.set_sack(Some(vec!(12, 0, 0, 0)));
 
         // Send SACK
-        iotry!(server.socket.send_to(packet.bytes().as_slice(), server.connected_to.clone()));
+        iotry!(server.socket.send_to(&packet.bytes()[..], server.connected_to.clone()));
 
         // Expect to receive "missing" packets
         let mut received: Vec<u8> = vec!();
@@ -1636,7 +1636,7 @@ mod test {
             let mut client = iotry!(client.connect(server_addr));
 
             // Send everything except the odd chunks
-            let chunks = to_send.as_slice().chunks(BUF_SIZE);
+            let chunks = to_send[..].chunks(BUF_SIZE);
             let dst = client.connected_to;
             for (index, chunk) in chunks.enumerate() {
                 let mut packet = Packet::new();
@@ -1648,7 +1648,7 @@ mod test {
                 packet.set_type(PacketType::Data);
 
                 if index % 2 == 0 {
-                    iotry!(client.socket.send_to(packet.bytes().as_slice(), dst));
+                    iotry!(client.socket.send_to(&packet.bytes()[..], dst));
                 }
 
                 client.curr_window += packet.len() as u32;
@@ -1683,7 +1683,7 @@ mod test {
         thread::spawn(move || {
             let client = iotry!(UtpSocket::bind(client_addr));
             let mut client = iotry!(client.connect(server_addr));
-            iotry!(client.send_to(to_send.as_slice()));
+            iotry!(client.send_to(&to_send[..]));
             iotry!(client.close());
         });
 
@@ -1720,7 +1720,7 @@ mod test {
 
             let mut client = iotry!(client.connect(server_addr));
             // Send enough data to rollover
-            iotry!(client.send_to(to_send.as_slice()));
+            iotry!(client.send_to(&to_send[..]));
             // Check that the sequence number did rollover
             assert!(client.seq_nr < 50);
             // Close connection
