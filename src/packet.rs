@@ -299,7 +299,7 @@ impl Packet {
             if kind == ExtensionType::SelectiveAck as u8 { // or more generally, a known kind
                 let extension = Extension {
                     ty: ExtensionType::SelectiveAck,
-                    data: buf.slice(extension_start, payload_start).to_vec(),
+                    data: buf[extension_start..payload_start].to_vec(),
                 };
                 extensions.push(extension);
             }
@@ -310,7 +310,7 @@ impl Packet {
 
         let mut payload;
         if idx < buf.len() {
-            payload = buf.slice_from(idx).to_vec();
+            payload = buf[idx..].to_vec();
         } else {
             payload = Vec::new();
         }

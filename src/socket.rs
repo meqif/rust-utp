@@ -176,7 +176,7 @@ impl UtpSocket {
         assert!(len == HEADER_SIZE);
         assert!(addr == self.connected_to);
 
-        let packet = Packet::decode(buf.slice_to(len));
+        let packet = Packet::decode(&buf[..len]);
         if packet.get_type() != PacketType::State {
             return Err(IoError {
                 kind: ConnectionFailed,
@@ -273,7 +273,7 @@ impl UtpSocket {
             Ok(x) => x,
             Err(e) => return Err(e),
         };
-        let packet = Packet::decode(b.slice_to(read));
+        let packet = Packet::decode(&b[..read]);
         debug!("received {:?}", packet);
 
         let shallow_clone = packet.shallow_clone();
@@ -344,7 +344,7 @@ impl UtpSocket {
             } else {
                 // Remove the bytes copied to the output buffer from the pending
                 // data buffer (i.e., pending -= output)
-                self.pending_data = self.pending_data.slice_from(len).to_vec();
+                self.pending_data = self.pending_data[len..].to_vec();
             }
         }
 
@@ -364,7 +364,7 @@ impl UtpSocket {
             if self.incoming_buffer[0].payload.len() == len {
                 self.advance_incoming_buffer();
             } else {
-                self.pending_data.push_all(self.incoming_buffer[0].payload.slice_from(len));
+                self.pending_data.push_all(&self.incoming_buffer[0].payload[len..]);
             }
 
             // Stop if the output buffer is full
@@ -1298,7 +1298,7 @@ mod test {
         let mut received: Vec<u8> = vec!();
         loop {
             match server.recv_from(&mut buf) {
-                Ok((len, _src)) => received.push_all(buf.slice_to(len)),
+                Ok((len, _src)) => received.push_all(&buf[..len]),
                 Err(ref e) if e.kind == EndOfFile => break,
                 Err(e) => panic!("{:?}", e)
             }
@@ -1325,7 +1325,7 @@ mod test {
             client.set_timeout(Some(10));
             let mut buf = [0; BUF_SIZE];
             let packet = match client.recv_from(&mut buf) {
-                Ok((nread, _src)) => Packet::decode(buf.slice_to(nread)),
+                Ok((nread, _src)) => Packet::decode(&buf[..nread]),
                 Err(e) => panic!("{}", e),
             };
             assert_eq!(packet.ack_nr(), seq_nr);
@@ -1366,7 +1366,7 @@ mod test {
         let mut data_packet;
         match server.socket.recv_from(&mut buf) {
             Ok((read, _src)) => {
-                data_packet = Packet::decode(buf.slice_to(read));
+                data_packet = Packet::decode(&buf[..read]);
                 assert!(data_packet.get_type() == PacketType::Data);
                 assert_eq!(data_packet.payload, data);
                 assert_eq!(data_packet.payload.len(), data.len());
@@ -1391,7 +1391,7 @@ mod test {
         match server.socket.recv_from(&mut buf) {
             Ok((0, _)) => panic!("Received 0 bytes from socket"),
             Ok((read, _src)) => {
-                let packet = Packet::decode(buf.slice_to(read));
+                let packet = Packet::decode(&buf[..read]);
                 assert_eq!(packet.get_type(), PacketType::Data);
                 assert_eq!(packet.seq_nr(), data_packet.seq_nr());
                 assert!(packet.payload == data_packet.payload);
@@ -1557,7 +1557,7 @@ mod test {
         let mut received: Vec<u8> = vec!();
         loop {
             match server.recv_from(&mut buf) {
-                Ok((len, _src)) => received.push_all(buf.slice_to(len)),
+                Ok((len, _src)) => received.push_all(&buf[..len]),
                 Err(ref e) if e.kind == EndOfFile => break,
                 Err(e) => panic!("{:?}", e)
             }
@@ -1612,7 +1612,7 @@ mod test {
         let mut received: Vec<u8> = vec!();
         loop {
             match server.recv_from(&mut buf) {
-                Ok((len, _src)) => received.push_all(buf.slice_to(len)),
+                Ok((len, _src)) => received.push_all(&buf[..len]),
                 Err(ref e) if e.kind == EndOfFile => break,
                 Err(e) => panic!("{:?}", e)
             }
@@ -1663,7 +1663,7 @@ mod test {
         let mut received: Vec<u8> = vec!();
         loop {
             match server.recv_from(&mut buf) {
-                Ok((len, _src)) => received.push_all(buf.slice_to(len)),
+                Ok((len, _src)) => received.push_all(&buf[..len]),
                 Err(ref e) if e.kind == EndOfFile => break,
                 Err(e) => panic!("{}", e)
             }
@@ -1692,7 +1692,7 @@ mod test {
             let mut small_buffer = [0; 512];
             match server.recv_from(&mut small_buffer) {
                 Ok((0, _src)) => (),
-                Ok((len, _src)) => read.push_all(small_buffer.slice_to(len)),
+                Ok((len, _src)) => read.push_all(&small_buffer[..len]),
                 Err(ref e) if e.kind == EndOfFile => break,
                 Err(e) => panic!("{}", e),
             }
@@ -1731,7 +1731,7 @@ mod test {
         let mut received: Vec<u8> = vec!();
         loop {
             match server.recv_from(&mut buf) {
-                Ok((len, _src)) => received.push_all(buf.slice_to(len)),
+                Ok((len, _src)) => received.push_all(&buf[..len]),
                 Err(ref e) if e.kind == EndOfFile => break,
                 Err(e) => panic!("{}", e)
             }
