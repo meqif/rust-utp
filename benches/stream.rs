@@ -40,7 +40,7 @@ fn bench_transfer_one_packet(b: &mut Bencher) {
 
         thread::spawn(move || {
             let mut client = iotry!(UtpStream::connect(server_addr));
-            iotry!(client.write(data.as_slice()));
+            iotry!(client.write(&data[..]));
             iotry!(client.close());
         });
 
@@ -63,7 +63,7 @@ fn bench_transfer_one_megabyte(b: &mut Bencher) {
 
         thread::spawn(move || {
             let mut client = iotry!(UtpStream::connect(server_addr));
-            iotry!(client.write(data.as_slice()));
+            iotry!(client.write(&data[..]));
             iotry!(client.close());
         });
 

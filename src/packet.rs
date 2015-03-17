@@ -87,7 +87,7 @@ impl PacketHeader {
     /// Return packet header as a slice of bytes.
     pub fn bytes(&self) -> &[u8] {
         let buf: &[u8; HEADER_SIZE] = unsafe { transmute(self) };
-        return buf.as_slice();
+        return &buf[..];
     }
 
     pub fn len(&self) -> usize {
@@ -266,10 +266,10 @@ impl Packet {
                 None => buf.push(0u8),
                 Some(next) => buf.push(next.ty as u8),
             }
-            buf.push_all(extension.to_bytes().as_slice());
+            buf.push_all(&extension.to_bytes()[..]);
         }
 
-        buf.push_all(self.payload.as_slice());
+        buf.push_all(&self.payload[..]);
         return buf;
     }
 
@@ -299,7 +299,7 @@ impl Packet {
             if kind == ExtensionType::SelectiveAck as u8 { // or more generally, a known kind
                 let extension = Extension {
                     ty: ExtensionType::SelectiveAck,
-                    data: buf.slice(extension_start, payload_start).to_vec(),
+                    data: buf[extension_start..payload_start].to_vec(),
                 };
                 extensions.push(extension);
             }
@@ -310,7 +310,7 @@ impl Packet {
 
         let mut payload;
         if idx < buf.len() {
-            payload = buf.slice_from(idx).to_vec();
+            payload = buf[idx..].to_vec();
         } else {
             payload = Vec::new();
         }
@@ -464,7 +464,7 @@ mod test {
                    0x65, 0xbf, 0x5d, 0xba, 0x00, 0x10, 0x00, 0x00,
                    0x3a, 0xf2, 0x42, 0xc8, 0x48, 0x65, 0x6c, 0x6c,
                    0x6f, 0x0a];
-        assert_eq!(Packet::decode(&buf).bytes().as_slice(), buf.as_slice());
+        assert_eq!(&Packet::decode(&buf).bytes()[..], &buf[..]);
     }
 
 }

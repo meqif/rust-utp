@@ -36,7 +36,7 @@ fn test_stream_small_data() {
 
     thread::spawn(move || {
         let mut client = iotry!(UtpStream::connect(server_addr));
-        iotry!(client.write(d.as_slice()));
+        iotry!(client.write(&d[..]));
         iotry!(client.close());
     });
 
@@ -59,7 +59,7 @@ fn test_stream_large_data() {
 
     thread::spawn(move || {
         let mut client = iotry!(UtpStream::connect(server_addr));
-        iotry!(client.write(d.as_slice()));
+        iotry!(client.write(&d[..]));
         iotry!(client.close());
     });
 
@@ -83,7 +83,7 @@ fn test_stream_successive_reads() {
 
     thread::spawn(move || {
         let mut client = iotry!(UtpStream::connect(server_addr));
-        iotry!(client.write(d.as_slice()));
+        iotry!(client.write(&d[..]));
         iotry!(client.close());
     });
 
