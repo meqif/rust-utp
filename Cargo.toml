@@ -14,7 +14,7 @@ keywords = ["utp", "networking", "protocol", "transport"]
 [dependencies]
 time = "*"
 log = "0.2"
-rand = "0.1"
+rand = "0.2"
 
 [lib]
 name = "utp"
