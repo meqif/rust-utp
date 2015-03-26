@@ -21,7 +21,7 @@ name = "utp"
 bench = false
 
 [[bin]]
-name = "utp-cat"
-path = "examples/utp-cat/main.rs"
+name = "utpcat"
+path = "examples/utpcat/main.rs"
 test = false
 bench = false
