@@ -601,7 +601,7 @@ impl UtpSocket {
             return Ok(Some(self.prepare_reply(packet, PacketType::Reset)));
         }
 
-        self.remote_wnd_size = packet.wnd_size() as u32;
+        self.remote_wnd_size = packet.wnd_size();
         debug!("self.remote_wnd_size: {}", self.remote_wnd_size);
 
         match (self.state, packet.get_type()) {
