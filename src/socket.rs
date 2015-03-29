@@ -396,10 +396,10 @@ impl UtpSocket {
     // size, which will result in the data being split over several packets.
     #[unstable]
     pub fn send_to(&mut self, buf: &[u8]) -> Result<usize> {
-        // Return Ok(0) == closed
-        // TODO: check what is the appropriate return value in the RFC
         if self.state == SocketState::Closed {
-            return Ok(0);
+            return Err(Error::new(ErrorKind::NotConnected,
+                                  "The socket is closed",
+                                  None));
         }
 
         let total_length = buf.len();
