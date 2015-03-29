@@ -154,7 +154,7 @@ impl UtpSocket {
         let mut addr = self.connected_to;
         let mut buf = [0; BUF_SIZE];
 
-        let mut syn_timeout = self.congestion_timeout;
+        // let syn_timeout = self.congestion_timeout;
         for _ in (0u8..5) {
             packet.set_timestamp_microseconds(now_microseconds());
 
