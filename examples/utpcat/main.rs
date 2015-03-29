@@ -1,7 +1,7 @@
 //! Implementation of a simple uTP client and server.
+#![feature(collections,convert,os)]
 
 extern crate utp;
-use std::old_io::net::ip::{Ipv4Addr, SocketAddr};
 
 macro_rules! iotry {
     ($e:expr) => (match $e { Ok(v) => v, Err(e) => panic!("{}", e), })
@@ -13,7 +13,6 @@ fn usage() {
 
 fn main() {
     use utp::UtpStream;
-    use std::str::FromStr;
     use std::io::{stdin, stdout, stderr, Read, Write};
 
     enum Mode {
@@ -34,34 +33,20 @@ fn main() {
     };
 
     let addr = match (args.next(), args.next()) {
-        (None, None) => {
-            // Use a default address
-            SocketAddr { ip: Ipv4Addr(127,0,0,1), port: 8080 }
-        },
-        (Some(ip), Some(port)) => {
-            let ip = match FromStr::from_str(ip) {
-                Ok(x) => x,
-                Err(_) => { println!("Invalid address"); return }
-            };
-            let port = match FromStr::from_str(port) {
-                Ok(x) => x,
-                Err(_) => { println!("Invalid port"); return }
-            };
-            SocketAddr {
-                ip:   ip,
-                port: port,
-            }
-        }
+        (None, None) => String::from_str("127.0.0.1:8080"),
+        (Some(ip), Some(port)) => format!("{}:{}", ip, port),
         _ => { usage(); return; }
     };
+    let addr: &str = addr.as_ref();
 
     match mode {
         Mode::Server => {
-            let mut stream = UtpStream::bind(addr);
+            let mut stream = iotry!(UtpStream::bind(addr));
             let mut writer = stdout();
             let _ = writeln!(&mut stderr(), "Serving on {}", addr);
 
-            let payload = iotry!(stream.read_to_end());
+            let mut payload = vec!();
+            iotry!(stream.read_to_end(&mut payload));
             iotry!(writer.write(&payload[..]));
         }
         Mode::Client => {
