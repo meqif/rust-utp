@@ -426,7 +426,7 @@ impl UtpSocket {
         // Consume acknowledgements until latest packet
         let mut buf = [0; BUF_SIZE];
         while self.last_acked < self.seq_nr - 1 {
-            try!(self.recv_from(&mut buf));
+            try!(self.recv(&mut buf));
         }
 
         Ok(total_length)
@@ -441,7 +441,7 @@ impl UtpSocket {
             let max_inflight = max(MIN_CWND * MSS, max_inflight);
             while self.curr_window + packet.len() as u32 > max_inflight {
                 let mut buf = [0; BUF_SIZE];
-                iotry!(self.recv_from(&mut buf));
+                iotry!(self.recv(&mut buf));
             }
 
             let mut packet = packet;
