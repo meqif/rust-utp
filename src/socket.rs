@@ -245,9 +245,22 @@ impl UtpSocket {
                                   None));
         }
 
-        match self.flush_incoming_buffer(buf) {
-            0 => self.recv(buf),
-            read => Ok((read, self.connected_to)),
+        let read = self.flush_incoming_buffer(buf);
+
+        if read > 0 {
+            return Ok((read, self.connected_to));
+        } else {
+            loop {
+                if self.state == SocketState::Closed {
+                    return Ok((0, self.connected_to));
+                }
+
+                match self.recv(buf) {
+                    Ok((0, _src)) => continue,
+                    Ok(x) => return Ok(x),
+                    Err(e) => return Err(e)
+                }
+            }
         }
     }
 
