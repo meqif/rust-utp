@@ -15,6 +15,7 @@
 // - Path MTU discovery (RFC4821)
 
 #![deny(missing_docs)]
+#![feature(core, collections, io)]
 
 extern crate rand;
 extern crate time;
