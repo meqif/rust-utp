@@ -54,14 +54,11 @@ impl Read for UtpStream {
 
 impl Write for UtpStream {
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
-        // TODO: return the actually written bytes
-        match self.socket.send_to(buf) {
-            Ok(()) => Ok(buf.len()),
-            Err(e) => Err(e)
-        }
+        self.socket.send_to(buf)
     }
 
     // TODO: Actually implement flushing
     fn flush(&mut self) -> Result<()> {
+        Ok(())
     }
 }

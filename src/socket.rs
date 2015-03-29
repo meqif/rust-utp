@@ -102,8 +102,10 @@ pub struct UtpSocket {
 
 impl UtpSocket {
     /// Create a UTP socket from the given address.
+    /// For now, I'll ignore all but the first address.
     #[unstable]
-    pub fn bind(addr: SocketAddr) -> Result<UtpSocket> {
+    pub fn bind<A: ToSocketAddrs>(addr: A) -> Result<UtpSocket> {
+        let addr = addr.to_socket_addrs().unwrap().next().unwrap();
         let skt = UdpSocket::bind(addr);
         let connection_id = rand::random::<u16>();
         match skt {
@@ -138,8 +140,9 @@ impl UtpSocket {
 
     /// Open a uTP connection to a remote host by hostname or IP address.
     #[unstable]
-    pub fn connect(mut self, other: SocketAddr) -> Result<UtpSocket> {
-        self.connected_to = other;
+    pub fn connect<A: ToSocketAddrs>(mut self, other: A) -> Result<UtpSocket> {
+        let addr = other.to_socket_addrs().unwrap().next().unwrap();
+        self.connected_to = addr;
         assert_eq!(self.receiver_connection_id + 1, self.sender_connection_id);
 
         let mut packet = Packet::new();
@@ -156,12 +159,12 @@ impl UtpSocket {
             packet.set_timestamp_microseconds(now_microseconds());
 
             // Send packet
-            debug!("Connecting to {}", other);
+            debug!("Connecting to {}", self.connected_to);
             try!(self.socket.send_to(&packet.bytes()[..], other));
             self.state = SocketState::SynSent;
 
             // Validate response
-            self.socket.set_read_timeout(Some(syn_timeout));
+            // self.socket.set_read_timeout(Some(syn_timeout));
             match self.socket.recv_from(&mut buf) {
                 Ok((read, src)) => { len = read; addr = src; break; },
                 // Err(ref e) if e.kind == TimedOut => {
@@ -233,7 +236,7 @@ impl UtpSocket {
     pub fn recv_from(&mut self, buf: &mut[u8]) -> Result<(usize,SocketAddr)> {
         // Return Ok(0) -- end of file
         if self.state == SocketState::Closed {
-            return Ok(0);
+            return Ok((0, self.connected_to));
         }
 
         if self.state == SocketState::ResetReceived {
@@ -250,10 +253,10 @@ impl UtpSocket {
 
     fn recv(&mut self, buf: &mut[u8]) -> Result<(usize,SocketAddr)> {
         let mut b = [0; BUF_SIZE + HEADER_SIZE];
-        if self.state != SocketState::New {
-            debug!("setting read timeout of {} ms", self.congestion_timeout);
-            self.socket.set_read_timeout(Some(self.congestion_timeout));
-        }
+        // if self.state != SocketState::New {
+        //     debug!("setting read timeout of {} ms", self.congestion_timeout);
+        //     self.socket.set_read_timeout(Some(self.congestion_timeout));
+        // }
         let (read, src) = match self.socket.recv_from(&mut b) {
             // Err(ref e) if e.kind == TimedOut => {
             //     debug!("recv_from timed out");
@@ -379,12 +382,14 @@ impl UtpSocket {
     // Note that the buffer passed to `send_to` might exceed the maximum packet
     // size, which will result in the data being split over several packets.
     #[unstable]
-    pub fn send_to(&mut self, buf: &[u8]) -> Result<()> {
+    pub fn send_to(&mut self, buf: &[u8]) -> Result<usize> {
         // Return Ok(0) == closed
         // TODO: check what is the appropriate return value in the RFC
         if self.state == SocketState::Closed {
             return Ok(0);
         }
+
+        let total_length = buf.len();
 
         for chunk in buf.chunks(MSS as usize - HEADER_SIZE) {
             let mut packet = Packet::new();
@@ -411,7 +416,7 @@ impl UtpSocket {
             try!(self.recv_from(&mut buf));
         }
 
-        Ok(())
+        Ok(total_length)
     }
 
     /// Send every packet in the unsent packet queue.
