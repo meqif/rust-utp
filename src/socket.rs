@@ -1,8 +1,7 @@
 use std::cmp::{min, max};
 use std::collections::{LinkedList, VecDeque};
-use std::old_io::net::ip::SocketAddr;
-use std::old_io::net::udp::UdpSocket;
-use std::old_io::{IoResult, IoError, TimedOut, ConnectionFailed, EndOfFile, Closed, ConnectionReset};
+use std::net::{ToSocketAddrs, SocketAddr, UdpSocket};
+use std::io::{Result, Error, ErrorKind};
 use std::iter::{range_inclusive, repeat};
 use std::num::SignedInt;
 use util::{now_microseconds, ewma};
@@ -104,7 +103,7 @@ pub struct UtpSocket {
 impl UtpSocket {
     /// Create a UTP socket from the given address.
     #[unstable]
-    pub fn bind(addr: SocketAddr) -> IoResult<UtpSocket> {
+    pub fn bind(addr: SocketAddr) -> Result<UtpSocket> {
         let skt = UdpSocket::bind(addr);
         let connection_id = rand::random::<u16>();
         match skt {
@@ -139,7 +138,7 @@ impl UtpSocket {
 
     /// Open a uTP connection to a remote host by hostname or IP address.
     #[unstable]
-    pub fn connect(mut self, other: SocketAddr) -> IoResult<UtpSocket> {
+    pub fn connect(mut self, other: SocketAddr) -> Result<UtpSocket> {
         self.connected_to = other;
         assert_eq!(self.receiver_connection_id + 1, self.sender_connection_id);
 
@@ -165,11 +164,11 @@ impl UtpSocket {
             self.socket.set_read_timeout(Some(syn_timeout));
             match self.socket.recv_from(&mut buf) {
                 Ok((read, src)) => { len = read; addr = src; break; },
-                Err(ref e) if e.kind == TimedOut => {
-                    debug!("Timed out, retrying");
-                    syn_timeout *= 2;
-                    continue;
-                },
+                // Err(ref e) if e.kind == TimedOut => {
+                //     debug!("Timed out, retrying");
+                //     syn_timeout *= 2;
+                //     continue;
+                // },
                 Err(e) => return Err(e),
             };
         }
@@ -178,11 +177,9 @@ impl UtpSocket {
 
         let packet = Packet::decode(&buf[..len]);
         if packet.get_type() != PacketType::State {
-            return Err(IoError {
-                kind: ConnectionFailed,
-                desc: "The remote peer sent an invalid reply",
-                detail: None,
-            });
+            return Err(Error::new(ErrorKind::ConnectionAborted,
+                                  "The remote peer sent an invalid reply",
+                                  None));
         }
         try!(self.handle_packet(&packet, addr));
 
@@ -196,7 +193,7 @@ impl UtpSocket {
     /// This method allows both peers to receive all packets still in
     /// flight.
     #[unstable]
-    pub fn close(&mut self) -> IoResult<()> {
+    pub fn close(&mut self) -> Result<()> {
         // Wait for acknowledgment on pending sent packets
         let mut buf = [0u8; BUF_SIZE];
         while !self.send_window.is_empty() {
@@ -233,21 +230,16 @@ impl UtpSocket {
     /// Returns `Closed` after receiving a FIN packet when the remaining
     /// inflight packets are consumed.
     #[unstable]
-    pub fn recv_from(&mut self, buf: &mut[u8]) -> IoResult<(usize,SocketAddr)> {
+    pub fn recv_from(&mut self, buf: &mut[u8]) -> Result<(usize,SocketAddr)> {
+        // Return Ok(0) -- end of file
         if self.state == SocketState::Closed {
-            return Err(IoError {
-                kind: EndOfFile,
-                desc: "End of file reached",
-                detail: None,
-            });
+            return Ok(0);
         }
 
         if self.state == SocketState::ResetReceived {
-            return Err(IoError {
-                kind: Closed,
-                desc: "Connection reset",
-                detail: None,
-            });
+            return Err(Error::new(ErrorKind::ConnectionReset,
+                                  "Connection reset by remote peer",
+                                  None));
         }
 
         match self.flush_incoming_buffer(buf) {
@@ -256,20 +248,20 @@ impl UtpSocket {
         }
     }
 
-    fn recv(&mut self, buf: &mut[u8]) -> IoResult<(usize,SocketAddr)> {
+    fn recv(&mut self, buf: &mut[u8]) -> Result<(usize,SocketAddr)> {
         let mut b = [0; BUF_SIZE + HEADER_SIZE];
         if self.state != SocketState::New {
             debug!("setting read timeout of {} ms", self.congestion_timeout);
             self.socket.set_read_timeout(Some(self.congestion_timeout));
         }
         let (read, src) = match self.socket.recv_from(&mut b) {
-            Err(ref e) if e.kind == TimedOut => {
-                debug!("recv_from timed out");
-                self.congestion_timeout = self.congestion_timeout * 2;
-                self.cwnd = MSS;
-                self.send_fast_resend_request();
-                return Ok((0, self.connected_to));
-            },
+            // Err(ref e) if e.kind == TimedOut => {
+            //     debug!("recv_from timed out");
+            //     self.congestion_timeout = self.congestion_timeout * 2;
+            //     self.cwnd = MSS;
+            //     self.send_fast_resend_request();
+            //     return Ok((0, self.connected_to));
+            // },
             Ok(x) => x,
             Err(e) => return Err(e),
         };
@@ -387,13 +379,11 @@ impl UtpSocket {
     // Note that the buffer passed to `send_to` might exceed the maximum packet
     // size, which will result in the data being split over several packets.
     #[unstable]
-    pub fn send_to(&mut self, buf: &[u8]) -> IoResult<()> {
+    pub fn send_to(&mut self, buf: &[u8]) -> Result<()> {
+        // Return Ok(0) == closed
+        // TODO: check what is the appropriate return value in the RFC
         if self.state == SocketState::Closed {
-            return Err(IoError {
-                kind: Closed,
-                desc: "Connection closed",
-                detail: None,
-            });
+            return Ok(0);
         }
 
         for chunk in buf.chunks(MSS as usize - HEADER_SIZE) {
@@ -425,7 +415,7 @@ impl UtpSocket {
     }
 
     /// Send every packet in the unsent packet queue.
-    fn send(&mut self) -> IoResult<()> {
+    fn send(&mut self) -> Result<()> {
         let dst = self.connected_to;
         while let Some(packet) = self.unsent_queue.pop_front() {
             debug!("current window: {}", self.send_window.len());
@@ -586,7 +576,7 @@ impl UtpSocket {
     /// Handle incoming packet, updating socket state accordingly.
     ///
     /// Returns appropriate reply packet, if needed.
-    fn handle_packet(&mut self, packet: &Packet, src: SocketAddr) -> IoResult<Option<Packet>> {
+    fn handle_packet(&mut self, packet: &Packet, src: SocketAddr) -> Result<Option<Packet>> {
         debug!("({:?}, {:?})", self.state, packet.get_type());
 
         // Acknowledge only if the packet strictly follows the previous one
@@ -624,11 +614,9 @@ impl UtpSocket {
                 Ok(None)
             },
             (SocketState::SynSent, _) => {
-                Err(IoError {
-                    kind: ConnectionFailed,
-                    desc: "The remote peer sent an invalid reply",
-                    detail: None,
-                })
+                Err(Error::new(ErrorKind::ConnectionRefused,
+                               "The remote peer sent an invalid reply",
+                               None))
             }
             (SocketState::Connected, PacketType::Syn) => Ok(None), // ignore
             (SocketState::Connected, PacketType::Data) => {
@@ -660,11 +648,9 @@ impl UtpSocket {
             }
             (_, PacketType::Reset) => {
                 self.state = SocketState::ResetReceived;
-                Err(IoError {
-                    kind: ConnectionReset,
-                    desc: "Remote host aborted connection (incorrect connection id)",
-                    detail: None,
-                })
+                Err(Error::new(ErrorKind::ConnectionReset,
+                               "Remote host aborted connection (incorrect connection id)",
+                               None))
             },
             (state, ty) => panic!("Unimplemented handling for ({:?},{:?})", state, ty)
         }
