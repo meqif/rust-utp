@@ -41,7 +41,7 @@ fn bench_transfer_one_packet(b: &mut Bencher) {
     let server_addr = next_test_ip4();
     let data = (0..len).map(|x| x as u8).collect::<Vec<u8>>();
     let data_arc = Arc::new(data);
-    let mut received = vec!();
+    let mut received = Vec::with_capacity(len);
 
     b.iter(|| {
         let data = data_arc.clone();
@@ -65,7 +65,7 @@ fn bench_transfer_one_megabyte(b: &mut Bencher) {
     let server_addr = next_test_ip4();
     let data = (0..len).map(|x| x as u8).collect::<Vec<u8>>();
     let data_arc = Arc::new(data);
-    let mut received = vec!();
+    let mut received = Vec::with_capacity(len);
 
     b.iter(|| {
         let data = data_arc.clone();
