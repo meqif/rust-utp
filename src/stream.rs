@@ -1,4 +1,4 @@
-use std::io::{Read, Write, Result, Error};
+use std::io::{Read, Write, Result};
 use std::net::{ToSocketAddrs};
 use socket::UtpSocket;
 
