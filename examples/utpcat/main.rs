@@ -33,12 +33,12 @@ fn main() {
         _ => { usage(); return; }
     };
 
-    let addr = match &args.collect::<Vec<_>>()[..] {
-        [] => {
+    let addr = match (args.next(), args.next()) {
+        (None, None) => {
             // Use a default address
             SocketAddr { ip: Ipv4Addr(127,0,0,1), port: 8080 }
         },
-        [ip, port] => {
+        (Some(ip), Some(port)) => {
             let ip = match FromStr::from_str(ip) {
                 Ok(x) => x,
                 Err(_) => { println!("Invalid address"); return }
