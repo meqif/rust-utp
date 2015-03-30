@@ -1,6 +1,4 @@
 //! Implementation of a simple uTP client and server.
-#![feature(collections,convert,os)]
-
 extern crate utp;
 
 macro_rules! iotry {
@@ -20,24 +18,23 @@ fn main() {
         Client
     }
 
-    let args = std::os::args();
-    let mut args = args.iter().map(|arg| &arg[..]);
+    let mut args = std::env::args();
 
     // Skip program name
     args.next();
 
-    let mode = match args.next() {
-        Some("-s") => Mode::Server,
-        Some("-c") => Mode::Client,
+    let mode: Mode = match args.next() {
+        Some(ref s) if &s[..] == "-s" => Mode::Server,
+        Some(ref s) if &s[..] == "-c" => Mode::Client,
         _ => { usage(); return; }
     };
 
     let addr = match (args.next(), args.next()) {
-        (None, None) => String::from_str("127.0.0.1:8080"),
+        (None, None) => "127.0.0.1:8080".to_string(),
         (Some(ip), Some(port)) => format!("{}:{}", ip, port),
         _ => { usage(); return; }
     };
-    let addr: &str = addr.as_ref();
+    let addr: &str = &addr;
 
     match mode {
         Mode::Server => {
