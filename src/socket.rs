@@ -200,7 +200,7 @@ impl UtpSocket {
         // Wait for acknowledgment on pending sent packets
         let mut buf = [0u8; BUF_SIZE];
         while !self.send_window.is_empty() {
-            try!(self.recv_from(&mut buf));
+            try!(self.recv(&mut buf));
         }
 
         // Nothing to do if the socket's already closed
