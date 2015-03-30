@@ -2,6 +2,36 @@
 //!
 //! [^spec]: http://www.bittorrent.org/beps/bep_0029.html
 
+//! # Examples
+//!
+//! ```
+//! extern crate utp;
+//!
+//! use utp::UtpStream;
+//! use std::io::{Read, Write};
+//!
+//! fn main() {
+//!     // Connect to an hypothetical local server running on port 8080
+//!     let addr = "127.0.0.1:8080";
+//!     let mut stream = match UtpStream::connect(addr) {
+//!         Ok(stream) => stream,
+//!         Err(e) => panic!("{}", e),
+//!     };
+//!
+//!     // Send a string
+//!     match stream.write("Hi there!".as_bytes()) {
+//!         Ok(_) => (),
+//!         Err(e) => println!("Write failed with {}", e)
+//!     }
+//!
+//!     // Close the stream
+//!     match stream.close() {
+//!         Ok(()) => println!("Connection closed"),
+//!         Err(e) => println!("{}", e)
+//!     }
+//! }
+//! ```
+
 //   __________  ____  ____
 //  /_  __/ __ \/ __ \/ __ \
 //   / / / / / / / / / / / /
@@ -15,6 +45,7 @@
 // - Path MTU discovery (RFC4821)
 
 #![deny(missing_docs)]
+#![feature(core, collections, io, old_io)]
 
 extern crate rand;
 extern crate time;

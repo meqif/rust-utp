@@ -1,11 +1,18 @@
+#![feature(old_io)]
+
 extern crate utp;
 
-use std::old_io::test::next_test_ip4;
 use std::thread;
 use utp::UtpStream;
+use std::io::{Read, Write};
 
 macro_rules! iotry {
     ($e:expr) => (match $e { Ok(e) => e, Err(e) => panic!("{}", e) })
+}
+
+fn next_test_ip4<'a>() -> (&'a str, u16) {
+    use std::old_io::test::next_test_port;
+    ("127.0.0.1", next_test_port())
 }
 
 #[test]
@@ -19,7 +26,8 @@ fn test_stream_open_and_close() {
         drop(client);
     });
 
-    iotry!(server.read_to_end());
+    let mut received = vec!();
+    iotry!(server.read_to_end(&mut received));
     iotry!(server.close());
 }
 
@@ -32,7 +40,7 @@ fn test_stream_small_data() {
 
     let d = data.clone();
     let server_addr = next_test_ip4();
-    let mut server = UtpStream::bind(server_addr);
+    let mut server = iotry!(UtpStream::bind(server_addr));
 
     thread::spawn(move || {
         let mut client = iotry!(UtpStream::connect(server_addr));
@@ -40,10 +48,11 @@ fn test_stream_small_data() {
         iotry!(client.close());
     });
 
-    let read = iotry!(server.read_to_end());
-    assert!(!read.is_empty());
-    assert_eq!(read.len(), data.len());
-    assert_eq!(read, data);
+    let mut received = vec!();
+    iotry!(server.read_to_end(&mut received));
+    assert!(!received.is_empty());
+    assert_eq!(received.len(), data.len());
+    assert_eq!(received, data);
 }
 
 #[test]
@@ -55,7 +64,7 @@ fn test_stream_large_data() {
 
     let d = data.clone();
     let server_addr = next_test_ip4();
-    let mut server = UtpStream::bind(server_addr);
+    let mut server = iotry!(UtpStream::bind(server_addr));
 
     thread::spawn(move || {
         let mut client = iotry!(UtpStream::connect(server_addr));
@@ -63,23 +72,22 @@ fn test_stream_large_data() {
         iotry!(client.close());
     });
 
-    let read = iotry!(server.read_to_end());
-    assert!(!read.is_empty());
-    assert_eq!(read.len(), data.len());
-    assert_eq!(read, data);
+    let mut received = vec!();
+    iotry!(server.read_to_end(&mut received));
+    assert!(!received.is_empty());
+    assert_eq!(received.len(), data.len());
+    assert_eq!(received, data);
 }
 
 #[test]
 fn test_stream_successive_reads() {
-    use std::old_io::EndOfFile;
-
     const LEN: usize = 1024;
     let data: Vec<u8> = (0..LEN).map(|idx| idx as u8).collect();
     assert_eq!(LEN, data.len());
 
     let d = data.clone();
     let server_addr = next_test_ip4();
-    let mut server = UtpStream::bind(server_addr);
+    let mut server = iotry!(UtpStream::bind(server_addr));
 
     thread::spawn(move || {
         let mut client = iotry!(UtpStream::connect(server_addr));
@@ -87,11 +95,12 @@ fn test_stream_successive_reads() {
         iotry!(client.close());
     });
 
-    iotry!(server.read_to_end());
+    let mut received = vec!();
+    iotry!(server.read_to_end(&mut received));
 
     let mut buf = [0u8; 4096];
     match server.read(&mut buf) {
-        Err(ref e) if e.kind == EndOfFile => {},
-        e => panic!("should have failed with Closed, got {:?}", e),
+        Ok(0) => (),
+        e => panic!("should have returned Ok(0), got {:?}", e),
     };
 }

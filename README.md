@@ -36,12 +36,11 @@ Check the `examples` directory. The simplest example would be:
 extern crate utp;
 
 use utp::UtpStream;
-use std::old_io::net::ip::{Ipv4Addr, SocketAddr};
+use std::io::{Read, Write};
 
 fn main() {
-    let addr = SocketAddr { ip: Ipv4Addr(127,0,0,1), port: 8080 };
-
     // Connect to an hypothetical local server running on port 8080
+    let addr = "127.0.0.1:8080";
     let mut stream = match UtpStream::connect(addr) {
         Ok(stream) => stream,
         Err(e) => panic!("{}", e),
@@ -49,7 +48,7 @@ fn main() {
 
     // Send a string
     match stream.write("Hi there!".as_bytes()) {
-        Ok(()) => (),
+        Ok(_) => (),
         Err(e) => println!("Write failed with {}", e)
     }
 

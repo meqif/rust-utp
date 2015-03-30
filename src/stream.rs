@@ -1,5 +1,5 @@
-use std::old_io::IoResult;
-use std::old_io::net::ip::{SocketAddr, Ipv4Addr};
+use std::io::{Read, Write, Result};
+use std::net::{ToSocketAddrs};
 use socket::UtpSocket;
 
 /// Stream interface for UtpSocket.
@@ -10,7 +10,7 @@ pub struct UtpStream {
 impl UtpStream {
     /// Create a uTP stream listening on the given address.
     #[unstable]
-    pub fn bind(addr: SocketAddr) -> IoResult<UtpStream> {
+    pub fn bind<A: ToSocketAddrs>(addr: A) -> Result<UtpStream> {
         match UtpSocket::bind(addr) {
             Ok(s)  => Ok(UtpStream { socket: s }),
             Err(e) => Err(e),
@@ -19,9 +19,9 @@ impl UtpStream {
 
     /// Open a uTP connection to a remote host by hostname or IP address.
     #[unstable]
-    pub fn connect(dst: SocketAddr) -> IoResult<UtpStream> {
+    pub fn connect<A: ToSocketAddrs>(dst: A) -> Result<UtpStream> {
         // Port 0 means the operating system gets to choose it
-        let my_addr = SocketAddr { ip: Ipv4Addr(0,0,0,0), port: 0 };
+        let my_addr = "0.0.0.0:0";
         let socket = match UtpSocket::bind(my_addr) {
             Ok(s) => s,
             Err(e) => return Err(e),
@@ -38,13 +38,13 @@ impl UtpStream {
     /// This method allows both peers to receive all packets still in
     /// flight.
     #[unstable]
-    pub fn close(&mut self) -> IoResult<()> {
+    pub fn close(&mut self) -> Result<()> {
         self.socket.close()
     }
 }
 
-impl Reader for UtpStream {
-    fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
+impl Read for UtpStream {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         match self.socket.recv_from(buf) {
             Ok((read, _src)) => Ok(read),
             Err(e) => Err(e),
@@ -52,8 +52,13 @@ impl Reader for UtpStream {
     }
 }
 
-impl Writer for UtpStream {
-    fn write_all(&mut self, buf: &[u8]) -> IoResult<()> {
+impl Write for UtpStream {
+    fn write(&mut self, buf: &[u8]) -> Result<usize> {
         self.socket.send_to(buf)
+    }
+
+    // TODO: Actually implement flushing
+    fn flush(&mut self) -> Result<()> {
+        Ok(())
     }
 }
