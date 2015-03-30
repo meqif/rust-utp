@@ -80,7 +80,6 @@ fn test_stream_large_data() {
 }
 
 #[test]
-#[ignore]
 fn test_stream_successive_reads() {
     const LEN: usize = 1024;
     let data: Vec<u8> = (0..LEN).map(|idx| idx as u8).collect();
@@ -101,7 +100,7 @@ fn test_stream_successive_reads() {
 
     let mut buf = [0u8; 4096];
     match server.read(&mut buf) {
-        Err(_) => {}, // Closed
-        e => panic!("should have failed with Closed, got {:?}", e),
+        Ok(0) => (),
+        e => panic!("should have returned Ok(0), got {:?}", e),
     };
 }
