@@ -45,19 +45,31 @@ fn main() {
             let mut writer = stdout();
             let _ = writeln!(&mut stderr(), "Serving on {}", addr);
 
-            let mut payload = vec!();
-            iotry!(stream.read_to_end(&mut payload));
-            iotry!(writer.write(&payload[..]));
+            let mut payload = vec![0; 1024 * 1024];
+            loop {
+                match stream.read(&mut payload) {
+                    Ok(0) => break,
+                    Ok(read) => iotry!(writer.write(&payload[..read])),
+                    Err(e) => panic!("{}", e)
+                };
+            }
         }
         Mode::Client => {
             let mut stream = iotry!(UtpStream::connect(addr));
             let mut reader = stdin();
 
-            let mut payload = vec!();
-            iotry!(reader.read_to_end(&mut payload));
-            iotry!(stream.write(&payload[..]));
+            let mut payload = vec![0; 1024 * 1024];
+            loop {
+                match reader.read(&mut payload) {
+                    Ok(0) => break,
+                    Ok(read) => iotry!(stream.write(&payload[..read])),
+                    Err(e) => {
+                        iotry!(stream.close());
+                        panic!("{:?}", e);
+                    }
+                };
+            }
             iotry!(stream.close());
-            drop(stream);
         }
     }
 }
