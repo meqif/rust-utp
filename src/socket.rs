@@ -454,27 +454,6 @@ impl UtpSocket {
         Ok(())
     }
 
-    /// Send fast resend request.
-    ///
-    /// Sends three identical ACK/STATE packets to the remote host, signalling a
-    /// fast resend request.
-    fn send_fast_resend_request(&mut self) {
-        let mut packet = Packet::new();
-        packet.set_wnd_size(BUF_SIZE as u32);
-        packet.set_type(PacketType::State);
-        packet.set_ack_nr(self.ack_nr);
-        packet.set_seq_nr(self.seq_nr);
-        packet.set_connection_id(self.sender_connection_id);
-
-        for _ in (0u8..3) {
-            let t = now_microseconds();
-            packet.set_timestamp_microseconds(t);
-            packet.set_timestamp_difference_microseconds((t - self.last_acked_timestamp));
-            iotry!(self.socket.send_to(&packet.bytes()[..], self.connected_to));
-            debug!("sent {:?}", packet);
-        }
-    }
-
     fn update_base_delay(&mut self, v: i64, now: i64) {
         use std::num::Int;
         let minute_in_microseconds = 60 * 10.pow(6);
