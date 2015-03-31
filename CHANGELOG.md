@@ -1,5 +1,13 @@
 # Change Log
 
+## [0.2.1]
+
+### Changed
+- Updated the `rand` dependency because the previous one didn't build on the latest Rust nightly.
+
+### Fixed
+- Some `UtpStream` tests were failing because of improperly sized buffers.
+
 ## [0.2.0]
 
 This release is now compatible with the 2015-03-28 nightly of the Rust compiler.
