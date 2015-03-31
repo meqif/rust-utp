@@ -48,7 +48,7 @@ fn test_stream_small_data() {
         iotry!(client.close());
     });
 
-    let mut received = vec!();
+    let mut received = Vec::with_capacity(LEN);
     iotry!(server.read_to_end(&mut received));
     assert!(!received.is_empty());
     assert_eq!(received.len(), data.len());
@@ -72,7 +72,7 @@ fn test_stream_large_data() {
         iotry!(client.close());
     });
 
-    let mut received = vec!();
+    let mut received = Vec::with_capacity(LEN);
     iotry!(server.read_to_end(&mut received));
     assert!(!received.is_empty());
     assert_eq!(received.len(), data.len());
@@ -95,11 +95,13 @@ fn test_stream_successive_reads() {
         iotry!(client.close());
     });
 
-    let mut received = vec!();
+    let mut received = Vec::with_capacity(LEN);
     iotry!(server.read_to_end(&mut received));
+    assert!(!received.is_empty());
+    assert_eq!(received.len(), data.len());
+    assert_eq!(received, data);
 
-    let mut buf = [0u8; 4096];
-    match server.read(&mut buf) {
+    match server.read(&mut received) {
         Ok(0) => (),
         e => panic!("should have returned Ok(0), got {:?}", e),
     };
