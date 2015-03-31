@@ -19,7 +19,6 @@ rand = "0.3"
 [lib]
 name = "utp"
 bench = false
-doctest = false
 
 [[bin]]
 name = "utpcat"

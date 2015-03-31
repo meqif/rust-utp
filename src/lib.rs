@@ -4,7 +4,7 @@
 
 //! # Examples
 //!
-//! ```
+//! ```no_run
 //! extern crate utp;
 //!
 //! use utp::UtpStream;
