@@ -1,7 +1,7 @@
 [package]
 
 name = "utp"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Ricardo Martins <ricardo@scarybox.net>"]
 
 description = "A µTP (Micro/uTorrent Transport Library) library implemented in Rust"
