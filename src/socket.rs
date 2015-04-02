@@ -435,8 +435,7 @@ impl UtpSocket {
     }
 
     fn update_base_delay(&mut self, v: i64, now: i64) {
-        use std::num::Int;
-        let minute_in_microseconds = 60 * 10.pow(6);
+        let minute_in_microseconds = 60 * 10i64.pow(6);
 
         if self.base_delays.is_empty() || now - self.base_delays[0].received_at > minute_in_microseconds {
             // Drop the oldest sample and save minimum for current minute
@@ -662,8 +661,6 @@ impl UtpSocket {
     }
 
     fn update_congestion_window(&mut self, off_target: f64, bytes_newly_acked: u32) {
-        use std::num::Int;
-
         let flightsize = self.curr_window;
         match self.cwnd.checked_add((GAIN * off_target * bytes_newly_acked as f64 * MSS as f64 / self.cwnd as f64) as u32) {
             Some(_) => {
