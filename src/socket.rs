@@ -232,21 +232,21 @@ impl UtpSocket {
     /// inflight packets are consumed.
     #[unstable]
     pub fn recv_from(&mut self, buf: &mut[u8]) -> Result<(usize,SocketAddr)> {
-        // Return Ok(0) -- end of file
-        if self.state == SocketState::Closed {
-            return Ok((0, self.connected_to));
-        }
-
-        if self.state == SocketState::ResetReceived {
-            return Err(Error::new(ErrorKind::ConnectionReset,
-                                  "Connection reset by remote peer"));
-        }
-
         let read = self.flush_incoming_buffer(buf);
 
         if read > 0 {
             return Ok((read, self.connected_to));
         } else {
+            // Return Ok(0) -- end of file
+            if self.state == SocketState::Closed {
+                return Ok((0, self.connected_to));
+            }
+
+            if self.state == SocketState::ResetReceived {
+                return Err(Error::new(ErrorKind::ConnectionReset,
+                                      "Connection reset by remote peer"));
+            }
+
             loop {
                 if self.state == SocketState::Closed {
                     return Ok((0, self.connected_to));
