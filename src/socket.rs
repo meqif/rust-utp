@@ -181,8 +181,7 @@ impl UtpSocket {
         let packet = Packet::decode(&buf[..len]);
         if packet.get_type() != PacketType::State {
             return Err(Error::new(ErrorKind::ConnectionAborted,
-                                  "The remote peer sent an invalid reply",
-                                  None));
+                                  "The remote peer sent an invalid reply"));
         }
         try!(self.handle_packet(&packet, addr));
 
@@ -241,8 +240,7 @@ impl UtpSocket {
 
         if self.state == SocketState::ResetReceived {
             return Err(Error::new(ErrorKind::ConnectionReset,
-                                  "Connection reset by remote peer",
-                                  None));
+                                  "Connection reset by remote peer"));
         }
 
         let read = self.flush_incoming_buffer(buf);
@@ -398,8 +396,7 @@ impl UtpSocket {
     pub fn send_to(&mut self, buf: &[u8]) -> Result<usize> {
         if self.state == SocketState::Closed {
             return Err(Error::new(ErrorKind::NotConnected,
-                                  "The socket is closed",
-                                  None));
+                                  "The socket is closed"));
         }
 
         let total_length = buf.len();
@@ -612,8 +609,7 @@ impl UtpSocket {
             },
             (SocketState::SynSent, _) => {
                 Err(Error::new(ErrorKind::ConnectionRefused,
-                               "The remote peer sent an invalid reply",
-                               None))
+                               "The remote peer sent an invalid reply"))
             }
             (SocketState::Connected, PacketType::Syn) => Ok(None), // ignore
             (SocketState::Connected, PacketType::Data) => {
@@ -646,8 +642,7 @@ impl UtpSocket {
             (_, PacketType::Reset) => {
                 self.state = SocketState::ResetReceived;
                 Err(Error::new(ErrorKind::ConnectionReset,
-                               "Remote host aborted connection (incorrect connection id)",
-                               None))
+                               "Remote host aborted connection (incorrect connection id)"))
             },
             (state, ty) => panic!("Unimplemented handling for ({:?},{:?})", state, ty)
         }
