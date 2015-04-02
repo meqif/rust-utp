@@ -333,52 +333,36 @@ impl UtpSocket {
     /// slice `buf`, starting in position `start`.
     /// Returns the last written index.
     fn flush_incoming_buffer(&mut self, buf: &mut [u8]) -> usize {
-        let mut idx = 0;
-
-        // Check if there is any pending data from a partially flushed packet
+        // Return pending data from a partially read packet
         if !self.pending_data.is_empty() {
-            let len = buf.clone_from_slice(&self.pending_data[..]);
+            let flushed = buf.clone_from_slice(&self.pending_data[..]);
 
-            // If all the data in the pending data buffer fits the given output
-            // buffer, remove the corresponding packet from the incoming buffer
-            // and clear the pending data buffer
-            if len == self.pending_data.len() {
+            if flushed == self.pending_data.len() {
                 self.pending_data.clear();
                 self.advance_incoming_buffer();
-                return idx + len;
             } else {
-                // Remove the bytes copied to the output buffer from the pending
-                // data buffer (i.e., pending -= output)
-                self.pending_data = self.pending_data[len..].to_vec();
+                self.pending_data = self.pending_data[flushed..].to_vec();
             }
+
+            return flushed;
         }
 
-        // Copy the payload of as many packets in the incoming buffer as possible
-        while !self.incoming_buffer.is_empty() &&
+        if !self.incoming_buffer.is_empty() &&
             (self.ack_nr == self.incoming_buffer[0].seq_nr() ||
              self.ack_nr + 1 == self.incoming_buffer[0].seq_nr())
         {
-            let len = min(buf.len() - idx, self.incoming_buffer[0].payload.len());
+            let flushed = buf.clone_from_slice(&self.incoming_buffer[0].payload[..]);
 
-            for i in (0..len) {
-                buf[idx] = self.incoming_buffer[0].payload[i];
-                idx += 1;
-            }
-
-            // Remove top packet if its payload fits the output buffer
-            if self.incoming_buffer[0].payload.len() == len {
+            if flushed == self.incoming_buffer[0].payload.len() {
                 self.advance_incoming_buffer();
             } else {
-                self.pending_data.push_all(&self.incoming_buffer[0].payload[len..]);
+                self.pending_data = self.incoming_buffer[0].payload[flushed..].to_vec();
             }
 
-            // Stop if the output buffer is full
-            if buf.len() == idx {
-                return idx;
-            }
+            return flushed;
         }
 
-        return idx;
+        return 0;
     }
 
     /// Send data on socket to the remote peer. Returns nothing on success.
