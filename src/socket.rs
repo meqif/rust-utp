@@ -874,7 +874,7 @@ mod test {
         thread::spawn(move || {
             let mut client = iotry!(client.connect(server_addr));
             assert!(client.state == SocketState::Connected);
-            assert_eq!(client.close(), Ok(()));
+            assert!(client.close().is_ok());
         });
 
         // Make the server listen for incoming connections until the end of the input
@@ -948,7 +948,7 @@ mod test {
         let ack_nr = client.ack_nr;
         assert!(ack_nr != 0);
         assert!(ack_nr == sender_seq_nr);
-        assert_eq!(client.close(), Ok(()));
+        assert!(client.close().is_ok());
 
         // The reply to both connect (SYN) and close (FIN) should be
         // STATE packets, which don't increase the sequence number
