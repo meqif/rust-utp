@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.2.2]
+
+No functional changes, mostly just changes to conform to changes in the Rust API.
+
 ## [0.2.1]
 
 ### Changed
