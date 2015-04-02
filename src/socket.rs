@@ -607,7 +607,7 @@ impl UtpSocket {
                 self.fin_seq_nr = packet.seq_nr();
 
                 // If all packets are received and handled
-                if self.no_pending_data() && self.ack_nr == self.fin_seq_nr
+                if self.ack_nr == self.fin_seq_nr
                 {
                     self.state = SocketState::Closed;
                     Ok(Some(self.prepare_reply(packet, PacketType::State)))
