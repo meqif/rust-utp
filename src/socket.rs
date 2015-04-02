@@ -795,7 +795,6 @@ impl UtpSocket {
 
 #[cfg(test)]
 mod test {
-    use std::net::UdpSocket;
     use std::thread;
     use std::net::ToSocketAddrs;
     use std::io::ErrorKind;
@@ -1237,22 +1236,19 @@ mod test {
         let mut buf = [0; BUF_SIZE];
         let expected: Vec<u8> = (1..13u8).collect();
         let mut received: Vec<u8> = vec!();
-        match server.recv_from(&mut buf) {
-            Ok((len, _src)) => received.push_all(&buf[..len]),
-            Err(e) => panic!("{:?}", e)
+        loop {
+            match server.recv_from(&mut buf) {
+                Ok((0, _src)) => break,
+                Ok((len, _src)) => received.push_all(&buf[..len]),
+                Err(e) => panic!("{:?}", e)
+            }
         }
 
         // After establishing a new connection, the server's ids are a mirror of the client's.
         assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
-        assert_eq!(server.state, SocketState::Connected);
+        assert_eq!(server.state, SocketState::Closed);
         assert_eq!(received.len(), expected.len());
         assert_eq!(received, expected);
-
-        match server.recv_from(&mut buf) {
-            Ok((0, _src)) => (),
-            e => panic!("Expected Ok(0), got {:?}", e)
-        }
-        assert_eq!(server.state, SocketState::Closed);
     }
 
     #[test]
