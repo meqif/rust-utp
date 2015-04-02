@@ -786,11 +786,6 @@ impl UtpSocket {
         }
         self.incoming_buffer.insert(i, packet);
     }
-
-    /// Checks whether there is pending data (to be returned on a `recv_from` call) on the socket
-    fn no_pending_data(&self) -> bool {
-        self.pending_data.is_empty() && self.incoming_buffer.is_empty()
-    }
 }
 
 #[cfg(test)]
