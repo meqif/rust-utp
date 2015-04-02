@@ -3,7 +3,6 @@ use std::collections::{LinkedList, VecDeque};
 use std::net::{ToSocketAddrs, SocketAddr, UdpSocket};
 use std::io::{Result, Error, ErrorKind};
 use std::iter::{range_inclusive, repeat};
-use std::num::SignedInt;
 use util::{now_microseconds, ewma};
 use packet::{Packet, PacketType, ExtensionType, HEADER_SIZE};
 use rand;
