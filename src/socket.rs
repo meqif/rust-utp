@@ -333,14 +333,18 @@ impl UtpSocket {
     /// slice `buf`, starting in position `start`.
     /// Returns the last written index.
     fn flush_incoming_buffer(&mut self, buf: &mut [u8]) -> usize {
-        // Return pending data from a partially read packet
-        if !self.pending_data.is_empty() {
-            let max_len = min(buf.len(), self.pending_data.len());
+        fn unsafe_copy(src: &[u8], dst: &mut [u8]) -> usize {
+            let max_len = min(src.len(), dst.len());
             unsafe {
                 use std::ptr::copy;
-                copy(self.pending_data.as_ptr(), buf.as_mut_ptr(), max_len);
+                copy(src.as_ptr(), dst.as_mut_ptr(), max_len);
             }
-            let flushed = max_len;
+            return max_len;
+        }
+
+        // Return pending data from a partially read packet
+        if !self.pending_data.is_empty() {
+            let flushed = unsafe_copy(&self.pending_data[..], buf);
 
             if flushed == self.pending_data.len() {
                 self.pending_data.clear();
@@ -356,14 +360,7 @@ impl UtpSocket {
             (self.ack_nr == self.incoming_buffer[0].seq_nr() ||
              self.ack_nr + 1 == self.incoming_buffer[0].seq_nr())
         {
-            let max_len = min(buf.len(), self.incoming_buffer[0].payload.len());
-            unsafe {
-                use std::ptr::copy;
-                copy(self.incoming_buffer[0].payload.as_ptr(),
-                     buf.as_mut_ptr(),
-                     max_len);
-            }
-            let flushed = max_len;
+            let flushed = unsafe_copy(&self.incoming_buffer[0].payload[..], buf);
 
             if flushed == self.incoming_buffer[0].payload.len() {
                 self.advance_incoming_buffer();
