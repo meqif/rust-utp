@@ -1,4 +1,4 @@
-#![feature(old_io, test)]
+#![feature(test)]
 
 extern crate test;
 extern crate utp;
@@ -13,8 +13,14 @@ macro_rules! iotry {
     ($e:expr) => (match $e { Ok(e) => e, Err(e) => panic!("{}", e) })
 }
 
+fn next_test_port() -> u16 {
+    use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT, Ordering};
+    static NEXT_OFFSET: AtomicUsize = ATOMIC_USIZE_INIT;
+    const BASE_PORT: u16 = 9600;
+    BASE_PORT + NEXT_OFFSET.fetch_add(1, Ordering::Relaxed) as u16
+}
+
 fn next_test_ip4<'a>() -> (&'a str, u16) {
-    use std::old_io::test::next_test_port;
     ("127.0.0.1", next_test_port())
 }
 
