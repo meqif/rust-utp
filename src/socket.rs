@@ -335,7 +335,12 @@ impl UtpSocket {
     fn flush_incoming_buffer(&mut self, buf: &mut [u8]) -> usize {
         // Return pending data from a partially read packet
         if !self.pending_data.is_empty() {
-            let flushed = buf.clone_from_slice(&self.pending_data[..]);
+            let max_len = min(buf.len(), self.pending_data.len());
+            unsafe {
+                use std::ptr::copy;
+                copy(self.pending_data.as_ptr(), buf.as_mut_ptr(), max_len);
+            }
+            let flushed = max_len;
 
             if flushed == self.pending_data.len() {
                 self.pending_data.clear();
@@ -351,7 +356,14 @@ impl UtpSocket {
             (self.ack_nr == self.incoming_buffer[0].seq_nr() ||
              self.ack_nr + 1 == self.incoming_buffer[0].seq_nr())
         {
-            let flushed = buf.clone_from_slice(&self.incoming_buffer[0].payload[..]);
+            let max_len = min(buf.len(), self.incoming_buffer[0].payload.len());
+            unsafe {
+                use std::ptr::copy;
+                copy(self.incoming_buffer[0].payload.as_ptr(),
+                     buf.as_mut_ptr(),
+                     max_len);
+            }
+            let flushed = max_len;
 
             if flushed == self.incoming_buffer[0].payload.len() {
                 self.advance_incoming_buffer();
