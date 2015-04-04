@@ -502,8 +502,8 @@ impl UtpSocket {
 
     /// Calculate the lowest base delay in the current window.
     fn min_base_delay(&self) -> i64 {
-        match self.base_delays.iter().min_by(|&x| (x.received_at - x.sent_at).abs()) {
-            Some(ref x) => x.received_at - x.sent_at,
+        match self.base_delays.iter().map(|ref x| x.received_at - x.sent_at).min() {
+            Some(x) => x,
             None => 0
         }
     }
