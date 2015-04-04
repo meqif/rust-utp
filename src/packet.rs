@@ -1,6 +1,5 @@
 use std::mem::transmute;
 use std::fmt;
-use std::iter::range_inclusive;
 use std::num::Int;
 use bit_iterator::BitIterator;
 
@@ -9,7 +8,7 @@ pub const HEADER_SIZE: usize = 20;
 macro_rules! u8_to_unsigned_be {
     ($src:ident, $start:expr, $end:expr, $t:ty) => ({
         let mut result: $t = 0;
-        for i in range_inclusive(0usize, $end - $start).rev() {
+        for i in (0usize .. $end - $start + 1).rev() {
             result = result | $src[$start+i] as $t << i*8;
         }
         result

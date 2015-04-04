@@ -2,7 +2,7 @@ use std::cmp::{min, max};
 use std::collections::{LinkedList, VecDeque};
 use std::net::{ToSocketAddrs, SocketAddr, UdpSocket};
 use std::io::{Result, Error, ErrorKind};
-use std::iter::{range_inclusive, repeat};
+use std::iter::repeat;
 use util::{now_microseconds, ewma};
 use packet::{Packet, PacketType, ExtensionType, HEADER_SIZE};
 use rand;
@@ -541,7 +541,7 @@ impl UtpSocket {
         if let Some(position) = self.send_window.iter()
             .position(|pkt| pkt.seq_nr() == self.last_acked)
         {
-            for _ in range_inclusive(0, position) {
+            for _ in (0..position + 1) {
                 let packet = self.send_window.remove(0);
                 self.curr_window -= packet.len() as u32;
             }
