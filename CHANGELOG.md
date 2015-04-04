@@ -1,5 +1,10 @@
 # Change Log
 
+## [0.2.3]
+
+### Fixed
+- Now the crate builds in both the latest nightly and 1.0.0-beta.
+
 ## [0.2.2]
 
 No functional changes, mostly just changes to conform to changes in the Rust API.
