@@ -2,7 +2,7 @@ use std::cmp::{min, max};
 use std::collections::{LinkedList, VecDeque};
 use std::net::{ToSocketAddrs, SocketAddr, UdpSocket};
 use std::io::{Result, Error, ErrorKind};
-use std::iter::{range_inclusive, repeat};
+use std::iter::repeat;
 use util::{now_microseconds, ewma};
 use packet::{Packet, PacketType, ExtensionType, HEADER_SIZE};
 use rand;
@@ -335,7 +335,12 @@ impl UtpSocket {
     fn flush_incoming_buffer(&mut self, buf: &mut [u8]) -> usize {
         // Return pending data from a partially read packet
         if !self.pending_data.is_empty() {
-            let flushed = buf.clone_from_slice(&self.pending_data[..]);
+            let max_len = min(buf.len(), self.pending_data.len());
+            unsafe {
+                use std::ptr::copy;
+                copy(self.pending_data.as_ptr(), buf.as_mut_ptr(), max_len);
+            }
+            let flushed = max_len;
 
             if flushed == self.pending_data.len() {
                 self.pending_data.clear();
@@ -351,7 +356,14 @@ impl UtpSocket {
             (self.ack_nr == self.incoming_buffer[0].seq_nr() ||
              self.ack_nr + 1 == self.incoming_buffer[0].seq_nr())
         {
-            let flushed = buf.clone_from_slice(&self.incoming_buffer[0].payload[..]);
+            let max_len = min(buf.len(), self.incoming_buffer[0].payload.len());
+            unsafe {
+                use std::ptr::copy;
+                copy(self.incoming_buffer[0].payload.as_ptr(),
+                     buf.as_mut_ptr(),
+                     max_len);
+            }
+            let flushed = max_len;
 
             if flushed == self.incoming_buffer[0].payload.len() {
                 self.advance_incoming_buffer();
@@ -490,8 +502,8 @@ impl UtpSocket {
 
     /// Calculate the lowest base delay in the current window.
     fn min_base_delay(&self) -> i64 {
-        match self.base_delays.iter().min_by(|&x| (x.received_at - x.sent_at).abs()) {
-            Some(ref x) => x.received_at - x.sent_at,
+        match self.base_delays.iter().map(|ref x| x.received_at - x.sent_at).min() {
+            Some(x) => x,
             None => 0
         }
     }
@@ -541,7 +553,7 @@ impl UtpSocket {
         if let Some(position) = self.send_window.iter()
             .position(|pkt| pkt.seq_nr() == self.last_acked)
         {
-            for _ in range_inclusive(0, position) {
+            for _ in (0..position + 1) {
                 let packet = self.send_window.remove(0);
                 self.curr_window -= packet.len() as u32;
             }
@@ -795,8 +807,14 @@ mod test {
     use util::now_microseconds;
     use rand;
 
+    fn next_test_port() -> u16 {
+        use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT, Ordering};
+        static NEXT_OFFSET: AtomicUsize = ATOMIC_USIZE_INIT;
+        const BASE_PORT: u16 = 9600;
+        BASE_PORT + NEXT_OFFSET.fetch_add(1, Ordering::Relaxed) as u16
+    }
+
     fn next_test_ip4<'a>() -> (&'a str, u16) {
-        use std::old_io::test::next_test_port;
         ("127.0.0.1", next_test_port())
     }
 
@@ -1231,7 +1249,7 @@ mod test {
         loop {
             match server.recv_from(&mut buf) {
                 Ok((0, _src)) => break,
-                Ok((len, _src)) => received.push_all(&buf[..len]),
+                Ok((len, _src)) => received.extend(buf[..len].to_vec()),
                 Err(e) => panic!("{:?}", e)
             }
         }
@@ -1463,7 +1481,7 @@ mod test {
         loop {
             match server.recv_from(&mut buf) {
                 Ok((0, _src)) => break,
-                Ok((len, _src)) => received.push_all(&buf[..len]),
+                Ok((len, _src)) => received.extend(buf[..len].to_vec()),
                 Err(e) => panic!("{:?}", e)
             }
         }
@@ -1519,7 +1537,7 @@ mod test {
         loop {
             match server.recv_from(&mut buf) {
                 Ok((0, _src)) => break,
-                Ok((len, _src)) => received.push_all(&buf[..len]),
+                Ok((len, _src)) => received.extend(buf[..len].to_vec()),
                 Err(e) => panic!("{:?}", e)
             }
         }
@@ -1570,7 +1588,7 @@ mod test {
         loop {
             match server.recv_from(&mut buf) {
                 Ok((0, _src)) => break,
-                Ok((len, _src)) => received.push_all(&buf[..len]),
+                Ok((len, _src)) => received.extend(buf[..len].to_vec()),
                 Err(e) => panic!("{}", e)
             }
         }
@@ -1598,7 +1616,7 @@ mod test {
             let mut small_buffer = [0; 512];
             match server.recv_from(&mut small_buffer) {
                 Ok((0, _src)) => break,
-                Ok((len, _src)) => read.push_all(&small_buffer[..len]),
+                Ok((len, _src)) => read.extend(small_buffer[..len].to_vec()),
                 Err(e) => panic!("{}", e),
             }
         }
@@ -1637,7 +1655,7 @@ mod test {
         loop {
             match server.recv_from(&mut buf) {
                 Ok((0, _src)) => break,
-                Ok((len, _src)) => received.push_all(&buf[..len]),
+                Ok((len, _src)) => received.extend(buf[..len].to_vec()),
                 Err(e) => panic!("{}", e)
             }
         }

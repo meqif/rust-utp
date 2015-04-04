@@ -1,6 +1,5 @@
-extern crate time;
-
-use std::num::ToPrimitive;
+use time;
+use num::ToPrimitive;
 
 /// Return current time in microseconds since the UNIX epoch.
 pub fn now_microseconds() -> u32 {
@@ -40,9 +39,8 @@ mod test {
     #[test]
     fn test_exponential_smoothed_moving_average() {
         use super::ewma;
-        use std::iter::range_inclusive;
 
-        let input = range_inclusive(1u32, 10).collect();
+        let input = (1u32..11).collect();
         let alpha = 1.0/3.0;
         let expected = [1.0, 4.0/3.0, 17.0/9.0,
         70.0/27.0, 275.0/81.0, 1036.0/243.0, 3773.0/729.0, 13378.0/2187.0,
