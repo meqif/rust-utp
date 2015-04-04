@@ -255,8 +255,8 @@ impl Packet {
     }
 
     pub fn bytes(&self) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(self.len());
-        buf.push_all(self.header.bytes());
+        let mut buf: Vec<u8> = Vec::with_capacity(self.len());
+        buf.extend(self.header.bytes().iter().map(|a| *a));
 
         let mut extensions = self.extensions.iter().peekable();
         while let Some(extension) = extensions.next() {
@@ -265,10 +265,10 @@ impl Packet {
                 None => buf.push(0u8),
                 Some(next) => buf.push(next.ty as u8),
             }
-            buf.push_all(&extension.to_bytes()[..]);
+            buf.extend(extension.to_bytes());
         }
 
-        buf.push_all(&self.payload[..]);
+        buf.extend(self.payload.clone());
         return buf;
     }
 

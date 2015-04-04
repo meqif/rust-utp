@@ -1243,7 +1243,7 @@ mod test {
         loop {
             match server.recv_from(&mut buf) {
                 Ok((0, _src)) => break,
-                Ok((len, _src)) => received.push_all(&buf[..len]),
+                Ok((len, _src)) => received.extend(buf[..len].to_vec()),
                 Err(e) => panic!("{:?}", e)
             }
         }
@@ -1475,7 +1475,7 @@ mod test {
         loop {
             match server.recv_from(&mut buf) {
                 Ok((0, _src)) => break,
-                Ok((len, _src)) => received.push_all(&buf[..len]),
+                Ok((len, _src)) => received.extend(buf[..len].to_vec()),
                 Err(e) => panic!("{:?}", e)
             }
         }
@@ -1531,7 +1531,7 @@ mod test {
         loop {
             match server.recv_from(&mut buf) {
                 Ok((0, _src)) => break,
-                Ok((len, _src)) => received.push_all(&buf[..len]),
+                Ok((len, _src)) => received.extend(buf[..len].to_vec()),
                 Err(e) => panic!("{:?}", e)
             }
         }
@@ -1582,7 +1582,7 @@ mod test {
         loop {
             match server.recv_from(&mut buf) {
                 Ok((0, _src)) => break,
-                Ok((len, _src)) => received.push_all(&buf[..len]),
+                Ok((len, _src)) => received.extend(buf[..len].to_vec()),
                 Err(e) => panic!("{}", e)
             }
         }
@@ -1610,7 +1610,7 @@ mod test {
             let mut small_buffer = [0; 512];
             match server.recv_from(&mut small_buffer) {
                 Ok((0, _src)) => break,
-                Ok((len, _src)) => read.push_all(&small_buffer[..len]),
+                Ok((len, _src)) => read.extend(small_buffer[..len].to_vec()),
                 Err(e) => panic!("{}", e),
             }
         }
@@ -1649,7 +1649,7 @@ mod test {
         loop {
             match server.recv_from(&mut buf) {
                 Ok((0, _src)) => break,
-                Ok((len, _src)) => received.push_all(&buf[..len]),
+                Ok((len, _src)) => received.extend(buf[..len].to_vec()),
                 Err(e) => panic!("{}", e)
             }
         }
