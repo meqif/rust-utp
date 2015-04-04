@@ -308,7 +308,13 @@ impl Packet {
 
         let mut payload;
         if idx < buf.len() {
-            payload = buf[idx..].to_vec();
+            let payload_length = buf.len() - idx;
+            payload = Vec::with_capacity(payload_length);
+            unsafe {
+                use std::ptr;
+                ptr::copy(buf.as_ptr().offset(idx as isize), payload.as_mut_ptr(), payload_length);
+                payload.set_len(payload_length);
+            }
         } else {
             payload = Vec::new();
         }
