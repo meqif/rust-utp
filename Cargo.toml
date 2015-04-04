@@ -13,6 +13,7 @@ keywords = ["utp", "networking", "protocol", "transport"]
 
 [dependencies]
 time = "*"
+num = "*"
 log = "0.3"
 rand = "0.3"
 

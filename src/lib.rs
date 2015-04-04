@@ -49,6 +49,7 @@
 
 extern crate rand;
 extern crate time;
+extern crate num;
 #[macro_use] extern crate log;
 
 // Public API
