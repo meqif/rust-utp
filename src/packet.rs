@@ -44,7 +44,8 @@ impl Extension {
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut data = vec!(self.data.len() as u8);
+        let mut data = Vec::with_capacity(self.data.len() + 1);
+        data.push(self.data.len() as u8);
         data.extend(self.data.iter().map(|&x| x));
         return data;
     }
