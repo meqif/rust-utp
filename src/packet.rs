@@ -255,9 +255,16 @@ impl Packet {
     }
 
     pub fn bytes(&self) -> Vec<u8> {
+        use std::ptr;
         let mut buf: Vec<u8> = Vec::with_capacity(self.len());
-        buf.extend(self.header.bytes().iter().map(|a| *a));
 
+        // Copy header
+        unsafe {
+            ptr::copy(self.header.bytes().as_ptr(), buf.as_mut_ptr(), self.header.len());
+            buf.set_len(self.header.len());
+        }
+
+        // Copy extensions
         let mut extensions = self.extensions.iter().peekable();
         while let Some(extension) = extensions.next() {
             // next extension id
@@ -268,7 +275,13 @@ impl Packet {
             buf.extend(extension.to_bytes());
         }
 
-        buf.extend(self.payload.clone());
+        // Copy payload
+        unsafe {
+            let buf_len = buf.len();
+            ptr::copy(self.payload.as_ptr(), buf.as_mut_ptr().offset(buf.len() as isize), self.payload.len());
+            buf.set_len(buf_len + self.payload.len());
+        }
+
         return buf;
     }
 
