@@ -1,6 +1,5 @@
 use std::mem::transmute;
 use std::fmt;
-use std::num::Int;
 use bit_iterator::BitIterator;
 
 pub const HEADER_SIZE: usize = 20;
@@ -117,14 +116,14 @@ impl fmt::Debug for PacketHeader {
                 timestamp_difference_microseconds: {}, wnd_size: {}, \
                 seq_nr: {}, ack_nr: {})",
                 self.get_type(),
-                Int::from_be(self.get_version()),
-                Int::from_be(self.extension),
-                Int::from_be(self.connection_id),
-                Int::from_be(self.timestamp_microseconds),
-                Int::from_be(self.timestamp_difference_microseconds),
-                Int::from_be(self.wnd_size),
-                Int::from_be(self.seq_nr),
-                Int::from_be(self.ack_nr),
+                u8::from_be(self.get_version()),
+                u8::from_be(self.extension),
+                u16::from_be(self.connection_id),
+                u32::from_be(self.timestamp_microseconds),
+                u32::from_be(self.timestamp_difference_microseconds),
+                u32::from_be(self.wnd_size),
+                u16::from_be(self.seq_nr),
+                u16::from_be(self.ack_nr),
         )
     }
 }
@@ -166,7 +165,7 @@ impl Packet {
 
     #[inline]
     pub fn seq_nr(&self) -> u16 {
-        Int::from_be(self.header.seq_nr)
+        u16::from_be(self.header.seq_nr)
     }
 
     #[inline]
@@ -176,7 +175,7 @@ impl Packet {
 
     #[inline]
     pub fn ack_nr(&self) -> u16 {
-        Int::from_be(self.header.ack_nr)
+        u16::from_be(self.header.ack_nr)
     }
 
     #[inline]
@@ -186,7 +185,7 @@ impl Packet {
 
     #[inline]
     pub fn connection_id(&self) -> u16 {
-        Int::from_be(self.header.connection_id)
+        u16::from_be(self.header.connection_id)
     }
 
     #[inline]
@@ -201,12 +200,12 @@ impl Packet {
 
     #[inline]
     pub fn wnd_size(&self) -> u32 {
-        Int::from_be(self.header.wnd_size)
+        u32::from_be(self.header.wnd_size)
     }
 
     #[inline]
     pub fn timestamp_microseconds(&self) -> u32 {
-        Int::from_be(self.header.timestamp_microseconds)
+        u32::from_be(self.header.timestamp_microseconds)
     }
 
     #[inline]
@@ -216,7 +215,7 @@ impl Packet {
 
     #[inline]
     pub fn timestamp_difference_microseconds(&self) -> u32 {
-        Int::from_be(self.header.timestamp_difference_microseconds)
+        u32::from_be(self.header.timestamp_difference_microseconds)
     }
 
     #[inline]
@@ -355,7 +354,6 @@ mod tests {
     use super::PacketType::{State, Data};
     use super::ExtensionType;
     use super::HEADER_SIZE;
-    use std::num::Int;
 
     #[test]
     fn test_packet_decode() {
@@ -366,9 +364,9 @@ mod tests {
         assert_eq!(pkt.header.get_type(), State);
         assert_eq!(pkt.header.extension, 0);
         assert_eq!(pkt.connection_id(), 16808);
-        assert_eq!(Int::from_be(pkt.header.timestamp_microseconds), 2570047530);
-        assert_eq!(Int::from_be(pkt.header.timestamp_difference_microseconds), 2672436769);
-        assert_eq!(Int::from_be(pkt.header.wnd_size), 2u32.pow(20));
+        assert_eq!(pkt.timestamp_microseconds(), 2570047530);
+        assert_eq!(pkt.timestamp_difference_microseconds(), 2672436769);
+        assert_eq!(pkt.wnd_size(), 2u32.pow(20));
         assert_eq!(pkt.seq_nr(), 15090);
         assert_eq!(pkt.ack_nr(), 27769);
         assert_eq!(pkt.len(), buf.len());
@@ -385,9 +383,9 @@ mod tests {
         assert_eq!(packet.header.get_type(), State);
         assert_eq!(packet.header.extension, 1);
         assert_eq!(packet.connection_id(), 16807);
-        assert_eq!(Int::from_be(packet.header.timestamp_microseconds), 0);
-        assert_eq!(Int::from_be(packet.header.timestamp_difference_microseconds), 0);
-        assert_eq!(Int::from_be(packet.header.wnd_size), 1500);
+        assert_eq!(packet.timestamp_microseconds(), 0);
+        assert_eq!(packet.timestamp_difference_microseconds(), 0);
+        assert_eq!(packet.wnd_size(), 1500);
         assert_eq!(packet.seq_nr(), 43859);
         assert_eq!(packet.ack_nr(), 15093);
         assert_eq!(packet.len(), buf.len());
@@ -410,9 +408,9 @@ mod tests {
         assert_eq!(packet.header.get_type(), State);
         assert_eq!(packet.header.extension, 1);
         assert_eq!(packet.connection_id(), 16807);
-        assert_eq!(Int::from_be(packet.header.timestamp_microseconds), 0);
-        assert_eq!(Int::from_be(packet.header.timestamp_difference_microseconds), 0);
-        assert_eq!(Int::from_be(packet.header.wnd_size), 1500);
+        assert_eq!(packet.timestamp_microseconds(), 0);
+        assert_eq!(packet.timestamp_difference_microseconds(), 0);
+        assert_eq!(packet.wnd_size(), 1500);
         assert_eq!(packet.seq_nr(), 43859);
         assert_eq!(packet.ack_nr(), 15093);
         assert!(packet.payload.is_empty());
@@ -450,12 +448,12 @@ mod tests {
         assert_eq!(header.get_version(), 1);
         assert_eq!(header.get_type(), Data);
         assert_eq!(header.extension, 0);
-        assert_eq!(Int::from_be(header.connection_id), connection_id);
-        assert_eq!(Int::from_be(header.seq_nr), seq_nr);
-        assert_eq!(Int::from_be(header.ack_nr), ack_nr);
-        assert_eq!(Int::from_be(header.wnd_size), window_size);
-        assert_eq!(Int::from_be(header.timestamp_microseconds), timestamp);
-        assert_eq!(Int::from_be(header.timestamp_difference_microseconds), timestamp_diff);
+        assert_eq!(pkt.connection_id(), connection_id);
+        assert_eq!(pkt.seq_nr(), seq_nr);
+        assert_eq!(pkt.ack_nr(), ack_nr);
+        assert_eq!(pkt.wnd_size(), window_size);
+        assert_eq!(pkt.timestamp_microseconds(), timestamp);
+        assert_eq!(pkt.timestamp_difference_microseconds(), timestamp_diff);
         assert_eq!(pkt.bytes(), buf.to_vec());
     }
 
