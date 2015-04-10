@@ -1,5 +1,9 @@
 # Change Log
 
+## [0.2.4]
+
+Improved performance encoding and decoding packets.
+
 ## [0.2.3]
 
 ### Fixed
