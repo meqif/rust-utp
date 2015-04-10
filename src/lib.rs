@@ -46,10 +46,6 @@
 
 #![deny(missing_docs)]
 
-#![cfg_attr(test, feature(test))]
-
-#[cfg(test)] extern crate test;
-
 extern crate rand;
 extern crate time;
 extern crate num;
