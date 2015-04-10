@@ -2,6 +2,7 @@
 
 [![Crate version](http://img.shields.io/badge/crates.io-v0.2.3-blue.svg?style=flat)](https://crates.io/crates/utp)
 [![Build Status](http://img.shields.io/travis/meqif/rust-utp.svg?style=flat)](https://travis-ci.org/meqif/rust-utp)
+[![Coverage Status](https://img.shields.io/coveralls/meqif/rust-utp.svg?style=flat)](https://coveralls.io/r/meqif/rust-utp?branch=master)
 
 A [Micro Transport Protocol](http://www.bittorrent.org/beps/bep_0029.html)
 library implemented in Rust.
