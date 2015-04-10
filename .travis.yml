@@ -6,6 +6,7 @@ rust:
 after_success: |
   cargo clean;
   cargo test --no-run;
+  sudo apt-get update &&
   sudo apt-get install libcurl4-openssl-dev libelf-dev libdw-dev binutils-dev &&
   wget https://github.com/SimonKagstrom/kcov/archive/master.tar.gz &&
   tar xzf master.tar.gz &&
