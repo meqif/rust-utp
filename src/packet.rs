@@ -14,6 +14,22 @@ macro_rules! u8_to_unsigned_be {
     })
 }
 
+macro_rules! make_getter {
+    ($name:ident, $t:ty, $m:ident) => {
+        pub fn $name(&self) -> $t {
+            $m::from_be(self.header.$name)
+        }
+    }
+}
+
+macro_rules! make_setter {
+    ($fn_name:ident, $field:ident, $t: ty) => {
+        pub fn $fn_name(&mut self, new: $t) {
+            self.header.$field = new.to_be();
+        }
+    }
+}
+
 #[derive(PartialEq,Eq,Debug)]
 pub enum PacketType {
     Data  = 0,
@@ -164,65 +180,19 @@ impl Packet {
         self.header.get_type()
     }
 
-    #[inline]
-    pub fn seq_nr(&self) -> u16 {
-        u16::from_be(self.header.seq_nr)
-    }
+    make_getter!(seq_nr, u16, u16);
+    make_getter!(ack_nr, u16, u16);
+    make_getter!(connection_id, u16, u16);
+    make_getter!(wnd_size, u32, u32);
+    make_getter!(timestamp_microseconds, u32, u32);
+    make_getter!(timestamp_difference_microseconds, u32, u32);
 
-    #[inline]
-    pub fn set_seq_nr(&mut self, seq_nr: u16) {
-        self.header.seq_nr = seq_nr.to_be();
-    }
-
-    #[inline]
-    pub fn ack_nr(&self) -> u16 {
-        u16::from_be(self.header.ack_nr)
-    }
-
-    #[inline]
-    pub fn set_ack_nr(&mut self, ack_nr: u16) {
-        self.header.ack_nr = ack_nr.to_be()
-    }
-
-    #[inline]
-    pub fn connection_id(&self) -> u16 {
-        u16::from_be(self.header.connection_id)
-    }
-
-    #[inline]
-    pub fn set_connection_id(&mut self, conn_id: u16) {
-        self.header.connection_id = conn_id.to_be();
-    }
-
-    #[inline]
-    pub fn set_wnd_size(&mut self, new_wnd_size: u32) {
-        self.header.wnd_size = new_wnd_size.to_be();
-    }
-
-    #[inline]
-    pub fn wnd_size(&self) -> u32 {
-        u32::from_be(self.header.wnd_size)
-    }
-
-    #[inline]
-    pub fn timestamp_microseconds(&self) -> u32 {
-        u32::from_be(self.header.timestamp_microseconds)
-    }
-
-    #[inline]
-    pub fn set_timestamp_microseconds(&mut self, tstamp: u32) {
-        self.header.timestamp_microseconds = tstamp.to_be();
-    }
-
-    #[inline]
-    pub fn timestamp_difference_microseconds(&self) -> u32 {
-        u32::from_be(self.header.timestamp_difference_microseconds)
-    }
-
-    #[inline]
-    pub fn set_timestamp_difference_microseconds(&mut self, tstamp: u32) {
-        self.header.timestamp_difference_microseconds = tstamp.to_be();
-    }
+    make_setter!(set_seq_nr, seq_nr, u16);
+    make_setter!(set_ack_nr, ack_nr, u16);
+    make_setter!(set_connection_id, connection_id, u16);
+    make_setter!(set_wnd_size, wnd_size, u32);
+    make_setter!(set_timestamp_microseconds, timestamp_microseconds, u32);
+    make_setter!(set_timestamp_difference_microseconds, timestamp_difference_microseconds, u32);
 
     /// Set Selective ACK field in packet header and add appropriate data.
     ///
