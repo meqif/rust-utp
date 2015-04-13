@@ -281,17 +281,15 @@ impl UtpSocket {
         let packet = Packet::decode(&b[..read]);
         debug!("received {:?}", packet);
 
-        let shallow_clone = packet.shallow_clone();
-
-        if packet.get_type() == PacketType::Data && self.ack_nr.wrapping_add(1) <= packet.seq_nr() {
-            self.insert_into_buffer(packet);
-        }
-
-        if let Some(pkt) = try!(self.handle_packet(&shallow_clone, src)) {
+        if let Some(pkt) = try!(self.handle_packet(&packet, src)) {
                 let mut pkt = pkt;
                 pkt.set_wnd_size(BUF_SIZE as u32);
                 try!(self.socket.send_to(&pkt.bytes()[..], src));
                 debug!("sent {:?}", pkt);
+        }
+
+        if packet.get_type() == PacketType::Data && self.ack_nr <= packet.seq_nr() {
+            self.insert_into_buffer(packet);
         }
 
         // Flush incoming buffer if possible
