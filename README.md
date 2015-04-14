@@ -60,10 +60,10 @@ fn main() {
 ## To implement
 
 - [x] congestion control
-- [ ] proper connection closing
+- [x] proper connection closing
     - [x] handle both RST and FIN
     - [x] send FIN on close
-    - [ ] automatically send FIN (or should it be RST?) on `drop` if not already closed
+    - [x] automatically send FIN on `drop` if not already closed
 - [x] sending RST on mismatch
 - [x] setters and getters that hide header field endianness conversion
 - [x] SACK extension

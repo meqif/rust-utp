@@ -219,7 +219,7 @@ impl UtpSocket {
 
         // Receive JAKE
         while self.state != SocketState::Closed {
-            try!(self.recv_from(&mut buf));
+            try!(self.recv(&mut buf));
         }
 
         Ok(())
@@ -621,8 +621,7 @@ impl UtpSocket {
                 self.fin_seq_nr = packet.seq_nr();
 
                 // If all packets are received and handled
-                if self.ack_nr == self.fin_seq_nr
-                {
+                if self.ack_nr == self.fin_seq_nr {
                     self.state = SocketState::Closed;
                     Ok(Some(self.prepare_reply(packet, PacketType::State)))
                 } else {
@@ -635,6 +634,14 @@ impl UtpSocket {
                     self.state = SocketState::Closed;
                 }
                 Ok(None)
+            }
+            (SocketState::FinSent, PacketType::Fin) => {
+                if self.send_window.is_empty() {
+                    self.state = SocketState::Closed;
+                    Ok(Some(self.prepare_reply(packet, PacketType::State)))
+                } else {
+                    panic!("Received FIN after sending FIN with pending unacknowledged packets");
+                }
             }
             (_, PacketType::Reset) => {
                 self.state = SocketState::ResetReceived;
@@ -797,6 +804,12 @@ impl UtpSocket {
             self.incoming_buffer.remove(i);
         }
         self.incoming_buffer.insert(i, packet);
+    }
+}
+
+impl Drop for UtpSocket {
+    fn drop(&mut self) {
+        let _ = self.close();
     }
 }
 
@@ -1094,6 +1107,9 @@ mod test {
         assert!(response.is_ok());
         let response = response.unwrap();
         assert!(response.is_none());
+
+        // Mark socket as closed
+        socket.state = SocketState::Closed;
     }
 
     #[test]
@@ -1132,6 +1148,9 @@ mod test {
         let response = response.unwrap();
         assert!(response.get_type() == PacketType::Reset);
         assert!(response.ack_nr() == packet.seq_nr());
+
+        // Mark socket as closed
+        socket.state = SocketState::Closed;
     }
 
     #[test]
@@ -1191,6 +1210,9 @@ mod test {
         assert!(response.is_ok());
         let response = response.unwrap();
         assert!(response.is_some());
+
+        // Mark socket as closed
+        socket.state = SocketState::Closed;
     }
 
     #[test]
@@ -1209,7 +1231,7 @@ mod test {
         thread::spawn(move || {
             let mut client = iotry!(client.connect(server_addr));
             assert!(client.state == SocketState::Connected);
-            let s = client.socket;
+            let s = client.socket.try_clone().ok().expect("Error cloning internal UDP socket");
             let mut window: Vec<Packet> = Vec::new();
 
             for data in (1..13u8).collect::<Vec<u8>>()[..].chunks(3) {
@@ -1223,6 +1245,7 @@ mod test {
                 window.push(packet.clone());
                 client.send_window.push(packet.clone());
                 client.seq_nr += 1;
+                client.curr_window += packet.len() as u32;
             }
 
             let mut packet = Packet::new();
@@ -1664,5 +1687,14 @@ mod test {
         }
         assert_eq!(received.len(), data.len());
         assert_eq!(received, data);
+    }
+
+    #[test]
+    fn test_drop_unused_socket() {
+        let server_addr = (next_test_ip4());
+        let server = iotry!(UtpSocket::bind(server_addr));
+
+        // Explicitly dropping socket. This test should not hang.
+        drop(server);
     }
 }
