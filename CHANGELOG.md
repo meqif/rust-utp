@@ -1,5 +1,11 @@
 # Change Log
 
+## [0.2.5]
+
+### Changed
+
+- Dropping an `UtpSocket` (or a wrapping struct like `UtpStream`) properly closes open connections.
+
 ## [0.2.4]
 
 Improved performance encoding and decoding packets.
