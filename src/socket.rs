@@ -178,10 +178,6 @@ impl UtpSocket {
         assert!(addr == self.connected_to);
 
         let packet = Packet::decode(&buf[..len]);
-        if packet.get_type() != PacketType::State {
-            return Err(Error::new(ErrorKind::ConnectionAborted,
-                                  "The remote peer sent an invalid reply"));
-        }
         try!(self.handle_packet(&packet, addr));
 
         debug!("connected to: {}", self.connected_to);
