@@ -1,5 +1,14 @@
 # Change Log
 
+## [0.2.6]
+
+No functional changes.
+
+### Changed
+
+- Removed stability attributes.
+- Removed an unnecessary partial clone when handling a received packet.
+
 ## [0.2.5]
 
 ### Changed
