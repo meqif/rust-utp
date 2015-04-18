@@ -309,15 +309,6 @@ impl Packet {
             payload: payload,
         }
     }
-
-    /// Return a clone of this object without the payload
-    pub fn shallow_clone(&self) -> Packet {
-        Packet {
-            header: self.header.clone(),
-            extensions: self.extensions.clone(),
-            payload: Vec::new(),
-        }
-    }
 }
 
 impl Clone for Packet {

@@ -77,6 +77,7 @@ pub struct UtpSocket {
     last_acked: u16,
     /// Timestamp of the latest packet the remote peer acknowledged
     last_acked_timestamp: u32,
+    last_dropped: u16,
     /// Sequence number of the received FIN packet, if any
     fin_seq_nr: u16,
     /// Round-trip time to remote peer
@@ -122,6 +123,7 @@ impl UtpSocket {
                 duplicate_ack_count: 0,
                 last_acked: 0,
                 last_acked_timestamp: 0,
+                last_dropped: 0,
                 fin_seq_nr: 0,
                 rtt: 0,
                 rtt_variance: 0,
@@ -281,17 +283,15 @@ impl UtpSocket {
         let packet = Packet::decode(&b[..read]);
         debug!("received {:?}", packet);
 
-        let shallow_clone = packet.shallow_clone();
-
-        if packet.get_type() == PacketType::Data && self.ack_nr.wrapping_add(1) <= packet.seq_nr() {
-            self.insert_into_buffer(packet);
-        }
-
-        if let Some(pkt) = try!(self.handle_packet(&shallow_clone, src)) {
+        if let Some(pkt) = try!(self.handle_packet(&packet, src)) {
                 let mut pkt = pkt;
                 pkt.set_wnd_size(BUF_SIZE as u32);
                 try!(self.socket.send_to(&pkt.bytes()[..], src));
                 debug!("sent {:?}", pkt);
+        }
+
+        if packet.get_type() == PacketType::Data && packet.seq_nr().wrapping_sub(self.last_dropped) > 0 {
+            self.insert_into_buffer(packet);
         }
 
         // Flush incoming buffer if possible
@@ -321,6 +321,7 @@ impl UtpSocket {
             let packet = self.incoming_buffer.remove(0);
             debug!("Removed packet from incoming buffer: {:?}", packet);
             self.ack_nr = packet.seq_nr();
+            self.last_dropped = self.ack_nr;
             Some(packet)
         } else {
             None
@@ -593,6 +594,7 @@ impl UtpSocket {
                 self.receiver_connection_id = packet.connection_id() + 1;
                 self.sender_connection_id = packet.connection_id();
                 self.state = SocketState::Connected;
+                self.last_dropped = self.ack_nr;
 
                 Ok(Some(self.prepare_reply(packet, PacketType::State)))
             },
@@ -1494,9 +1496,7 @@ mod test {
         });
 
         let mut buf = [0u8; BUF_SIZE];
-        match server.recv(&mut buf) {
-            e => println!("{:?}", e),
-        }
+        iotry!(server.recv(&mut buf));
         // After establishing a new connection, the server's ids are a mirror of the client's.
         assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
 
