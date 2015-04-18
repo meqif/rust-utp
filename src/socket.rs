@@ -103,7 +103,6 @@ pub struct UtpSocket {
 impl UtpSocket {
     /// Create a UTP socket from the given address.
     /// For now, I'll ignore all but the first address.
-    #[unstable]
     pub fn bind<A: ToSocketAddrs>(addr: A) -> Result<UtpSocket> {
         let addr = addr.to_socket_addrs().unwrap().next().unwrap();
         let skt = UdpSocket::bind(addr);
@@ -140,7 +139,6 @@ impl UtpSocket {
     }
 
     /// Open a uTP connection to a remote host by hostname or IP address.
-    #[unstable]
     pub fn connect<A: ToSocketAddrs>(mut self, other: A) -> Result<UtpSocket> {
         let addr = other.to_socket_addrs().unwrap().next().unwrap();
         self.connected_to = addr;
@@ -195,7 +193,6 @@ impl UtpSocket {
     ///
     /// This method allows both peers to receive all packets still in
     /// flight.
-    #[unstable]
     pub fn close(&mut self) -> Result<()> {
         // Wait for acknowledgment on pending sent packets
         let mut buf = [0u8; BUF_SIZE];
@@ -232,7 +229,6 @@ impl UtpSocket {
     /// On success, returns the number of bytes read and the sender's address.
     /// Returns `Closed` after receiving a FIN packet when the remaining
     /// inflight packets are consumed.
-    #[unstable]
     pub fn recv_from(&mut self, buf: &mut[u8]) -> Result<(usize,SocketAddr)> {
         let read = self.flush_incoming_buffer(buf);
 
@@ -385,7 +381,6 @@ impl UtpSocket {
     //
     // Note that the buffer passed to `send_to` might exceed the maximum packet
     // size, which will result in the data being split over several packets.
-    #[unstable]
     pub fn send_to(&mut self, buf: &[u8]) -> Result<usize> {
         if self.state == SocketState::Closed {
             return Err(Error::new(ErrorKind::NotConnected,

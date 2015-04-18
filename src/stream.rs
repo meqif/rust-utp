@@ -9,7 +9,6 @@ pub struct UtpStream {
 
 impl UtpStream {
     /// Create a uTP stream listening on the given address.
-    #[unstable]
     pub fn bind<A: ToSocketAddrs>(addr: A) -> Result<UtpStream> {
         match UtpSocket::bind(addr) {
             Ok(s)  => Ok(UtpStream { socket: s }),
@@ -18,7 +17,6 @@ impl UtpStream {
     }
 
     /// Open a uTP connection to a remote host by hostname or IP address.
-    #[unstable]
     pub fn connect<A: ToSocketAddrs>(dst: A) -> Result<UtpStream> {
         // Port 0 means the operating system gets to choose it
         let my_addr = "0.0.0.0:0";
@@ -37,7 +35,6 @@ impl UtpStream {
     ///
     /// This method allows both peers to receive all packets still in
     /// flight.
-    #[unstable]
     pub fn close(&mut self) -> Result<()> {
         self.socket.close()
     }
