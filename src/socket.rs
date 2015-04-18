@@ -1686,7 +1686,7 @@ mod test {
 
     #[test]
     fn test_drop_unused_socket() {
-        let server_addr = (next_test_ip4());
+        let server_addr = next_test_ip4();
         let server = iotry!(UtpSocket::bind(server_addr));
 
         // Explicitly dropping socket. This test should not hang.
