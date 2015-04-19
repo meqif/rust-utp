@@ -1,3 +1,4 @@
+use std::io::{Result, Error, ErrorKind};
 use std::mem::transmute;
 use std::fmt;
 use bit_iterator::BitIterator;
@@ -265,7 +266,10 @@ impl Packet {
     /// Note that this method makes no attempt to guess the payload size, saving
     /// all except the initial 20 bytes corresponding to the header as payload.
     /// It's the caller's responsability to use an appropriately sized buffer.
-    pub fn decode(buf: &[u8]) -> Packet {
+    pub fn decode(buf: &[u8]) -> Result<Packet> {
+        if buf.len() < HEADER_SIZE {
+            return Err(Error::new(ErrorKind::Other, "Too short"));
+        }
         let header = PacketHeader::decode(buf);
 
         let mut extensions = Vec::new();
@@ -274,6 +278,9 @@ impl Packet {
 
         // Consume known extensions and skip over unknown ones
         while idx < buf.len() && kind != 0 {
+            if buf.len() < idx + 2 {
+                return Err(Error::new(ErrorKind::Other, "Too short"));
+            }
             let len = buf[idx + 1] as usize;
             let extension_start = idx + 2;
             let payload_start = extension_start + len;
@@ -303,11 +310,11 @@ impl Packet {
             payload = Vec::new();
         }
 
-        Packet {
+        Ok(Packet {
             header: header,
             extensions: extensions,
             payload: payload,
-        }
+        })
     }
 }
 
@@ -339,6 +346,8 @@ mod tests {
         let buf = [0x21, 0x00, 0x41, 0xa8, 0x99, 0x2f, 0xd0, 0x2a, 0x9f, 0x4a,
                    0x26, 0x21, 0x00, 0x10, 0x00, 0x00, 0x3a, 0xf2, 0x6c, 0x79];
         let pkt = Packet::decode(&buf);
+        assert!(pkt.is_ok());
+        let pkt = pkt.unwrap();
         assert_eq!(pkt.header.get_version(), 1);
         assert_eq!(pkt.header.get_type(), State);
         assert_eq!(pkt.header.extension, 0);
@@ -358,6 +367,8 @@ mod tests {
                    0x00, 0x00, 0x00, 0x00, 0x05, 0xdc, 0xab, 0x53, 0x3a, 0xf5,
                    0x00, 0x04, 0x00, 0x00, 0x00, 0x00];
         let packet = Packet::decode(&buf);
+        assert!(packet.is_ok());
+        let packet = packet.unwrap();
         assert_eq!(packet.header.get_version(), 1);
         assert_eq!(packet.header.get_type(), State);
         assert_eq!(packet.header.extension, 1);
@@ -383,6 +394,8 @@ mod tests {
                    0xff, 0x04, 0x00, 0x00, 0x00, 0x00, // Imaginary extension
                    0x00, 0x04, 0x00, 0x00, 0x00, 0x00];
         let packet = Packet::decode(&buf);
+        assert!(packet.is_ok());
+        let packet = packet.unwrap();
         assert_eq!(packet.header.get_version(), 1);
         assert_eq!(packet.header.get_type(), State);
         assert_eq!(packet.header.extension, 1);
@@ -442,6 +455,19 @@ mod tests {
                    0x65, 0xbf, 0x5d, 0xba, 0x00, 0x10, 0x00, 0x00,
                    0x3a, 0xf2, 0x42, 0xc8, 0x48, 0x65, 0x6c, 0x6c,
                    0x6f, 0x0a];
-        assert_eq!(&Packet::decode(&buf).bytes()[..], &buf[..]);
+        assert_eq!(&Packet::decode(&buf).unwrap().bytes()[..], &buf[..]);
+    }
+
+    #[test]
+    fn test_decode_evil_sequence() {
+        let buf = [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let packet = Packet::decode(&buf);
+        assert!(packet.is_err());
+    }
+
+    #[test]
+    fn test_decode_empty_packet() {
+        let packet = Packet::decode(&[]);
+        assert!(packet.is_err());
     }
 }

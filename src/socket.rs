@@ -180,7 +180,7 @@ impl UtpSocket {
                                   "The remote server aborted the connection"));
         }
 
-        let packet = Packet::decode(&buf[..len]);
+        let packet = iotry!(Packet::decode(&buf[..len]));
         try!(self.handle_packet(&packet, addr));
 
         debug!("connected to: {}", self.connected_to);
@@ -277,7 +277,7 @@ impl UtpSocket {
             Ok(x) => x,
             Err(e) => return Err(e),
         };
-        let packet = Packet::decode(&b[..read]);
+        let packet = iotry!(Packet::decode(&b[..read]));
         debug!("received {:?}", packet);
 
         if let Some(pkt) = try!(self.handle_packet(&packet, src)) {
@@ -1310,7 +1310,7 @@ mod test {
         let mut data_packet;
         match server.socket.recv_from(&mut buf) {
             Ok((read, _src)) => {
-                data_packet = Packet::decode(&buf[..read]);
+                data_packet = iotry!(Packet::decode(&buf[..read]));
                 assert_eq!(data_packet.get_type(), PacketType::Data);
                 assert_eq!(data_packet.payload, data);
                 assert_eq!(data_packet.payload.len(), data.len());
@@ -1335,7 +1335,7 @@ mod test {
         match server.socket.recv_from(&mut buf) {
             Ok((0, _)) => panic!("Received 0 bytes from socket"),
             Ok((read, _src)) => {
-                let packet = Packet::decode(&buf[..read]);
+                let packet = iotry!(Packet::decode(&buf[..read]));
                 assert_eq!(packet.get_type(), PacketType::Data);
                 assert_eq!(packet.seq_nr(), data_packet.seq_nr());
                 assert!(packet.payload == data_packet.payload);
