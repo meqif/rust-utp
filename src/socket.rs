@@ -1690,4 +1690,26 @@ mod test {
         // Explicitly dropping socket. This test should not hang.
         drop(server);
     }
+
+    #[test]
+    fn test_receive_invalid_reply_on_connect() {
+        use std::net::UdpSocket;
+        let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
+        let server = iotry!(UdpSocket::bind(server_addr));
+        let client = iotry!(UtpSocket::bind(client_addr));
+
+        thread::spawn(move || {
+            let mut buf = [0; 1500];
+            match server.recv_from(&mut buf) {
+                Ok((_len, client_addr)) => server.send_to(&[], client_addr),
+                _ => panic!()
+            }
+        });
+
+        match client.connect(server_addr) {
+            Err(ref e) if e.kind() == ErrorKind::ConnectionAborted => (), // OK
+            Err(e) => panic!("Expected ErrorKind::ConnectionAborted, got {:?}", e),
+            Ok(_) => panic!("Expected Err, got Ok")
+        }
+    }
 }
