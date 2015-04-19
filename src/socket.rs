@@ -22,7 +22,7 @@ const MAX_CONGESTION_TIMEOUT: u64 = 60_000; // one minute
 const BASE_HISTORY: usize = 10; // base delays history size
 
 macro_rules! iotry {
-    ($e:expr) => (match $e { Ok(e) => e, Err(e) => panic!("{}", e) })
+    ($e:expr) => (match $e { Ok(e) => e, Err(e) => panic!("{:?}", e) })
 }
 
 #[derive(PartialEq,Eq,Debug,Copy,Clone)]
@@ -174,10 +174,13 @@ impl UtpSocket {
                 Err(e) => return Err(e),
             };
         }
-        assert!(len == HEADER_SIZE);
-        assert!(addr == self.connected_to);
 
-        let packet = Packet::decode(&buf[..len]);
+        if len != HEADER_SIZE || addr != self.connected_to {
+            return Err(Error::new(ErrorKind::ConnectionAborted,
+                                  "The remote server aborted the connection"));
+        }
+
+        let packet = iotry!(Packet::decode(&buf[..len]));
         try!(self.handle_packet(&packet, addr));
 
         debug!("connected to: {}", self.connected_to);
@@ -196,8 +199,10 @@ impl UtpSocket {
             try!(self.recv(&mut buf));
         }
 
-        // Nothing to do if the socket's already closed
-        if self.state == SocketState::Closed {
+        // Nothing to do if the socket's already closed or not connected
+        if self.state == SocketState::Closed ||
+            self.state == SocketState::New ||
+            self.state == SocketState::SynSent {
             return Ok(());
         }
 
@@ -272,7 +277,7 @@ impl UtpSocket {
             Ok(x) => x,
             Err(e) => return Err(e),
         };
-        let packet = Packet::decode(&b[..read]);
+        let packet = iotry!(Packet::decode(&b[..read]));
         debug!("received {:?}", packet);
 
         if let Some(pkt) = try!(self.handle_packet(&packet, src)) {
@@ -1305,7 +1310,7 @@ mod test {
         let mut data_packet;
         match server.socket.recv_from(&mut buf) {
             Ok((read, _src)) => {
-                data_packet = Packet::decode(&buf[..read]);
+                data_packet = iotry!(Packet::decode(&buf[..read]));
                 assert_eq!(data_packet.get_type(), PacketType::Data);
                 assert_eq!(data_packet.payload, data);
                 assert_eq!(data_packet.payload.len(), data.len());
@@ -1330,7 +1335,7 @@ mod test {
         match server.socket.recv_from(&mut buf) {
             Ok((0, _)) => panic!("Received 0 bytes from socket"),
             Ok((read, _src)) => {
-                let packet = Packet::decode(&buf[..read]);
+                let packet = iotry!(Packet::decode(&buf[..read]));
                 assert_eq!(packet.get_type(), PacketType::Data);
                 assert_eq!(packet.seq_nr(), data_packet.seq_nr());
                 assert!(packet.payload == data_packet.payload);
@@ -1686,5 +1691,27 @@ mod test {
 
         // Explicitly dropping socket. This test should not hang.
         drop(server);
+    }
+
+    #[test]
+    fn test_receive_invalid_reply_on_connect() {
+        use std::net::UdpSocket;
+        let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
+        let server = iotry!(UdpSocket::bind(server_addr));
+        let client = iotry!(UtpSocket::bind(client_addr));
+
+        thread::spawn(move || {
+            let mut buf = [0; 1500];
+            match server.recv_from(&mut buf) {
+                Ok((_len, client_addr)) => server.send_to(&[], client_addr),
+                _ => panic!()
+            }
+        });
+
+        match client.connect(server_addr) {
+            Err(ref e) if e.kind() == ErrorKind::ConnectionAborted => (), // OK
+            Err(e) => panic!("Expected ErrorKind::ConnectionAborted, got {:?}", e),
+            Ok(_) => panic!("Expected Err, got Ok")
+        }
     }
 }
