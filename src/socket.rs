@@ -1353,62 +1353,62 @@ mod test {
         iotry!(server.recv_from(&mut buf));
     }
 
-    #[test]
-    #[ignore]
-    // `std::net::UdpSocket` no longer supports timeouts, so this test is deprecated for now.
-    fn test_socket_timeout_request() {
-        let (server_addr, client_addr) = (next_test_ip4().to_socket_addrs().unwrap().next().unwrap(),
-                                          next_test_ip4().to_socket_addrs().unwrap().next().unwrap());
+    // #[test]
+    // #[ignore]
+    // // `std::net::UdpSocket` no longer supports timeouts, so this test is deprecated for now.
+    // fn test_socket_timeout_request() {
+    //     let (server_addr, client_addr) = (next_test_ip4().to_socket_addrs().unwrap().next().unwrap(),
+    //                                       next_test_ip4().to_socket_addrs().unwrap().next().unwrap());
 
-        let client = iotry!(UtpSocket::bind(client_addr));
-        let mut server = iotry!(UtpSocket::bind(server_addr));
-        const LEN: usize = 512;
-        let data = (0..LEN).map(|idx| idx as u8).collect::<Vec<u8>>();
-        let d = data.clone();
+    //     let client = iotry!(UtpSocket::bind(client_addr));
+    //     let mut server = iotry!(UtpSocket::bind(server_addr));
+    //     const LEN: usize = 512;
+    //     let data = (0..LEN).map(|idx| idx as u8).collect::<Vec<u8>>();
+    //     let d = data.clone();
 
-        assert!(server.state == SocketState::New);
-        assert!(client.state == SocketState::New);
+    //     assert!(server.state == SocketState::New);
+    //     assert!(client.state == SocketState::New);
 
-        // Check proper difference in client's send connection id and receive connection id
-        assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
+    //     // Check proper difference in client's send connection id and receive connection id
+    //     assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
 
-        thread::spawn(move || {
-            let mut client = iotry!(client.connect(server_addr));
-            assert!(client.state == SocketState::Connected);
-            assert_eq!(client.connected_to, server_addr);
-            iotry!(client.send_to(&d[..]));
-            drop(client);
-        });
+    //     thread::spawn(move || {
+    //         let mut client = iotry!(client.connect(server_addr));
+    //         assert!(client.state == SocketState::Connected);
+    //         assert_eq!(client.connected_to, server_addr);
+    //         iotry!(client.send_to(&d[..]));
+    //         drop(client);
+    //     });
 
-        let mut buf = [0u8; BUF_SIZE];
-        match server.recv(&mut buf) {
-            e => println!("{:?}", e),
-        }
-        // After establishing a new connection, the server's ids are a mirror of the client's.
-        assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
-        assert_eq!(server.connected_to, client_addr);
+    //     let mut buf = [0u8; BUF_SIZE];
+    //     match server.recv(&mut buf) {
+    //         e => println!("{:?}", e),
+    //     }
+    //     // After establishing a new connection, the server's ids are a mirror of the client's.
+    //     assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
+    //     assert_eq!(server.connected_to, client_addr);
 
-        assert!(server.state == SocketState::Connected);
+    //     assert!(server.state == SocketState::Connected);
 
-        // Purposefully read from UDP socket directly and discard it, in order
-        // to behave as if the packet was lost and thus trigger the timeout
-        // handling in the *next* call to `UtpSocket.recv_from`.
-        iotry!(server.socket.recv_from(&mut buf));
+    //     // Purposefully read from UDP socket directly and discard it, in order
+    //     // to behave as if the packet was lost and thus trigger the timeout
+    //     // handling in the *next* call to `UtpSocket.recv_from`.
+    //     iotry!(server.socket.recv_from(&mut buf));
 
-        // Set a much smaller than usual timeout, for quicker test completion
-        server.congestion_timeout = 50;
+    //     // Set a much smaller than usual timeout, for quicker test completion
+    //     server.congestion_timeout = 50;
 
-        // Now wait for the previously discarded packet
-        loop {
-            match server.recv_from(&mut buf) {
-                Ok((0, _)) => continue,
-                Ok(_) => break,
-                Err(e) => panic!("{:?}", e),
-            }
-        }
+    //     // Now wait for the previously discarded packet
+    //     loop {
+    //         match server.recv_from(&mut buf) {
+    //             Ok((0, _)) => continue,
+    //             Ok(_) => break,
+    //             Err(e) => panic!("{:?}", e),
+    //         }
+    //     }
 
-        drop(server);
-    }
+    //     drop(server);
+    // }
 
     #[test]
     fn test_sorted_buffer_insertion() {
@@ -1510,62 +1510,62 @@ mod test {
         assert_eq!(received, expected);
     }
 
-    #[test]
-    #[ignore]
-    fn test_selective_ack_response() {
-        let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
-        const LEN: usize = 1024 * 10;
-        let data = (0..LEN).map(|idx| idx as u8).collect::<Vec<u8>>();
-        let to_send = data.clone();
+    // #[test]
+    // #[ignore]
+    // fn test_selective_ack_response() {
+    //     let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
+    //     const LEN: usize = 1024 * 10;
+    //     let data = (0..LEN).map(|idx| idx as u8).collect::<Vec<u8>>();
+    //     let to_send = data.clone();
 
-        // Client
-        thread::spawn(move || {
-            let client = iotry!(UtpSocket::bind(client_addr));
-            let mut client = iotry!(client.connect(server_addr));
-            client.congestion_timeout = 50;
+    //     // Client
+    //     thread::spawn(move || {
+    //         let client = iotry!(UtpSocket::bind(client_addr));
+    //         let mut client = iotry!(client.connect(server_addr));
+    //         client.congestion_timeout = 50;
 
-            iotry!(client.send_to(&to_send[..]));
-            iotry!(client.close());
-        });
+    //         iotry!(client.send_to(&to_send[..]));
+    //         iotry!(client.close());
+    //     });
 
-        // Server
-        let mut server = iotry!(UtpSocket::bind(server_addr));
+    //     // Server
+    //     let mut server = iotry!(UtpSocket::bind(server_addr));
 
-        let mut buf = [0; BUF_SIZE];
+    //     let mut buf = [0; BUF_SIZE];
 
-        // Connect
-        iotry!(server.recv_from(&mut buf));
+    //     // Connect
+    //     iotry!(server.recv_from(&mut buf));
 
-        // Discard packets
-        iotry!(server.socket.recv_from(&mut buf));
-        iotry!(server.socket.recv_from(&mut buf));
-        iotry!(server.socket.recv_from(&mut buf));
+    //     // Discard packets
+    //     iotry!(server.socket.recv_from(&mut buf));
+    //     iotry!(server.socket.recv_from(&mut buf));
+    //     iotry!(server.socket.recv_from(&mut buf));
 
-        // Generate SACK
-        let mut packet = Packet::new();
-        packet.set_seq_nr(server.seq_nr);
-        packet.set_ack_nr(server.ack_nr - 1);
-        packet.set_connection_id(server.sender_connection_id);
-        packet.set_timestamp_microseconds(now_microseconds());
-        packet.set_type(PacketType::State);
-        packet.set_sack(vec!(12, 0, 0, 0));
+    //     // Generate SACK
+    //     let mut packet = Packet::new();
+    //     packet.set_seq_nr(server.seq_nr);
+    //     packet.set_ack_nr(server.ack_nr - 1);
+    //     packet.set_connection_id(server.sender_connection_id);
+    //     packet.set_timestamp_microseconds(now_microseconds());
+    //     packet.set_type(PacketType::State);
+    //     packet.set_sack(vec!(12, 0, 0, 0));
 
-        // Send SACK
-        iotry!(server.socket.send_to(&packet.bytes()[..], server.connected_to.clone()));
+    //     // Send SACK
+    //     iotry!(server.socket.send_to(&packet.bytes()[..], server.connected_to.clone()));
 
-        // Expect to receive "missing" packets
-        let mut received: Vec<u8> = vec!();
-        loop {
-            match server.recv_from(&mut buf) {
-                Ok((0, _src)) => break,
-                Ok((len, _src)) => received.extend(buf[..len].to_vec()),
-                Err(e) => panic!("{:?}", e)
-            }
-        }
-        assert!(!received.is_empty());
-        assert_eq!(received.len(), data.len());
-        assert_eq!(received, data);
-    }
+    //     // Expect to receive "missing" packets
+    //     let mut received: Vec<u8> = vec!();
+    //     loop {
+    //         match server.recv_from(&mut buf) {
+    //             Ok((0, _src)) => break,
+    //             Ok((len, _src)) => received.extend(buf[..len].to_vec()),
+    //             Err(e) => panic!("{:?}", e)
+    //         }
+    //     }
+    //     assert!(!received.is_empty());
+    //     assert_eq!(received.len(), data.len());
+    //     assert_eq!(received, data);
+    // }
 
     #[test]
     fn test_correct_packet_loss() {
