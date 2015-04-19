@@ -199,8 +199,10 @@ impl UtpSocket {
             try!(self.recv(&mut buf));
         }
 
-        // Nothing to do if the socket's already closed
-        if self.state == SocketState::Closed {
+        // Nothing to do if the socket's already closed or not connected
+        if self.state == SocketState::Closed ||
+            self.state == SocketState::New ||
+            self.state == SocketState::SynSent {
             return Ok(());
         }
 
