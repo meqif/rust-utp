@@ -1,4 +1,3 @@
-use std::io::{Result, Error, ErrorKind};
 use std::mem::transmute;
 use std::fmt;
 use bit_iterator::BitIterator;
@@ -30,6 +29,9 @@ macro_rules! make_setter {
         }
     }
 }
+
+#[derive(Debug)]
+pub enum ParseError { InvalidHeaderLength, InvalidExtension }
 
 #[derive(PartialEq,Eq,Debug)]
 pub enum PacketType {
@@ -266,9 +268,9 @@ impl Packet {
     /// Note that this method makes no attempt to guess the payload size, saving
     /// all except the initial 20 bytes corresponding to the header as payload.
     /// It's the caller's responsability to use an appropriately sized buffer.
-    pub fn decode(buf: &[u8]) -> Result<Packet> {
+    pub fn decode(buf: &[u8]) -> Result<Packet, ParseError> {
         if buf.len() < HEADER_SIZE {
-            return Err(Error::new(ErrorKind::Other, "Too short"));
+            return Err(ParseError::InvalidHeaderLength);
         }
         let header = PacketHeader::decode(buf);
 
@@ -279,7 +281,7 @@ impl Packet {
         // Consume known extensions and skip over unknown ones
         while idx < buf.len() && kind != 0 {
             if buf.len() < idx + 2 {
-                return Err(Error::new(ErrorKind::Other, "Too short"));
+                return Err(ParseError::InvalidExtension);
             }
             let len = buf[idx + 1] as usize;
             let extension_start = idx + 2;

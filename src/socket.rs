@@ -22,7 +22,7 @@ const MAX_CONGESTION_TIMEOUT: u64 = 60_000; // one minute
 const BASE_HISTORY: usize = 10; // base delays history size
 
 macro_rules! iotry {
-    ($e:expr) => (match $e { Ok(e) => e, Err(e) => panic!("{}", e) })
+    ($e:expr) => (match $e { Ok(e) => e, Err(e) => panic!("{:?}", e) })
 }
 
 #[derive(PartialEq,Eq,Debug,Copy,Clone)]
