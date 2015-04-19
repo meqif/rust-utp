@@ -921,7 +921,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
     fn test_acks_on_socket() {
         use std::sync::mpsc::channel;
         let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
@@ -934,7 +933,7 @@ mod test {
             // Make the server listen for incoming connections
             let mut server = server;
             let mut buf = [0u8; BUF_SIZE];
-            let _resp = server.recv_from(&mut buf);
+            let _resp = server.recv(&mut buf);
             tx.send(server.seq_nr).unwrap();
 
             // Close the connection
