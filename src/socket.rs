@@ -1703,7 +1703,7 @@ mod test {
         thread::spawn(move || {
             let mut buf = [0; 1500];
             match server.recv_from(&mut buf) {
-                Ok((_len, client_addr)) => server.send_to(&[], client_addr),
+                Ok((_len, client_addr)) => { iotry!(server.send_to(&[], client_addr)); },
                 _ => panic!()
             }
         });
