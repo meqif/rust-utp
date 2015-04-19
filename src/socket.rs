@@ -174,8 +174,11 @@ impl UtpSocket {
                 Err(e) => return Err(e),
             };
         }
-        assert!(len == HEADER_SIZE);
-        assert!(addr == self.connected_to);
+
+        if len != HEADER_SIZE || addr != self.connected_to {
+            return Err(Error::new(ErrorKind::ConnectionAborted,
+                                  "The remote server aborted the connection"));
+        }
 
         let packet = Packet::decode(&buf[..len]);
         try!(self.handle_packet(&packet, addr));
