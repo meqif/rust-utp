@@ -1,4 +1,5 @@
 #![feature(test)]
+#![allow(dead_code)]
 extern crate test;
 
 // Ugly hack to allow benchmarking private modules
