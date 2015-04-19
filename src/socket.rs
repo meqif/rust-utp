@@ -661,7 +661,7 @@ impl UtpSocket {
             let sack = self.build_selective_ack();
 
             if sack.len() > 0 {
-                reply.set_sack(Some(sack));
+                reply.set_sack(sack);
             }
         }
 
@@ -1548,7 +1548,7 @@ mod test {
         packet.set_connection_id(server.sender_connection_id);
         packet.set_timestamp_microseconds(now_microseconds());
         packet.set_type(PacketType::State);
-        packet.set_sack(Some(vec!(12, 0, 0, 0)));
+        packet.set_sack(vec!(12, 0, 0, 0));
 
         // Send SACK
         iotry!(server.socket.send_to(&packet.bytes()[..], server.connected_to.clone()));

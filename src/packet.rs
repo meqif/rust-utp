@@ -199,32 +199,20 @@ impl Packet {
 
     /// Set Selective ACK field in packet header and add appropriate data.
     ///
-    /// If None is passed, the SACK extension is disabled and the respective
-    /// data is flushed. Otherwise, the SACK extension is enabled and the
-    /// vector `v` is taken as the extension's payload.
-    ///
     /// The length of the SACK extension is expressed in bytes, which
     /// must be a multiple of 4 and at least 4.
-    pub fn set_sack(&mut self, v: Option<Vec<u8>>) {
-        match v {
-            None => {
-                self.header.extension = 0;
-                self.extensions = Vec::new();
-            },
-            Some(bv) => {
-                // The length of the SACK extension is expressed in bytes, which
-                // must be a multiple of 4 and at least 4.
-                assert!(bv.len() >= 4);
-                assert!(bv.len() % 4 == 0);
+    pub fn set_sack(&mut self, bv: Vec<u8>) {
+        // The length of the SACK extension is expressed in bytes, which
+        // must be a multiple of 4 and at least 4.
+        assert!(bv.len() >= 4);
+        assert!(bv.len() % 4 == 0);
 
-                let extension = Extension {
-                    ty: ExtensionType::SelectiveAck,
-                    data: bv,
-                };
-                self.extensions.push(extension);
-                self.header.extension |= ExtensionType::SelectiveAck as u8;
-            }
-        }
+        let extension = Extension {
+            ty: ExtensionType::SelectiveAck,
+            data: bv,
+        };
+        self.extensions.push(extension);
+        self.header.extension |= ExtensionType::SelectiveAck as u8;
     }
 
     pub fn bytes(&self) -> Vec<u8> {
