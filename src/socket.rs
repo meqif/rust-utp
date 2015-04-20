@@ -1697,7 +1697,7 @@ mod test {
     }
 
     #[test]
-    fn test_receive_invalid_reply_on_connect() {
+    fn test_invalid_packet_on_connect() {
         use std::net::UdpSocket;
         let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
         let server = iotry!(UdpSocket::bind(server_addr));
@@ -1714,6 +1714,33 @@ mod test {
         match client.connect(server_addr) {
             Err(ref e) if e.kind() == ErrorKind::ConnectionAborted => (), // OK
             Err(e) => panic!("Expected ErrorKind::ConnectionAborted, got {:?}", e),
+            Ok(_) => panic!("Expected Err, got Ok")
+        }
+    }
+
+    #[test]
+    fn test_receive_unexpected_reply_type_on_connect() {
+        use std::net::UdpSocket;
+        let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
+        let server = iotry!(UdpSocket::bind(server_addr));
+        let client = iotry!(UtpSocket::bind(client_addr));
+
+        thread::spawn(move || {
+            let mut buf = [0; BUF_SIZE];
+            let mut packet = Packet::new();
+            packet.set_type(PacketType::Data);
+
+            match server.recv_from(&mut buf) {
+                Ok((_len, client_addr)) => {
+                    iotry!(server.send_to(&packet.bytes()[..], client_addr));
+                },
+                _ => panic!()
+            }
+        });
+
+        match client.connect(server_addr) {
+            Err(ref e) if e.kind() == ErrorKind::ConnectionRefused => (), // OK
+            Err(e) => panic!("Expected ErrorKind::ConnectionRefused, got {:?}", e),
             Ok(_) => panic!("Expected Err, got Ok")
         }
     }
