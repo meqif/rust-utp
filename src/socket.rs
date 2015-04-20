@@ -649,7 +649,11 @@ impl UtpSocket {
                 Err(Error::new(ErrorKind::ConnectionReset,
                                "Remote host aborted connection (incorrect connection id)"))
             },
-            (state, ty) => panic!("Unimplemented handling for ({:?},{:?})", state, ty)
+            (state, ty) => {
+                let message = format!("Unimplemented handling for ({:?},{:?})", state, ty);
+                debug!("{}", message);
+                Err(Error::new(ErrorKind::Other, message))
+            }
         }
     }
 
