@@ -573,7 +573,8 @@ impl UtpSocket {
         }
 
         // Reset connection if connection id doesn't match and this isn't a SYN
-        if (self.state, packet.get_type()) != (SocketState::New, PacketType::Syn) &&
+        if packet.get_type() != PacketType::Syn &&
+            self.state != SocketState::SynSent &&
             !(packet.connection_id() == self.sender_connection_id ||
               packet.connection_id() == self.receiver_connection_id) {
             return Ok(Some(self.prepare_reply(packet, PacketType::Reset)));
@@ -594,6 +595,9 @@ impl UtpSocket {
 
                 Ok(Some(self.prepare_reply(packet, PacketType::State)))
             },
+            (_, PacketType::Syn) => {
+                Ok(Some(self.prepare_reply(packet, PacketType::Reset)))
+            }
             (SocketState::SynSent, PacketType::State) => {
                 self.ack_nr = packet.seq_nr();
                 self.seq_nr += 1;
@@ -606,7 +610,6 @@ impl UtpSocket {
                 Err(Error::new(ErrorKind::ConnectionRefused,
                                "The remote peer sent an invalid reply"))
             }
-            (SocketState::Connected, PacketType::Syn) => Ok(None), // ignore
             (SocketState::Connected, PacketType::Data) => {
                 Ok(self.handle_data_packet(packet))
             },
