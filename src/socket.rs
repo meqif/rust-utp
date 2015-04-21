@@ -21,10 +21,6 @@ const MIN_CONGESTION_TIMEOUT: u64 = 500; // 500 ms
 const MAX_CONGESTION_TIMEOUT: u64 = 60_000; // one minute
 const BASE_HISTORY: usize = 10; // base delays history size
 
-macro_rules! iotry {
-    ($e:expr) => (match $e { Ok(e) => e, Err(e) => panic!("{:?}", e) })
-}
-
 #[derive(PartialEq,Eq,Debug,Copy,Clone)]
 enum SocketState {
     New,
@@ -180,7 +176,10 @@ impl UtpSocket {
                                   "The remote server aborted the connection"));
         }
 
-        let packet = iotry!(Packet::decode(&buf[..len]));
+        let packet = match Packet::decode(&buf[..len]) {
+            Ok(packet) => packet,
+            Err(_) => return Err(Error::new(ErrorKind::Other, "Error parsing packet"))
+        };
         try!(self.handle_packet(&packet, addr));
 
         debug!("connected to: {}", self.connected_to);
@@ -277,7 +276,10 @@ impl UtpSocket {
             Ok(x) => x,
             Err(e) => return Err(e),
         };
-        let packet = iotry!(Packet::decode(&b[..read]));
+        let packet = match Packet::decode(&b[..read]) {
+            Ok(packet) => packet,
+            Err(_) => return Err(Error::new(ErrorKind::Other, "Error parsing packet"))
+        };
         debug!("received {:?}", packet);
 
         if let Some(pkt) = try!(self.handle_packet(&packet, src)) {
@@ -433,7 +435,7 @@ impl UtpSocket {
             let max_inflight = max(MIN_CWND * MSS, max_inflight);
             while self.curr_window + packet.len() as u32 > max_inflight {
                 let mut buf = [0; BUF_SIZE];
-                iotry!(self.recv(&mut buf));
+                try!(self.recv(&mut buf));
             }
 
             let mut packet = packet;
@@ -542,7 +544,8 @@ impl UtpSocket {
         match self.send_window.iter().find(|pkt| pkt.seq_nr() == lost_packet_nr) {
             None => debug!("Packet {} not found", lost_packet_nr),
             Some(packet) => {
-                iotry!(self.socket.send_to(&packet.bytes()[..], self.connected_to));
+                // FIXME: Unchecked result
+                let _ = self.socket.send_to(&packet.bytes()[..], self.connected_to);
                 debug!("sent {:?}", packet);
             }
         }
@@ -641,7 +644,9 @@ impl UtpSocket {
                     self.state = SocketState::Closed;
                     Ok(Some(self.prepare_reply(packet, PacketType::State)))
                 } else {
-                    panic!("Received FIN after sending FIN with pending unacknowledged packets");
+                    debug!("Received FIN after sending FIN with pending unacknowledged packets");
+                    Err(Error::new(ErrorKind::Other,
+                                   "Received FIN after sending FIN with pending unacknowledged packets"))
                 }
             }
             (_, PacketType::Reset) => {
@@ -827,6 +832,10 @@ mod test {
     use packet::{Packet, PacketType};
     use util::now_microseconds;
     use rand;
+
+    macro_rules! iotry {
+        ($e:expr) => (match $e { Ok(e) => e, Err(e) => panic!("{:?}", e) })
+    }
 
     fn next_test_port() -> u16 {
         use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT, Ordering};
