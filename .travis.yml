@@ -2,7 +2,7 @@ language: rust
 sudo: true
 rust:
     - nightly
-    - 1.0.0-beta
+    - 1.0.0-beta.2
 after_success: |
   cargo clean;
   cargo test --no-run;
