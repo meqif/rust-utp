@@ -1789,4 +1789,39 @@ mod test {
             Err(e) => panic!("{:?}", e)
         }
     }
+
+    #[test]
+    fn test_receiving_reset_on_established_connection() {
+        // Establish connection
+        let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
+        let mut server = iotry!(UtpSocket::bind(server_addr));
+        let client = iotry!(UtpSocket::bind(client_addr));
+
+        thread::spawn(move || {
+            let client = iotry!(client.connect(server_addr));
+            let mut packet = Packet::new();
+            packet.set_wnd_size(BUF_SIZE as u32);
+            packet.set_type(PacketType::Reset);
+            packet.set_connection_id(client.sender_connection_id);
+            packet.set_seq_nr(client.seq_nr);
+            packet.set_ack_nr(client.ack_nr);
+            iotry!(client.socket.send_to(&packet.bytes()[..], server_addr));
+            let mut buf = [0; BUF_SIZE];
+            match client.socket.recv_from(&mut buf) {
+                Ok((_len, _src)) => (),
+                Err(e) => panic!("{:?}", e)
+            }
+        });
+
+        let mut buf = [0; BUF_SIZE];
+        loop {
+            match server.recv_from(&mut buf) {
+                Ok((0, _src)) => break,
+                Ok(_) => (),
+                Err(ref e) if e.kind() == ErrorKind::ConnectionReset => return,
+                Err(e) => panic!("{:?}", e)
+            }
+        }
+        panic!("Should have received Reset");
+    }
 }
