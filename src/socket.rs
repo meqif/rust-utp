@@ -155,12 +155,13 @@ impl UtpSocket {
 
             // Send packet
             debug!("Connecting to {}", self.connected_to);
-            try!(self.socket.send_to(&packet.bytes()[..], other));
+            try!(self.socket.send_to(&packet.bytes()[..], self.connected_to));
             self.state = SocketState::SynSent;
 
             // Validate response
             // self.socket.set_read_timeout(Some(syn_timeout));
             match self.socket.recv_from(&mut buf) {
+                Ok((_read, src)) if src != self.connected_to => continue,
                 Ok((read, src)) => { len = read; addr = src; break; },
                 // Err(ref e) if e.kind == TimedOut => {
                 //     debug!("Timed out, retrying");
@@ -169,11 +170,6 @@ impl UtpSocket {
                 // },
                 Err(e) => return Err(e),
             };
-        }
-
-        if len != HEADER_SIZE || addr != self.connected_to {
-            return Err(Error::new(ErrorKind::ConnectionAborted,
-                                  "The remote server aborted the connection"));
         }
 
         let packet = match Packet::decode(&buf[..len]) {
@@ -1725,8 +1721,8 @@ mod test {
         });
 
         match client.connect(server_addr) {
-            Err(ref e) if e.kind() == ErrorKind::ConnectionAborted => (), // OK
-            Err(e) => panic!("Expected ErrorKind::ConnectionAborted, got {:?}", e),
+            Err(ref e) if e.kind() == ErrorKind::Other => (), // OK
+            Err(e) => panic!("Expected ErrorKind::Other, got {:?}", e),
             Ok(_) => panic!("Expected Err, got Ok")
         }
     }
