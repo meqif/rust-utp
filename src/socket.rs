@@ -21,6 +21,33 @@ const MIN_CONGESTION_TIMEOUT: u64 = 500; // 500 ms
 const MAX_CONGESTION_TIMEOUT: u64 = 60_000; // one minute
 const BASE_HISTORY: usize = 10; // base delays history size
 
+#[derive(Debug)]
+pub enum SocketError {
+    ConnectionClosed,
+    ConnectionReset,
+    InvalidPacket,
+    InvalidReply,
+    PendingAcknowledgments,
+}
+
+impl From<SocketError> for Error {
+    fn from(error: SocketError) -> Error {
+        use self::SocketError::*;
+        match error {
+            ConnectionClosed => Error::new(ErrorKind::NotConnected,
+                                           "The socket is closed"),
+            ConnectionReset => Error::new(ErrorKind::ConnectionReset,
+                                          "Connection reset by remote peer"),
+            InvalidPacket => Error::new(ErrorKind::Other,
+                                        "Error parsing packet"),
+            InvalidReply => Error::new(ErrorKind::ConnectionRefused,
+                                       "The remote peer sent an invalid reply"),
+            PendingAcknowledgments => Error::new(ErrorKind::Other,
+                                                 "Received FIN with pending unacknowledged packets")
+        }
+    }
+}
+
 #[derive(PartialEq,Eq,Debug,Copy,Clone)]
 enum SocketState {
     New,
@@ -172,7 +199,7 @@ impl UtpSocket {
             };
         }
 
-        let packet = try!(Packet::decode(&buf[..len]).or(Err(Error::new(ErrorKind::Other, "Error parsing packet"))));
+        let packet = try!(Packet::decode(&buf[..len]).or(Err(SocketError::InvalidPacket)));
         try!(self.handle_packet(&packet, addr));
 
         debug!("connected to: {}", self.connected_to);
@@ -234,8 +261,7 @@ impl UtpSocket {
             }
 
             if self.state == SocketState::ResetReceived {
-                return Err(Error::new(ErrorKind::ConnectionReset,
-                                      "Connection reset by remote peer"));
+                return Err(Error::from(SocketError::ConnectionReset));
             }
 
             loop {
@@ -269,7 +295,7 @@ impl UtpSocket {
             Ok(x) => x,
             Err(e) => return Err(e),
         };
-        let packet = try!(Packet::decode(&b[..read]).or(Err(Error::new(ErrorKind::Other, "Error parsing packet"))));
+        let packet = try!(Packet::decode(&b[..read]).or(Err(SocketError::InvalidPacket)));
         debug!("received {:?}", packet);
 
         if let Some(pkt) = try!(self.handle_packet(&packet, src)) {
@@ -376,8 +402,7 @@ impl UtpSocket {
     // size, which will result in the data being split over several packets.
     pub fn send_to(&mut self, buf: &[u8]) -> Result<usize> {
         if self.state == SocketState::Closed {
-            return Err(Error::new(ErrorKind::NotConnected,
-                                  "The socket is closed"));
+            return Err(Error::from(SocketError::ConnectionClosed));
         }
 
         let total_length = buf.len();
@@ -597,8 +622,7 @@ impl UtpSocket {
                 Ok(None)
             },
             (SocketState::SynSent, _) => {
-                Err(Error::new(ErrorKind::ConnectionRefused,
-                               "The remote peer sent an invalid reply"))
+                Err(Error::from(SocketError::InvalidReply))
             }
             (SocketState::Connected, PacketType::Data) => {
                 Ok(self.handle_data_packet(packet))
@@ -632,14 +656,12 @@ impl UtpSocket {
                     Ok(Some(self.prepare_reply(packet, PacketType::State)))
                 } else {
                     debug!("Received FIN after sending FIN with pending unacknowledged packets");
-                    Err(Error::new(ErrorKind::Other,
-                                   "Received FIN after sending FIN with pending unacknowledged packets"))
+                    Err(Error::from(SocketError::PendingAcknowledgments))
                 }
             }
             (_, PacketType::Reset) => {
                 self.state = SocketState::ResetReceived;
-                Err(Error::new(ErrorKind::ConnectionReset,
-                               "Remote host aborted connection (incorrect connection id)"))
+                Err(Error::from(SocketError::ConnectionReset))
             },
             (state, ty) => {
                 let message = format!("Unimplemented handling for ({:?},{:?})", state, ty);
