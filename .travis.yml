@@ -17,5 +17,5 @@ after_success: |
   sudo make install &&
   cd ../.. &&
   kcov --exclude-pattern=/.cargo target/kcov_a target/debug/utp-*;
-  kcov --exclude-pattern=/.cargo target/kcov_b target/debug/utp-*;
+  kcov --exclude-pattern=/.cargo target/kcov_b target/debug/stream-*;
   kcov --coveralls-id=$TRAVIS_JOB_ID --merge target/kcov target/kcov_*;
