@@ -172,10 +172,7 @@ impl UtpSocket {
             };
         }
 
-        let packet = match Packet::decode(&buf[..len]) {
-            Ok(packet) => packet,
-            Err(_) => return Err(Error::new(ErrorKind::Other, "Error parsing packet"))
-        };
+        let packet = try!(Packet::decode(&buf[..len]).or(Err(Error::new(ErrorKind::Other, "Error parsing packet"))));
         try!(self.handle_packet(&packet, addr));
 
         debug!("connected to: {}", self.connected_to);
@@ -272,10 +269,7 @@ impl UtpSocket {
             Ok(x) => x,
             Err(e) => return Err(e),
         };
-        let packet = match Packet::decode(&b[..read]) {
-            Ok(packet) => packet,
-            Err(_) => return Err(Error::new(ErrorKind::Other, "Error parsing packet"))
-        };
+        let packet = try!(Packet::decode(&b[..read]).or(Err(Error::new(ErrorKind::Other, "Error parsing packet"))));
         debug!("received {:?}", packet);
 
         if let Some(pkt) = try!(self.handle_packet(&packet, src)) {
