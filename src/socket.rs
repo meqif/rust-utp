@@ -128,11 +128,10 @@ impl UtpSocket {
     /// For now, I'll ignore all but the first address.
     pub fn bind<A: ToSocketAddrs>(addr: A) -> Result<UtpSocket> {
         let addr = addr.to_socket_addrs().unwrap().next().unwrap();
-        let skt = UdpSocket::bind(addr);
         let connection_id = rand::random::<u16>();
-        match skt {
-            Ok(x) => Ok(UtpSocket {
-                socket: x,
+        UdpSocket::bind(addr).map(|s|
+            UtpSocket {
+                socket: s,
                 connected_to: addr,
                 receiver_connection_id: connection_id,
                 sender_connection_id: connection_id + 1,
@@ -156,9 +155,7 @@ impl UtpSocket {
                 base_delays: VecDeque::with_capacity(BASE_HISTORY),
                 congestion_timeout: INITIAL_CONGESTION_TIMEOUT,
                 cwnd: INIT_CWND * MSS,
-            }),
-            Err(e) => Err(e)
-        }
+            })
     }
 
     /// Open a uTP connection to a remote host by hostname or IP address.
