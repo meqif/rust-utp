@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::mem::transmute;
 use std::fmt;
 use bit_iterator::BitIterator;
@@ -31,7 +32,28 @@ macro_rules! make_setter {
 }
 
 #[derive(Debug)]
-pub enum ParseError { InvalidHeaderLength, InvalidExtension }
+pub enum ParseError {
+    InvalidHeaderLength,
+    UnsupportedExtension,
+    UnsupportedVersion
+}
+
+impl fmt::Display for ParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.description())
+    }
+}
+
+impl Error for ParseError {
+    fn description(&self) -> &str {
+        use self::ParseError::*;
+        match *self {
+            InvalidHeaderLength => "The packet is too small",
+            UnsupportedVersion => "Unsupported packet version",
+            UnsupportedExtension => "Unsupported extension in packet",
+        }
+    }
+}
 
 #[derive(PartialEq,Eq,Debug)]
 pub enum PacketType {
@@ -262,6 +284,10 @@ impl Packet {
         }
         let header = PacketHeader::decode(buf);
 
+        if header.get_version() != 1 {
+            return Err(ParseError::UnsupportedVersion);
+        }
+
         let mut extensions = Vec::new();
         let mut idx = HEADER_SIZE;
         let mut kind = header.extension;
@@ -269,7 +295,7 @@ impl Packet {
         // Consume known extensions and skip over unknown ones
         while idx < buf.len() && kind != 0 {
             if buf.len() < idx + 2 {
-                return Err(ParseError::InvalidExtension);
+                return Err(ParseError::UnsupportedExtension);
             }
             let len = buf[idx + 1] as usize;
             let extension_start = idx + 2;
