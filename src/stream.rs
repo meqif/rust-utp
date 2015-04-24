@@ -10,25 +10,16 @@ pub struct UtpStream {
 impl UtpStream {
     /// Create a uTP stream listening on the given address.
     pub fn bind<A: ToSocketAddrs>(addr: A) -> Result<UtpStream> {
-        match UtpSocket::bind(addr) {
-            Ok(s)  => Ok(UtpStream { socket: s }),
-            Err(e) => Err(e),
-        }
+        UtpSocket::bind(addr).and_then(|s| Ok(UtpStream { socket: s }))
     }
 
     /// Open a uTP connection to a remote host by hostname or IP address.
     pub fn connect<A: ToSocketAddrs>(dst: A) -> Result<UtpStream> {
         // Port 0 means the operating system gets to choose it
         let my_addr = "0.0.0.0:0";
-        let socket = match UtpSocket::bind(my_addr) {
-            Ok(s) => s,
-            Err(e) => return Err(e),
-        };
-
-        match socket.connect(dst) {
-            Ok(socket) => Ok(UtpStream { socket: socket }),
-            Err(e) => Err(e),
-        }
+        UtpSocket::bind(my_addr)
+            .and_then(|s| s.connect(dst))
+            .and_then(|s| Ok(UtpStream { socket: s }))
     }
 
     /// Gracefully close connection to peer.
@@ -42,10 +33,7 @@ impl UtpStream {
 
 impl Read for UtpStream {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-        match self.socket.recv_from(buf) {
-            Ok((read, _src)) => Ok(read),
-            Err(e) => Err(e),
-        }
+        self.socket.recv_from(buf).map(|(read, _src)| read)
     }
 }
 
