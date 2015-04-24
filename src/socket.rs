@@ -294,7 +294,14 @@ impl UtpSocket {
             Ok(x) => x,
             Err(e) => return Err(e),
         };
-        let packet = try!(Packet::decode(&b[..read]).or(Err(SocketError::InvalidPacket)));
+        let packet = match Packet::decode(&b[..read]) {
+            Ok(packet) => packet,
+            Err(e) => {
+                debug!("{}", e);
+                debug!("Ignoring invalid packet");
+                return Ok((0, self.connected_to));
+            }
+        };
         debug!("received {:?}", packet);
 
         if let Some(pkt) = try!(self.handle_packet(&packet, src)) {
