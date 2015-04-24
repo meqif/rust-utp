@@ -165,7 +165,6 @@ impl UtpSocket {
     pub fn connect<A: ToSocketAddrs>(mut self, other: A) -> Result<UtpSocket> {
         let addr = other.to_socket_addrs().unwrap().next().unwrap();
         self.connected_to = addr;
-        assert_eq!(self.receiver_connection_id + 1, self.sender_connection_id);
 
         let mut packet = Packet::new();
         packet.set_type(PacketType::Syn);
