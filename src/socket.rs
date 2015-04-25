@@ -705,21 +705,17 @@ impl UtpSocket {
     }
 
     fn update_congestion_window(&mut self, off_target: f64, bytes_newly_acked: u32) {
+        // FIXME: More investigation is needed to ascertain the true cause of the miscalculation of
+        // the congestion window increase. For now, we simply ignore meaninglessly large increases.
         let flightsize = self.curr_window;
-        match self.cwnd.checked_add((GAIN * off_target * bytes_newly_acked as f64 * MSS as f64 / self.cwnd as f64) as u32) {
-            Some(_) => {
-                let max_allowed_cwnd = flightsize + ALLOWED_INCREASE * MSS;
-                self.cwnd = min(self.cwnd, max_allowed_cwnd);
-                self.cwnd = max(self.cwnd, MIN_CWND * MSS);
+        // Check for (absence of) overflow
+        if self.cwnd.checked_add((GAIN * off_target * bytes_newly_acked as f64 * MSS as f64 / self.cwnd as f64) as u32).is_some() {
+            let max_allowed_cwnd = flightsize + ALLOWED_INCREASE * MSS;
+            self.cwnd = min(self.cwnd, max_allowed_cwnd);
+            self.cwnd = max(self.cwnd, MIN_CWND * MSS);
 
-                debug!("cwnd: {}", self.cwnd);
-                debug!("max_allowed_cwnd: {}", max_allowed_cwnd);
-            }
-            None => {
-                // FIXME: This shouldn't happen at all, more investigation is needed to ascertain the
-                // true cause of the miscalculation of the congestion window increase. For now, we
-                // simply ignore meaningly large increases.
-            }
+            debug!("cwnd: {}", self.cwnd);
+            debug!("max_allowed_cwnd: {}", max_allowed_cwnd);
         }
     }
 
@@ -766,9 +762,7 @@ impl UtpSocket {
                     let seq_nr = packet.ack_nr() + 2 + idx as u16;
                     if received {
                         debug!("SACK: packet {} received", seq_nr);
-                    } else if !self.send_window.is_empty() &&
-                        seq_nr < self.send_window.last().unwrap().seq_nr()
-                    {
+                    } else if self.send_window.last().map(|p| seq_nr < p.seq_nr()).unwrap_or(false) {
                         debug!("SACK: packet {} lost", seq_nr);
                         self.resend_lost_packet(seq_nr);
                         packet_loss_detected = true;
@@ -817,8 +811,7 @@ impl UtpSocket {
         let i = self.incoming_buffer.iter().filter(|p| p.seq_nr() < packet.seq_nr()).count();
 
         // Remove packet if it's a duplicate
-        if !self.incoming_buffer.is_empty() && i < self.incoming_buffer.len() &&
-            self.incoming_buffer[i].seq_nr() == packet.seq_nr() {
+        if self.incoming_buffer.get(i).map(|p| p.seq_nr() == packet.seq_nr()).unwrap_or(false) {
             self.incoming_buffer.remove(i);
         }
         self.incoming_buffer.insert(i, packet);
