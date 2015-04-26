@@ -1,5 +1,16 @@
 # Change Log
 
+## [0.2.7]
+
+### Fixed
+
+- Fixed compilation errors in 1.0.0-beta.2
+
+### Changed
+
+- Improved resilience to errors --- receiving an invalid packet no longer leads to a panic
+- Sockets with established connections refuse new connections
+
 ## [0.2.6]
 
 No functional changes.
