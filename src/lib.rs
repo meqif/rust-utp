@@ -52,6 +52,7 @@ extern crate time;
 extern crate num;
 #[macro_use] extern crate log;
 #[cfg(test)] extern crate quickcheck;
+#[cfg(unix)] extern crate nix;
 
 // Public API
 pub use socket::UtpSocket;

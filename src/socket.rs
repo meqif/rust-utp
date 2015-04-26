@@ -210,6 +210,8 @@ impl UtpSocket {
     ///
     /// If more than one valid address is specified, only the first will be used.
     pub fn connect<A: ToSocketAddrs>(mut self, other: A) -> Result<UtpSocket> {
+        use std::io::ErrorKind::WouldBlock;
+
         let addr = other.to_socket_addrs().unwrap().next().unwrap();
         self.connected_to = addr;
 
@@ -221,7 +223,6 @@ impl UtpSocket {
         let mut len = 0;
         let mut buf = [0; BUF_SIZE];
 
-        // let syn_timeout = self.congestion_timeout;
         for _ in (0u8..5) {
             packet.set_timestamp_microseconds(now_microseconds());
 
@@ -232,14 +233,15 @@ impl UtpSocket {
 
             // Validate response
             // self.socket.set_read_timeout(Some(syn_timeout));
+            self.set_read_timeout();
             match self.socket.recv_from(&mut buf) {
                 Ok((_read, src)) if src != self.connected_to => continue,
                 Ok((read, _src)) => { len = read; break; },
-                // Err(ref e) if e.kind == TimedOut => {
-                //     debug!("Timed out, retrying");
-                //     syn_timeout *= 2;
-                //     continue;
-                // },
+                Err(ref e) if e.kind() == WouldBlock => {
+                    debug!("Timed out, retrying");
+                    // syn_timeout *= 2;
+                    continue;
+                },
                 Err(e) => return Err(e),
             };
         }
@@ -318,20 +320,50 @@ impl UtpSocket {
         }
     }
 
+    #[cfg(unix)]
+    fn set_read_timeout(&mut self) {
+        use nix::sys::socket::{SockLevel, sockopt, setsockopt};
+        use nix::sys::time::TimeVal;
+        use std::os::unix::io::AsRawFd;
+
+        debug!("setting read timeout of {} ms", self.congestion_timeout);
+        let _ = setsockopt(self.socket.as_raw_fd(),
+                           SockLevel::Socket,
+                           sockopt::ReceiveTimeout,
+                           &TimeVal::milliseconds(self.congestion_timeout as i64));
+    }
+
+    #[cfg(not(unix))]
+    fn set_read_timeout(&mut self) {}
+
     fn recv(&mut self, buf: &mut[u8]) -> Result<(usize,SocketAddr)> {
+        use std::io::ErrorKind::WouldBlock;
+
+        if self.state != SocketState::New {
+            self.set_read_timeout();
+        }
+
         let mut b = [0; BUF_SIZE + HEADER_SIZE];
-        // if self.state != SocketState::New {
-        //     debug!("setting read timeout of {} ms", self.congestion_timeout);
-        //     self.socket.set_read_timeout(Some(self.congestion_timeout));
-        // }
         let (read, src) = match self.socket.recv_from(&mut b) {
-            // Err(ref e) if e.kind == TimedOut => {
-            //     debug!("recv_from timed out");
-            //     self.congestion_timeout = self.congestion_timeout * 2;
-            //     self.cwnd = MSS;
-            //     self.send_fast_resend_request();
-            //     return Ok((0, self.connected_to));
-            // },
+            Err(ref e) if e.kind() == WouldBlock => {
+                debug!("recv_from timed out");
+                self.congestion_timeout = self.congestion_timeout * 2;
+                self.cwnd = MSS;
+                // self.send_fast_resend_request();
+                for _ in 0..3 {
+                    let mut packet = Packet::new();
+                    packet.set_type(PacketType::State);
+                    let self_t_micro: u32 = now_microseconds();
+                    let other_t_micro: u32 = 0;
+                    packet.set_timestamp_microseconds(self_t_micro);
+                    packet.set_timestamp_difference_microseconds((self_t_micro - other_t_micro));
+                    packet.set_connection_id(self.sender_connection_id);
+                    packet.set_seq_nr(self.seq_nr);
+                    packet.set_ack_nr(self.ack_nr);
+                    try!(self.socket.send_to(&packet.bytes()[..], self.connected_to));
+                }
+                return Ok((0, self.connected_to));
+            },
             Ok(x) => x,
             Err(e) => return Err(e),
         };
