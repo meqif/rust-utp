@@ -320,6 +320,21 @@ impl UtpSocket {
         }
     }
 
+    fn send_fast_resend_request(&self) {
+        for _ in 0..3 {
+            let mut packet = Packet::new();
+            packet.set_type(PacketType::State);
+            let self_t_micro: u32 = now_microseconds();
+            let other_t_micro: u32 = 0;
+            packet.set_timestamp_microseconds(self_t_micro);
+            packet.set_timestamp_difference_microseconds((self_t_micro - other_t_micro));
+            packet.set_connection_id(self.sender_connection_id);
+            packet.set_seq_nr(self.seq_nr);
+            packet.set_ack_nr(self.ack_nr);
+            let _ = self.socket.send_to(&packet.bytes()[..], self.connected_to);
+        }
+    }
+
     #[cfg(unix)]
     fn set_read_timeout(&mut self) {
         use nix::sys::socket::{SockLevel, sockopt, setsockopt};
@@ -349,19 +364,7 @@ impl UtpSocket {
                 debug!("recv_from timed out");
                 self.congestion_timeout = self.congestion_timeout * 2;
                 self.cwnd = MSS;
-                // self.send_fast_resend_request();
-                for _ in 0..3 {
-                    let mut packet = Packet::new();
-                    packet.set_type(PacketType::State);
-                    let self_t_micro: u32 = now_microseconds();
-                    let other_t_micro: u32 = 0;
-                    packet.set_timestamp_microseconds(self_t_micro);
-                    packet.set_timestamp_difference_microseconds((self_t_micro - other_t_micro));
-                    packet.set_connection_id(self.sender_connection_id);
-                    packet.set_seq_nr(self.seq_nr);
-                    packet.set_ack_nr(self.ack_nr);
-                    try!(self.socket.send_to(&packet.bytes()[..], self.connected_to));
-                }
+                self.send_fast_resend_request();
                 return Ok((0, self.connected_to));
             },
             Ok(x) => x,
