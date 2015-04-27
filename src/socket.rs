@@ -169,7 +169,6 @@ impl UtpSocket {
         packet.set_seq_nr(self.seq_nr);
 
         let mut len = 0;
-        let mut addr = self.connected_to;
         let mut buf = [0; BUF_SIZE];
 
         // let syn_timeout = self.congestion_timeout;
@@ -185,7 +184,7 @@ impl UtpSocket {
             // self.socket.set_read_timeout(Some(syn_timeout));
             match self.socket.recv_from(&mut buf) {
                 Ok((_read, src)) if src != self.connected_to => continue,
-                Ok((read, src)) => { len = read; addr = src; break; },
+                Ok((read, _src)) => { len = read; break; },
                 // Err(ref e) if e.kind == TimedOut => {
                 //     debug!("Timed out, retrying");
                 //     syn_timeout *= 2;
