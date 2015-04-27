@@ -220,10 +220,10 @@ impl UtpSocket {
         packet.set_connection_id(self.receiver_connection_id);
         packet.set_seq_nr(self.seq_nr);
 
-        let mut len = 0;
+        let mut len;
         let mut buf = [0; BUF_SIZE];
 
-        for _ in (0u8..5) {
+        loop {
             packet.set_timestamp_microseconds(now_microseconds());
 
             // Send packet
