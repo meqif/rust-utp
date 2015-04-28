@@ -486,4 +486,27 @@ mod tests {
         let packet = Packet::decode(&[]);
         assert!(packet.is_err());
     }
+
+    #[test]
+    fn quicktest() {
+        use quickcheck::{self, TestResult};
+
+        fn run(x: Vec<u8>) -> TestResult {
+            let packet = Packet::decode(&x[..]);
+
+            if x.len() < 20 {
+                // Header too small
+                TestResult::from_bool(packet.is_err())
+            } else if x[0] & 0x0F != 1 {
+                // Invalid version
+                TestResult::from_bool(packet.is_err())
+            } else if x[1] != 0 && x[1] != 1 {
+                // Unknown extensions are ignored
+                TestResult::from_bool(packet.is_ok() && packet.unwrap().len() < x.len())
+            } else {
+                TestResult::from_bool(packet.is_ok() && packet.unwrap().bytes() == x)
+            }
+        }
+        quickcheck::quickcheck(run as fn(Vec<u8>) -> TestResult)
+    }
 }

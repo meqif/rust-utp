@@ -18,6 +18,9 @@ log = "0.3"
 env_logger = "0.3"
 rand = "0.3"
 
+[dev-dependencies]
+quickcheck = "*"
+
 [lib]
 name = "utp"
 
