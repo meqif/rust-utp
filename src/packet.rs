@@ -520,6 +520,7 @@ mod tests {
         assert!(packet.is_err());
     }
 
+    // Use quickcheck to simulate a malicious attacker sending malformed packets
     #[test]
     fn quicktest() {
         use quickcheck::{QuickCheck, TestResult};
