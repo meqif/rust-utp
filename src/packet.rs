@@ -33,6 +33,7 @@ macro_rules! make_setter {
 
 #[derive(Debug)]
 pub enum ParseError {
+    InvalidExtensionLength,
     InvalidPacketLength,
     UnsupportedVersion
 }
@@ -47,6 +48,7 @@ impl Error for ParseError {
     fn description(&self) -> &str {
         use self::ParseError::*;
         match *self {
+            InvalidExtensionLength => "Invalid extension length (must be a non-zero multiple of 4)",
             InvalidPacketLength => "The packet is too small",
             UnsupportedVersion => "Unsupported packet version",
         }
@@ -290,6 +292,10 @@ impl Packet {
         let mut idx = HEADER_SIZE;
         let mut kind = header.extension;
 
+        if buf.len() == HEADER_SIZE && header.extension != 0 {
+            return Err(ParseError::InvalidExtensionLength);
+        }
+
         // Consume known extensions and skip over unknown ones
         while idx < buf.len() && kind != 0 {
             if buf.len() < idx + 2 {
@@ -298,6 +304,14 @@ impl Packet {
             let len = buf[idx + 1] as usize;
             let extension_start = idx + 2;
             let payload_start = extension_start + len;
+
+            // Check validity of extension length:
+            // - non-zero,
+            // - multiple of 4,
+            // - does not exceed packet length
+            if len == 0 || len % 4 != 0 || payload_start > buf.len() {
+                return Err(ParseError::InvalidExtensionLength);
+            }
 
             if kind == ExtensionType::SelectiveAck as u8 { // or more generally, a known kind
                 let extension = Extension {
@@ -309,6 +323,10 @@ impl Packet {
 
             kind = buf[idx];
             idx += payload_start;
+        }
+        // Check for pending extensions (early exit of previous loop)
+        if kind != 0 {
+            return Err(ParseError::InvalidPacketLength);
         }
 
         let mut payload;
