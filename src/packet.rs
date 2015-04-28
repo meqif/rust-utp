@@ -560,7 +560,7 @@ mod tests {
 
                     idx += len + 2;
                 }
-                TestResult::from_bool(packet.is_ok() && next_kind == 0)
+                TestResult::from_bool(packet.is_ok() || next_kind != 0)
             } else {
                 TestResult::from_bool(packet.is_ok() && packet.unwrap().bytes() == x)
             }
