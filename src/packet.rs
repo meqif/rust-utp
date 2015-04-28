@@ -322,7 +322,7 @@ impl Packet {
             }
 
             kind = buf[idx];
-            idx += payload_start;
+            idx += len + 2;
         }
         // Check for pending extensions (early exit of previous loop)
         if kind != 0 {
