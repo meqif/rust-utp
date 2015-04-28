@@ -33,8 +33,7 @@ macro_rules! make_setter {
 
 #[derive(Debug)]
 pub enum ParseError {
-    InvalidHeaderLength,
-    UnsupportedExtension,
+    InvalidPacketLength,
     UnsupportedVersion
 }
 
@@ -48,9 +47,8 @@ impl Error for ParseError {
     fn description(&self) -> &str {
         use self::ParseError::*;
         match *self {
-            InvalidHeaderLength => "The packet is too small",
+            InvalidPacketLength => "The packet is too small",
             UnsupportedVersion => "Unsupported packet version",
-            UnsupportedExtension => "Unsupported extension in packet",
         }
     }
 }
@@ -280,7 +278,7 @@ impl Packet {
     /// It's the caller's responsability to use an appropriately sized buffer.
     pub fn decode(buf: &[u8]) -> Result<Packet, ParseError> {
         if buf.len() < HEADER_SIZE {
-            return Err(ParseError::InvalidHeaderLength);
+            return Err(ParseError::InvalidPacketLength);
         }
         let header = PacketHeader::decode(buf);
 
@@ -295,7 +293,7 @@ impl Packet {
         // Consume known extensions and skip over unknown ones
         while idx < buf.len() && kind != 0 {
             if buf.len() < idx + 2 {
-                return Err(ParseError::UnsupportedExtension);
+                return Err(ParseError::InvalidPacketLength);
             }
             let len = buf[idx + 1] as usize;
             let extension_start = idx + 2;
