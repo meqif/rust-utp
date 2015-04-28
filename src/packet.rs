@@ -558,7 +558,7 @@ mod tests {
                         return TestResult::from_bool(packet.is_err());
                     }
 
-                    idx += len;
+                    idx += len + 2;
                 }
                 TestResult::from_bool(packet.is_ok() && next_kind == 0)
             } else {
