@@ -487,7 +487,7 @@ mod tests {
 
     #[test]
     fn quicktest() {
-        use quickcheck::{self, TestResult};
+        use quickcheck::{QuickCheck, TestResult};
 
         fn run(x: Vec<u8>) -> TestResult {
             let packet = Packet::decode(&x[..]);
@@ -498,13 +498,37 @@ mod tests {
             } else if x[0] & 0x0F != 1 {
                 // Invalid version
                 TestResult::from_bool(packet.is_err())
-            } else if x[1] != 0 && x[1] != 1 {
-                // Unknown extensions are ignored
-                TestResult::from_bool(packet.is_ok() && packet.unwrap().len() < x.len())
+            } else if x[1] != 0 {
+                // Non-empty extension field, check validity of extension(s)
+                if x.len() < HEADER_SIZE + 2 {
+                    return TestResult::from_bool(packet.is_err());
+                }
+
+                let mut next_kind = x[1];
+                let mut idx = HEADER_SIZE;
+
+                while idx < x.len() && next_kind != 0 {
+                    if x.len() < idx + 2 {
+                        return TestResult::from_bool(packet.is_err());
+                    }
+                    let len = x[idx + 1] as usize;
+                    next_kind = x[idx];
+
+                    // Check validity of extension length:
+                    // - non-zero,
+                    // - multiple of 4,
+                    // - does not exceed packet length
+                    if len == 0 || len % 4 != 0 || x.len() < idx + len + 2 {
+                        return TestResult::from_bool(packet.is_err());
+                    }
+
+                    idx += len;
+                }
+                TestResult::from_bool(packet.is_ok() && next_kind == 0)
             } else {
                 TestResult::from_bool(packet.is_ok() && packet.unwrap().bytes() == x)
             }
         }
-        quickcheck::quickcheck(run as fn(Vec<u8>) -> TestResult)
+        QuickCheck::new().tests(1000).quickcheck(run as fn(Vec<u8>) -> TestResult)
     }
 }
