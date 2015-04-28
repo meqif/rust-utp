@@ -8,10 +8,10 @@ after_success: |
   cargo test --no-run;
   sudo apt-get update &&
   sudo apt-get install libcurl4-openssl-dev libelf-dev libdw-dev binutils-dev &&
-  wget https://github.com/meqif/kcov/archive/coveralls_for_merge_mode.tar.gz &&
-  tar xzf coveralls_for_merge_mode.tar.gz &&
-  mkdir kcov-coveralls_for_merge_mode/build &&
-  cd kcov-coveralls_for_merge_mode/build &&
+  wget https://github.com/SimonKagstrom/kcov/archive/master.tar.gz &&
+  tar xzf master.tar.gz &&
+  mkdir kcov-master/build &&
+  cd kcov-master/build &&
   cmake .. &&
   make &&
   sudo make install &&
