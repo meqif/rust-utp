@@ -1,7 +1,20 @@
-//! Implementation of the Micro Transport Protocol.[^spec]
+//! Implementation of the [Micro Transport Protocol][spec].
 //!
-//! [^spec]: http://www.bittorrent.org/beps/bep_0029.html
-
+//! This library provides both a socket interface (`UtpSocket`) and a stream interface (`UtpStream`).
+//! I recommend that you use `UtpStream`, as it implements the `Read` and `Write`
+//! traits we all know (and love) from `std::io`, which makes it generally easier to work with than `UtpSocket`.
+//!
+//! [spec]: http://www.bittorrent.org/beps/bep_0029.html
+//!
+//! # Installation
+//!
+//! Ensure your `Cargo.toml` contains:
+//!
+//! ```toml
+//! [dependencies]
+//! utp = "*"
+//! ```
+//!
 //! # Examples
 //!
 //! ```no_run
