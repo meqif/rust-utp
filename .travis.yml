@@ -3,9 +3,12 @@ sudo: true
 rust:
     - nightly
     - beta
+before_script:
+  - git clone --depth 1 https://github.com/huonw/travis-cargo
+  - ln -s ./travis-cargo/travis-cargo.py tc
 after_success: |
-  cargo clean;
-  cargo test --no-run;
+  ./tc --only beta cargo doc && ./tc --only beta doc-upload &&
+  cargo test --no-run &&
   sudo apt-get update &&
   sudo apt-get install libcurl4-openssl-dev libelf-dev libdw-dev binutils-dev &&
   wget https://github.com/SimonKagstrom/kcov/archive/master.tar.gz &&
@@ -19,3 +22,6 @@ after_success: |
   kcov --exclude-pattern=/.cargo target/kcov_a target/debug/stream-* &&
   kcov --exclude-pattern=/.cargo target/kcov_b target/debug/utp-* &&
   kcov --coveralls-id=$TRAVIS_JOB_ID --merge target/kcov target/kcov_a target/kcov_b
+env:
+  global:
+    secure: cqq4PpUsrmCNLbWrmkkuf/SaCKET0+QN5w0lXmuOndBES5C+m/aR417T3Pb+7PR4gqibf47eSXgaVCQa64eZAI5PjgXrdZ7FtPRu/mgcsgcgiVrSUz5C/KSMsmp876Gl67csjCZ6SZXJ3YC0/Jh3jiJLiRt9Giqzn/s1v15j/CY=
