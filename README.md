@@ -14,18 +14,24 @@ control. However, it does support packet loss detection (except by timeout) the
 Selective Acknowledgment extension, handles unordered and duplicate packets and
 presents a stream interface (`UtpStream`).
 
-## Building
-
-```sh
-git clone https://github.com/meqif/rust-utp.git
-cd rust-utp
-cargo test
-cargo build --release
-```
-
-Note that non-release builds are *much* slower.
+[API documentation](http://meqif.github.io/rust-utp/)
 
 ## Usage
+
+To use `utp`, add this to your `Cargo.toml`:
+
+```toml
+[dependencies]
+utp = "*"
+```
+
+Then, import it in your crate root or wherever you need it:
+
+```rust
+extern crate utp;
+```
+
+## Examples
 
 Check the `examples` directory. The simplest example would be:
 
