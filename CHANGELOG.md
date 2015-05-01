@@ -1,5 +1,12 @@
 # Change Log
 
+## [0.2.8]
+
+### Fixed
+
+- Fixed bug where extensions could be skipped when parsing a packet.
+- Improved reliability of packet parsing.
+
 ## [0.2.7]
 
 ### Fixed
