@@ -4,24 +4,10 @@ rust:
     - nightly
     - beta
 before_script:
-  - git clone --depth 1 https://github.com/huonw/travis-cargo
-  - ln -s ./travis-cargo/travis-cargo.py tc
+  - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
 after_success: |
-  ./tc --only beta cargo doc && ./tc --only beta doc-upload &&
-  cargo test --no-run &&
-  sudo apt-get update &&
-  sudo apt-get install libcurl4-openssl-dev libelf-dev libdw-dev binutils-dev &&
-  wget https://github.com/SimonKagstrom/kcov/archive/master.tar.gz &&
-  tar xzf master.tar.gz &&
-  mkdir kcov-master/build &&
-  cd kcov-master/build &&
-  cmake .. &&
-  make &&
-  sudo make install &&
-  cd ../.. &&
-  kcov --exclude-pattern=/.cargo target/kcov_a target/debug/stream-* &&
-  kcov --exclude-pattern=/.cargo target/kcov_b target/debug/utp-* &&
-  kcov --coveralls-id=$TRAVIS_JOB_ID --merge target/kcov target/kcov_a target/kcov_b
+  travis-cargo --only beta cargo doc && travis-cargo --only beta doc-upload &&
+  travis-cargo coveralls
 env:
   global:
     secure: cqq4PpUsrmCNLbWrmkkuf/SaCKET0+QN5w0lXmuOndBES5C+m/aR417T3Pb+7PR4gqibf47eSXgaVCQa64eZAI5PjgXrdZ7FtPRu/mgcsgcgiVrSUz5C/KSMsmp876Gl67csjCZ6SZXJ3YC0/Jh3jiJLiRt9Giqzn/s1v15j/CY=
