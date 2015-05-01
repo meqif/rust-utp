@@ -1,7 +1,15 @@
-# rust-utp [![Crate Version](https://img.shields.io/crates/v/utp.svg?style=flat)](https://crates.io/crates/utp) [![Build Status](https://img.shields.io/travis/meqif/rust-utp.svg?style=flat)](http://travis-ci.org/meqif/rust-utp)  [![Coverage Status](https://img.shields.io/coveralls/meqif/rust-utp.svg?style=flat)](https://coveralls.io/r/meqif/rust-utp?branch=master)
+# rust-utp
+
+[![Crate Version](https://img.shields.io/crates/v/utp.svg?style=flat)](https://crates.io/crates/utp)
+[![Build Status](https://img.shields.io/travis/meqif/rust-utp.svg?style=flat)](http://travis-ci.org/meqif/rust-utp)
+[![Coverage Status](https://img.shields.io/coveralls/meqif/rust-utp.svg?style=flat)](https://coveralls.io/r/meqif/rust-utp?branch=master)
 
 A [Micro Transport Protocol](http://www.bittorrent.org/beps/bep_0029.html)
 library implemented in Rust.
+
+[API documentation](http://meqif.github.io/rust-utp/)
+
+## Overview
 
 The Micro Transport Protocol is a reliable protocol with ordered delivery built
 over UDP. Its congestion control algorithm is
@@ -13,8 +21,6 @@ The current implementation is somewhat incomplete, lacking a complete implementa
 control. However, it does support packet loss detection (except by timeout) the
 Selective Acknowledgment extension, handles unordered and duplicate packets and
 presents a stream interface (`UtpStream`).
-
-[API documentation](http://meqif.github.io/rust-utp/)
 
 ## Usage
 
@@ -35,7 +41,7 @@ extern crate utp;
 
 Check the `examples` directory. The simplest example would be:
 
-```rust,no_run
+```rust
 extern crate utp;
 
 use utp::UtpStream;
