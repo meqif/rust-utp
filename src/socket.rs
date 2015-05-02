@@ -1822,4 +1822,47 @@ mod test {
         }
         panic!("Should have received Reset");
     }
+
+    #[test]
+    fn test_premature_fin() {
+        let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
+        let mut server = iotry!(UtpSocket::bind(server_addr));
+        let client = iotry!(UtpSocket::bind(client_addr));
+
+        const LEN: usize = BUF_SIZE * 4;
+        let data = (0..LEN).map(|idx| idx as u8).collect::<Vec<u8>>();
+        let to_send = data.clone();
+
+        thread::spawn(move || {
+            let mut client = iotry!(client.connect(server_addr));
+            iotry!(client.send_to(&to_send[..]));
+            iotry!(client.close());
+        });
+
+        let mut buf = [0; BUF_SIZE];
+
+        // Accept connection
+        iotry!(server.recv(&mut buf));
+
+        // Send FIN without acknowledging packets received
+        let mut packet = Packet::new();
+        packet.set_connection_id(server.sender_connection_id);
+        packet.set_seq_nr(server.seq_nr);
+        packet.set_ack_nr(server.ack_nr);
+        packet.set_timestamp_microseconds(now_microseconds());
+        packet.set_type(PacketType::Fin);
+        iotry!(server.socket.send_to(&packet.bytes()[..], client_addr));
+
+        // Receive until end
+        let mut received: Vec<u8> = vec!();
+        loop {
+            match server.recv_from(&mut buf) {
+                Ok((0, _src)) => break,
+                Ok((len, _src)) => received.extend(buf[..len].to_vec()),
+                Err(e) => panic!("{}", e)
+            }
+        }
+        assert_eq!(received.len(), data.len());
+        assert_eq!(received, data);
+    }
 }
