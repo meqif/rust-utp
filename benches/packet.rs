@@ -1,6 +1,7 @@
 #![feature(test)]
 #![allow(dead_code)]
 extern crate test;
+extern crate quickcheck;
 
 // Ugly hack to allow benchmarking private modules
 #[path = "../src/bit_iterator.rs"] mod bit_iterator;
