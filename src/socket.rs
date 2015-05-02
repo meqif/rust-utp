@@ -101,8 +101,6 @@ pub struct UtpSocket {
     /// Timestamp of the latest packet the remote peer acknowledged
     last_acked_timestamp: u32,
     last_dropped: u16,
-    /// Sequence number of the received FIN packet, if any
-    fin_seq_nr: u16,
     /// Round-trip time to remote peer
     rtt: i32,
     /// Variance of the round-trip time to the remote peer
@@ -145,7 +143,6 @@ impl UtpSocket {
                 last_acked: 0,
                 last_acked_timestamp: 0,
                 last_dropped: 0,
-                fin_seq_nr: 0,
                 rtt: 0,
                 rtt_variance: 0,
                 pending_data: Vec::new(),
@@ -634,11 +631,8 @@ impl UtpSocket {
                 Ok(None)
             },
             (SocketState::Connected, PacketType::Fin) => {
-                self.state = SocketState::FinReceived;
-                self.fin_seq_nr = packet.seq_nr();
-
                 // If all packets are received and handled
-                if self.ack_nr == self.fin_seq_nr {
+                if self.seq_nr == packet.ack_nr() && self.send_window.is_empty() {
                     self.state = SocketState::Closed;
                     Ok(Some(self.prepare_reply(packet, PacketType::State)))
                 } else {
