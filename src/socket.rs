@@ -27,7 +27,7 @@ pub enum SocketError {
     ConnectionReset,
     InvalidPacket,
     InvalidReply,
-    PendingAcknowledgments,
+    // PendingAcknowledgments,
 }
 
 impl From<SocketError> for Error {
@@ -42,8 +42,8 @@ impl From<SocketError> for Error {
                                         "Error parsing packet"),
             InvalidReply => Error::new(ErrorKind::ConnectionRefused,
                                        "The remote peer sent an invalid reply"),
-            PendingAcknowledgments => Error::new(ErrorKind::Other,
-                                                 "Received FIN with pending unacknowledged packets")
+            // PendingAcknowledgments => Error::new(ErrorKind::Other,
+            //                                      "Received FIN with pending unacknowledged packets")
         }
     }
 }
@@ -631,7 +631,8 @@ impl UtpSocket {
                 self.handle_state_packet(packet);
                 Ok(None)
             },
-            (SocketState::Connected, PacketType::Fin) => {
+            (SocketState::Connected, PacketType::Fin) |
+            (SocketState::FinSent,   PacketType::Fin) => {
                 // If all packets are received and handled
                 if self.seq_nr == packet.ack_nr() && self.send_window.is_empty() {
                     self.state = SocketState::Closed;
@@ -646,15 +647,6 @@ impl UtpSocket {
                     self.state = SocketState::Closed;
                 }
                 Ok(None)
-            }
-            (SocketState::FinSent, PacketType::Fin) => {
-                if self.send_window.is_empty() {
-                    self.state = SocketState::Closed;
-                    Ok(Some(self.prepare_reply(packet, PacketType::State)))
-                } else {
-                    debug!("Received FIN after sending FIN with pending unacknowledged packets");
-                    Err(Error::from(SocketError::PendingAcknowledgments))
-                }
             }
             (_, PacketType::Reset) => {
                 self.state = SocketState::ResetReceived;
