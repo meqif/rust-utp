@@ -35,6 +35,7 @@ macro_rules! make_setter {
 pub enum ParseError {
     InvalidExtensionLength,
     InvalidPacketLength,
+    InvalidPacketType,
     UnsupportedVersion
 }
 
@@ -50,6 +51,7 @@ impl Error for ParseError {
         match *self {
             InvalidExtensionLength => "Invalid extension length (must be a non-zero multiple of 4)",
             InvalidPacketLength => "The packet is too small",
+            InvalidPacketType => "Invalid packet type",
             UnsupportedVersion => "Unsupported packet version",
         }
     }
@@ -147,6 +149,16 @@ impl PacketHeader {
         if buf[0] & 0x0F != 1 {
             return Err(ParseError::UnsupportedVersion);
         }
+
+        // Check packet type
+        let _ = match buf[0] >> 4 {
+            0 => PacketType::Data,
+            1 => PacketType::Fin,
+            2 => PacketType::State,
+            3 => PacketType::Reset,
+            4 => PacketType::Syn,
+            _ => return Err(ParseError::InvalidPacketType)
+        };
 
         Ok(PacketHeader {
             type_ver: buf[0],
@@ -550,6 +562,9 @@ mod tests {
                 TestResult::from_bool(packet.is_err())
             } else if x[0] & 0x0F != 1 {
                 // Invalid version
+                TestResult::from_bool(packet.is_err())
+            } else if (x[0] >> 4) > 4 {
+                // Invalid packet type
                 TestResult::from_bool(packet.is_err())
             } else if x[1] != 0 {
                 // Non-empty extension field, check validity of extension(s)
