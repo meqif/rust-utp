@@ -579,6 +579,6 @@ mod tests {
                 TestResult::from_bool(packet.is_ok() && packet.unwrap().bytes() == x)
             }
         }
-        QuickCheck::new().tests(1000).quickcheck(run as fn(Vec<u8>) -> TestResult)
+        QuickCheck::new().tests(10000).quickcheck(run as fn(Vec<u8>) -> TestResult)
     }
 }
