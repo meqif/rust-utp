@@ -105,8 +105,5 @@ fn test_stream_successive_reads() {
     assert_eq!(received.len(), data.len());
     assert_eq!(received, data);
 
-    match server.read(&mut received) {
-        Ok(0) => (),
-        e => panic!("should have returned Ok(0), got {:?}", e),
-    };
+    assert_eq!(server.read(&mut received).unwrap(), 0);
 }
