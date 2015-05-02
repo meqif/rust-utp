@@ -100,6 +100,7 @@ pub struct UtpSocket {
     last_acked: u16,
     /// Timestamp of the latest packet the remote peer acknowledged
     last_acked_timestamp: u32,
+    /// Sequence number of the last packet removed from the incoming buffer
     last_dropped: u16,
     /// Round-trip time to remote peer
     rtt: i32,
