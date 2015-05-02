@@ -137,8 +137,18 @@ impl PacketHeader {
     /// Read byte buffer and return corresponding packet header.
     /// It assumes the fields are in network (big-endian) byte order,
     /// preserving it.
-    pub fn decode(buf: &[u8]) -> PacketHeader {
-        PacketHeader {
+    pub fn decode(buf: &[u8]) -> Result<PacketHeader, ParseError> {
+        // Check length
+        if buf.len() < HEADER_SIZE {
+            return Err(ParseError::InvalidPacketLength);
+        }
+
+        // Check version
+        if buf[0] & 0x0F != 1 {
+            return Err(ParseError::UnsupportedVersion);
+        }
+
+        Ok(PacketHeader {
             type_ver: buf[0],
             extension: buf[1],
             connection_id: u8_to_unsigned_be!(buf, 2, 3, u16),
@@ -147,7 +157,7 @@ impl PacketHeader {
             wnd_size: u8_to_unsigned_be!(buf, 12, 15, u32),
             seq_nr: u8_to_unsigned_be!(buf, 16, 17, u16),
             ack_nr: u8_to_unsigned_be!(buf, 18, 19, u16),
-        }
+        })
     }
 }
 
@@ -279,14 +289,7 @@ impl Packet {
     /// all except the initial 20 bytes corresponding to the header as payload.
     /// It's the caller's responsability to use an appropriately sized buffer.
     pub fn decode(buf: &[u8]) -> Result<Packet, ParseError> {
-        if buf.len() < HEADER_SIZE {
-            return Err(ParseError::InvalidPacketLength);
-        }
-        let header = PacketHeader::decode(buf);
-
-        if header.get_version() != 1 {
-            return Err(ParseError::UnsupportedVersion);
-        }
+        let header = try!(PacketHeader::decode(buf));
 
         let mut extensions = Vec::new();
         let mut idx = HEADER_SIZE;
