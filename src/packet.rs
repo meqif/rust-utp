@@ -368,10 +368,8 @@ impl fmt::Debug for Packet {
 
 #[cfg(test)]
 mod tests {
-    use super::Packet;
+    use super::*;
     use super::PacketType::{State, Data};
-    use super::ExtensionType;
-    use super::HEADER_SIZE;
 
     #[test]
     fn test_packet_decode() {
@@ -496,6 +494,22 @@ mod tests {
         assert_eq!(pkt.timestamp_microseconds(), timestamp);
         assert_eq!(pkt.timestamp_difference_microseconds(), timestamp_diff);
         assert_eq!(pkt.bytes(), buf.to_vec());
+    }
+
+    #[test]
+    fn test_packet_encode_with_multiple_extensions() {
+        let mut packet = Packet::new();
+        let extension = super::Extension { ty: ExtensionType::SelectiveAck, data: vec!(1,2,3,4) };
+        packet.header.extension = extension.ty as u8;
+        packet.extensions.push(extension.clone());
+        packet.extensions.push(extension.clone());
+        let bytes = packet.bytes();
+        assert_eq!(bytes.len(), HEADER_SIZE + (extension.len() + 1) * 2);
+        assert_eq!(bytes[1], extension.ty as u8);
+        assert_eq!(bytes[HEADER_SIZE], extension.ty as u8);
+        assert_eq!(bytes[HEADER_SIZE + 1], extension.data.len() as u8);
+        assert_eq!(bytes[HEADER_SIZE + extension.len() + 1], 0);
+        assert_eq!(bytes[HEADER_SIZE + extension.len() + 2], extension.data.len() as u8);
     }
 
     #[test]
