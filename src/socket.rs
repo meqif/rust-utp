@@ -1310,17 +1310,13 @@ mod test {
         iotry!(server.recv(&mut buf));
 
         // Receive data
-        let mut data_packet;
-        match server.socket.recv_from(&mut buf) {
-            Ok((read, _src)) => {
-                data_packet = iotry!(Packet::decode(&buf[..read]));
-                assert_eq!(data_packet.get_type(), PacketType::Data);
-                assert_eq!(data_packet.payload, data);
-                assert_eq!(data_packet.payload.len(), data.len());
-            },
+        let data_packet = match server.socket.recv_from(&mut buf) {
+            Ok((read, _src)) => iotry!(Packet::decode(&buf[..read])),
             Err(e) => panic!("{}", e),
-        }
-        let data_packet = data_packet;
+        };
+        assert_eq!(data_packet.get_type(), PacketType::Data);
+        assert_eq!(data_packet.payload, data);
+        assert_eq!(data_packet.payload.len(), data.len());
 
         // Send triple ACK
         let mut packet = Packet::new();
