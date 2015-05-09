@@ -52,7 +52,7 @@ fn main() {
             let mut writer = stdout();
             let _ = writeln!(&mut stderr(), "Serving on {}", addr);
 
-            // Create a reasonably-sized buffer
+            // Create a reasonably sized buffer
             let mut payload = vec![0; 1024 * 1024];
 
             // Wait for a new connection and print the received data to stdout.
