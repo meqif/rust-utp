@@ -2,18 +2,43 @@ use std::io::{Read, Write, Result};
 use std::net::{ToSocketAddrs};
 use socket::UtpSocket;
 
-/// Stream interface for UtpSocket.
+/// A structure that represents a uTP (Micro Transport Protocol) stream between a local socket and a
+/// remote socket.
+///
+/// The connection will be closed when the value is dropped (either explicitly or when it goes out of
+/// scope).
+///
+/// # Examples
+///
+/// ```no_run
+/// use utp::UtpStream;
+/// use std::io::{Read, Write};
+///
+/// let mut stream = UtpStream::bind("127.0.0.1:1234").unwrap();
+/// let _ = stream.write(&[1]);
+/// let _ = stream.read(&mut [0; 1000]);
+/// ```
 pub struct UtpStream {
     socket: UtpSocket,
 }
 
 impl UtpStream {
-    /// Create a uTP stream listening on the given address.
+    /// Creates a uTP stream listening on the given address.
+    ///
+    /// The address type can be any implementor of the `ToSocketAddr` trait. See its documentation
+    /// for concrete examples.
+    ///
+    /// If more than one valid address is specified, only the first will be used.
     pub fn bind<A: ToSocketAddrs>(addr: A) -> Result<UtpStream> {
         UtpSocket::bind(addr).and_then(|s| Ok(UtpStream { socket: s }))
     }
 
-    /// Open a uTP connection to a remote host by hostname or IP address.
+    /// Opens a uTP connection to a remote host by hostname or IP address.
+    ///
+    /// The address type can be any implementor of the `ToSocketAddr` trait. See its documentation
+    /// for concrete examples.
+    ///
+    /// If more than one valid address is specified, only the first will be used.
     pub fn connect<A: ToSocketAddrs>(dst: A) -> Result<UtpStream> {
         // Port 0 means the operating system gets to choose it
         let my_addr = "0.0.0.0:0";
@@ -22,7 +47,7 @@ impl UtpStream {
             .and_then(|s| Ok(UtpStream { socket: s }))
     }
 
-    /// Gracefully close connection to peer.
+    /// Gracefully closes connection to peer.
     ///
     /// This method allows both peers to receive all packets still in
     /// flight.

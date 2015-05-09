@@ -72,59 +72,108 @@ struct DelayDifferenceSample {
     difference: TimestampSender,
 }
 
-/// A uTP (Micro Transport Protocol) socket.
+/// A structure that represents a uTP (Micro Transport Protocol) connection between a local socket
+/// and a remote socket.
+///
+/// The socket will be closed when the value is dropped (either explicitly or when it goes out of
+/// scope).
+///
+/// # Examples
+///
+/// ```no_run
+/// use utp::UtpSocket;
+///
+/// let mut socket = UtpSocket::bind("127.0.0.1:1234").unwrap();
+///
+/// let mut buf = [0; 1000];
+/// let (amt, _src) = socket.recv_from(&mut buf).ok().unwrap();
+///
+/// let mut buf = &mut buf[..amt];
+/// buf.reverse();
+/// let _ = socket.send_to(buf).unwrap();
+///
+/// // Explicitly close the socket. You can either call `close` on the socket,
+/// //explicitly drop it or just let it go out of scope.
+/// socket.close();
+/// ```
 pub struct UtpSocket {
     /// The wrapped UDP socket
     socket: UdpSocket,
+
     /// Remote peer
     connected_to: SocketAddr,
+
     /// Sender connection identifier
     sender_connection_id: u16,
+
     /// Receiver connection identifier
     receiver_connection_id: u16,
+
     /// Sequence number for the next packet
     seq_nr: u16,
+
     /// Sequence number of the latest acknowledged packet sent by the remote peer
     ack_nr: u16,
+
     /// Socket state
     state: SocketState,
+
     /// Received but not acknowledged packets
     incoming_buffer: Vec<Packet>,
+
     /// Sent but not yet acknowledged packets
     send_window: Vec<Packet>,
+
     /// Packets not yet sent
     unsent_queue: LinkedList<Packet>,
+
     /// How many ACKs did the socket receive for packet with sequence number equal to `ack_nr`
     duplicate_ack_count: u32,
+
     /// Sequence number of the latest packet the remote peer acknowledged
     last_acked: u16,
+
     /// Timestamp of the latest packet the remote peer acknowledged
     last_acked_timestamp: u32,
+
     /// Sequence number of the last packet removed from the incoming buffer
     last_dropped: u16,
+
     /// Round-trip time to remote peer
     rtt: i32,
+
     /// Variance of the round-trip time to the remote peer
     rtt_variance: i32,
+
     /// Data from the latest packet not yet returned in `recv_from`
     pending_data: Vec<u8>,
+
     /// Bytes in flight
     curr_window: u32,
+
     /// Window size of the remote peer
     remote_wnd_size: u32,
+
     /// Rolling window of packet delay to remote peer
     base_delays: VecDeque<DelaySample>,
+
     /// Rolling window of the difference between sending a packet and receiving its acknowledgement
     current_delays: Vec<DelayDifferenceSample>,
+
     /// Current congestion timeout in milliseconds
     congestion_timeout: u64,
+
     /// Congestion window in bytes
     cwnd: u32,
 }
 
 impl UtpSocket {
-    /// Create a UTP socket from the given address.
-    /// For now, I'll ignore all but the first address.
+    /// Creates a new UTP socket from the given address.
+    ///
+    /// The address type can be any implementor of the `ToSocketAddr` trait. See its documentation
+    /// for concrete examples.
+    ///
+    /// If more than one valid address is specified, only the first will be used.
     pub fn bind<A: ToSocketAddrs>(addr: A) -> Result<UtpSocket> {
         let addr = addr.to_socket_addrs().unwrap().next().unwrap();
         let connection_id = rand::random::<u16>();
@@ -156,7 +205,12 @@ impl UtpSocket {
             })
     }
 
-    /// Open a uTP connection to a remote host by hostname or IP address.
+    /// Opens a connection to a remote host by hostname or IP address.
+    ///
+    /// The address type can be any implementor of the `ToSocketAddr` trait. See its documentation
+    /// for concrete examples.
+    ///
+    /// If more than one valid address is specified, only the first will be used.
     pub fn connect<A: ToSocketAddrs>(mut self, other: A) -> Result<UtpSocket> {
         let addr = other.to_socket_addrs().unwrap().next().unwrap();
         self.connected_to = addr;
@@ -200,7 +254,7 @@ impl UtpSocket {
         return Ok(self);
     }
 
-    /// Gracefully close connection to peer.
+    /// Gracefully closes connection to peer.
     ///
     /// This method allows both peers to receive all packets still in
     /// flight.
@@ -237,7 +291,7 @@ impl UtpSocket {
         Ok(())
     }
 
-    /// Receive data from socket.
+    /// Receives data from socket.
     ///
     /// On success, returns the number of bytes read and the sender's address.
     /// Returns `Closed` after receiving a FIN packet when the remaining
@@ -329,8 +383,7 @@ impl UtpSocket {
         resp
     }
 
-    /// Remove packet in incoming buffer and update current acknowledgement
-    /// number.
+    /// Removes a packet in the incoming buffer and updates the current acknowledgement number.
     fn advance_incoming_buffer(&mut self) -> Option<Packet> {
         if !self.incoming_buffer.is_empty() {
             let packet = self.incoming_buffer.remove(0);
@@ -390,7 +443,7 @@ impl UtpSocket {
         return 0;
     }
 
-    /// Send data on socket to the remote peer. Returns nothing on success.
+    /// Sends data on the socket to the remote peer. On success, returns the number of bytes written.
     //
     // # Implementation details
     //
@@ -441,7 +494,7 @@ impl UtpSocket {
         Ok(total_length)
     }
 
-    /// Send every packet in the unsent packet queue.
+    /// Sends every packet in the unsent packet queue.
     fn send(&mut self) -> Result<()> {
         let dst = self.connected_to;
         while let Some(packet) = self.unsent_queue.pop_front() {
@@ -480,7 +533,7 @@ impl UtpSocket {
         }
     }
 
-    /// Insert a new sample in the current delay list after removing samples older than one RTT, as
+    /// Inserts a new sample in the current delay list after removing samples older than one RTT, as
     /// specified in RFC6817.
     fn update_current_delay(&mut self, v: i64, now: i64) {
         // Remove samples more than one RTT old
@@ -507,7 +560,7 @@ impl UtpSocket {
         debug!("self.congestion_timeout: {}", self.congestion_timeout);
     }
 
-    /// Calculate the filtered current delay in the current window.
+    /// Calculates the filtered current delay in the current window.
     ///
     /// The current delay is calculated through application of the exponential
     /// weighted moving average filter with smoothing factor 0.333 over the
@@ -517,12 +570,12 @@ impl UtpSocket {
         ewma(input, 0.333) as i64
     }
 
-    /// Calculate the lowest base delay in the current window.
+    /// Calculates the lowest base delay in the current window.
     fn min_base_delay(&self) -> i64 {
         self.base_delays.iter().map(|ref x| x.received_at - x.sent_at).min().unwrap_or(0)
     }
 
-    /// Build the selective acknowledgment payload for usage in packets.
+    /// Builds the selective acknowledgment extension data for usage in packets.
     fn build_selective_ack(&self) -> Vec<u8> {
         let stashed = self.incoming_buffer.iter()
             .filter(|&pkt| pkt.seq_nr() > self.ack_nr);
@@ -563,7 +616,7 @@ impl UtpSocket {
         }
     }
 
-    /// Forget sent packets that were acknowledged by the remote peer.
+    /// Forgets sent packets that were acknowledged by the remote peer.
     fn advance_send_window(&mut self) {
         if let Some(position) = self.send_window.iter()
             .position(|pkt| pkt.seq_nr() == self.last_acked)
@@ -576,9 +629,9 @@ impl UtpSocket {
         debug!("self.curr_window: {}", self.curr_window);
     }
 
-    /// Handle incoming packet, updating socket state accordingly.
+    /// Handles an incoming packet, updating socket state accordingly.
     ///
-    /// Returns appropriate reply packet, if needed.
+    /// Returns the appropriate reply packet, if needed.
     fn handle_packet(&mut self, packet: &Packet, src: SocketAddr) -> Result<Option<Packet>> {
         debug!("({:?}, {:?})", self.state, packet.get_type());
 
@@ -784,7 +837,7 @@ impl UtpSocket {
         self.advance_send_window();
     }
 
-    /// Insert a packet into the socket's buffer.
+    /// Inserts a packet into the socket's buffer.
     ///
     /// The packet is inserted in such a way that the buffer is
     /// ordered ascendingly by their sequence number. This allows
