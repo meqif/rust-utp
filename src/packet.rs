@@ -53,7 +53,7 @@ impl Error for ParseError {
     }
 }
 
-#[derive(PartialEq,Eq,Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum PacketType {
     Data  = 0,
     Fin   = 1,
@@ -62,7 +62,7 @@ pub enum PacketType {
     Syn   = 4,
 }
 
-#[derive(PartialEq,Eq,Debug,Clone,Copy)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum ExtensionType {
     SelectiveAck = 1,
 }
@@ -94,7 +94,7 @@ impl Extension {
     }
 }
 
-#[derive(Clone,Copy)]
+#[derive(Clone, Copy)]
 #[packed]
 struct PacketHeader {
     type_ver: u8, // type: u4, ver: u4

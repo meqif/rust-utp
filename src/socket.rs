@@ -48,7 +48,7 @@ impl From<SocketError> for Error {
     }
 }
 
-#[derive(PartialEq,Eq,Debug,Copy,Clone)]
+#[derive(PartialEq, Eq, Debug, Copy, Clone)]
 enum SocketState {
     New,
     Connected,
