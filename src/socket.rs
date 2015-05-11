@@ -616,6 +616,15 @@ impl UtpSocket {
 
     /// Forgets sent packets that were acknowledged by the remote peer.
     fn advance_send_window(&mut self) {
+        // The reason I'm not removing the first element in a loop while its sequence number is
+        // smaller than `last_acked` is because of wrapping sequence numbers, which would create the
+        // sequence [..., 65534, 65535, 0, 1, ...]. If `last_acked` is smaller than the first
+        // packet's sequence number because of wraparound (for instance, 1), no packets would be
+        // removed, as the condition `seq_nr < last_acked` would fail immediately.
+        //
+        // On the other hand, I can't keep removing the first packet in a loop until its sequence
+        // number matches `last_acked` because it might never match, and in that case no packets
+        // should be removed.
         if let Some(position) = self.send_window.iter()
             .position(|pkt| pkt.seq_nr() == self.last_acked)
         {
