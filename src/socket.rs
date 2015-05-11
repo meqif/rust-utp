@@ -294,7 +294,7 @@ impl UtpSocket {
     /// Receives data from socket.
     ///
     /// On success, returns the number of bytes read and the sender's address.
-    /// Returns `Closed` after receiving a FIN packet when the remaining
+    /// Returns 0 bytes read after receiving a FIN packet when the remaining
     /// inflight packets are consumed.
     pub fn recv_from(&mut self, buf: &mut[u8]) -> Result<(usize,SocketAddr)> {
         let read = self.flush_incoming_buffer(buf);
@@ -302,16 +302,14 @@ impl UtpSocket {
         if read > 0 {
             return Ok((read, self.connected_to));
         } else {
-            // Return Ok(0) -- end of file
-            if self.state == SocketState::Closed {
-                return Ok((0, self.connected_to));
-            }
-
+            // If the socket received a reset packet and all data has been flushed, then it can't
+            // receive anything else
             if self.state == SocketState::ResetReceived {
                 return Err(Error::from(SocketError::ConnectionReset));
             }
 
             loop {
+                // A closed socket with no pending data can only "read" 0 new bytes.
                 if self.state == SocketState::Closed {
                     return Ok((0, self.connected_to));
                 }
