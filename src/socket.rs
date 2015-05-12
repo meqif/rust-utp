@@ -754,8 +754,12 @@ impl UtpSocket {
         // FIXME: More investigation is needed to ascertain the true cause of the miscalculation of
         // the congestion window increase. For now, we simply ignore meaninglessly large increases.
         let flightsize = self.curr_window;
+
+        let cwnd_increase = GAIN * off_target * bytes_newly_acked as f64 * MSS as f64;
+        let cwnd_increase = cwnd_increase / self.cwnd as f64;
+
         // Check for (absence of) overflow
-        if self.cwnd.checked_add((GAIN * off_target * bytes_newly_acked as f64 * MSS as f64 / self.cwnd as f64) as u32).is_some() {
+        if self.cwnd.checked_add(cwnd_increase as u32).is_some() {
             let max_allowed_cwnd = flightsize + ALLOWED_INCREASE * MSS;
             self.cwnd = min(self.cwnd, max_allowed_cwnd);
             self.cwnd = max(self.cwnd, MIN_CWND * MSS);
