@@ -2,13 +2,12 @@
 /// (least-significat bit) of the first element of the vector.
 pub struct BitIterator<'a> {
     object: &'a Vec<u8>,
-    current_byte: usize,
     current_bit: usize
 }
 
 impl<'a> BitIterator<'a> {
     pub fn new(obj: &'a Vec<u8>) -> BitIterator {
-        BitIterator { object: obj, current_byte: 0, current_bit: 0 }
+        BitIterator { object: obj, current_bit: 0 }
     }
 }
 
@@ -17,16 +16,13 @@ impl<'a> Iterator for BitIterator<'a> {
 
     fn next(&mut self) -> Option<u8> {
         const U8BITS: usize = 8;
-        let result = self.object[self.current_byte] >> self.current_bit & 0x1;
+        let current_byte = self.current_bit / U8BITS;
 
-        if self.current_bit + 1 == U8BITS {
-            self.current_byte += 1;
-        }
-        self.current_bit = (self.current_bit + 1) % U8BITS;
-
-        if self.current_byte == self.object.len() {
+        if current_byte == self.object.len() {
             return None;
         } else {
+            let result = self.object[current_byte] >> (self.current_bit % U8BITS) & 0x1;
+            self.current_bit += 1;
             return Some(result);
         }
     }
