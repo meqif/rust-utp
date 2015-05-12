@@ -791,20 +791,17 @@ impl UtpSocket {
         // Process extensions, if any
         for extension in packet.extensions.iter() {
             if extension.get_type() == ExtensionType::SelectiveAck {
-                let bits = extension.iter();
                 // If three or more packets are acknowledged past the implicit missing one,
                 // assume it was lost.
-                if bits.filter(|&bit| bit == 1).count() >= 3 {
+                if extension.iter().filter(|&received| received).count() >= 3 {
                     self.resend_lost_packet(packet.ack_nr() + 1);
                     packet_loss_detected = true;
                 }
 
-                let bits = extension.iter();
-                for (idx, received) in bits.map(|bit| bit == 1).enumerate() {
-                    let seq_nr = packet.ack_nr() + 2 + idx as u16;
-                    if received {
-                        debug!("SACK: packet {} received", seq_nr);
-                    } else if self.send_window.last().map(|p| seq_nr < p.seq_nr()).unwrap_or(false) {
+                for seq_nr in extension.iter().enumerate()
+                    .filter(|&(_idx, received)| received)
+                    .map(|(idx, _received)| packet.ack_nr() + 2 + idx as u16) {
+                    if self.send_window.last().map(|p| seq_nr < p.seq_nr()).unwrap_or(false) {
                         debug!("SACK: packet {} lost", seq_nr);
                         self.resend_lost_packet(seq_nr);
                         packet_loss_detected = true;

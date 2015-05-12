@@ -90,7 +90,7 @@ impl Extension {
     }
 
     pub fn iter(&self) -> BitIterator {
-        BitIterator::new(&self.data)
+        BitIterator::from_bytes(&self.data)
     }
 }
 
