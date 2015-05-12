@@ -2,7 +2,6 @@ use std::cmp::{min, max};
 use std::collections::{LinkedList, VecDeque};
 use std::net::{ToSocketAddrs, SocketAddr, UdpSocket};
 use std::io::{Result, Error, ErrorKind};
-use std::iter::repeat;
 use util::{now_microseconds, ewma};
 use packet::{Packet, PacketType, ExtensionType, HEADER_SIZE};
 use rand;
@@ -584,20 +583,13 @@ impl UtpSocket {
             let byte = (diff / 8) as usize;
             let bit = (diff % 8) as usize;
 
-            if byte >= sack.len() {
+            // Make sure the amount of elements in the SACK vector is a
+            // multiple of 4 and enough to represent the lost packets
+            while byte >= sack.len() || sack.len() % 4 != 0 {
                 sack.push(0u8);
             }
 
-            let mut bitarray = sack.pop().unwrap();
-            bitarray |= 1 << bit;
-            sack.push(bitarray);
-        }
-
-        // Make sure the amount of elements in the SACK vector is a
-        // multiple of 4
-        if sack.len() % 4 != 0 {
-            let len = sack.len();
-            sack.extend(repeat(0).take((len / 4 + 1) * 4 - len));
+            sack[byte] |= 1 << bit;
         }
 
         return sack;
