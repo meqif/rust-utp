@@ -763,9 +763,11 @@ impl UtpSocket {
 
         let cwnd_increase = GAIN * off_target * bytes_newly_acked as f64 * MSS as f64;
         let cwnd_increase = cwnd_increase / self.cwnd as f64;
+        debug!("cwnd_increase: {}", cwnd_increase);
 
         // Check for (absence of) overflow
-        if self.cwnd.checked_add(cwnd_increase as u32).is_some() {
+        if let Some(new_cwnd) = self.cwnd.checked_add(cwnd_increase as u32) {
+            self.cwnd = new_cwnd;
             let max_allowed_cwnd = flightsize + ALLOWED_INCREASE * MSS;
             self.cwnd = min(self.cwnd, max_allowed_cwnd);
             self.cwnd = max(self.cwnd, MIN_CWND * MSS);
