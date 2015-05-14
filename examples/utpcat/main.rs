@@ -4,13 +4,16 @@ extern crate log;
 extern crate env_logger;
 extern crate utp;
 
+use std::process;
+
 // A little macro to make it easier to unwrap return values or halt the program
 macro_rules! iotry {
     ($e:expr) => (match $e { Ok(v) => v, Err(e) => panic!("{}", e), })
 }
 
-fn usage() {
+fn usage() -> ! {
     println!("Usage: utp [-s|-c] <address> <port>");
+    process::exit(1);
 }
 
 fn main() {
@@ -34,14 +37,14 @@ fn main() {
     let mode: Mode = match args.next() {
         Some(ref s) if &s[..] == "-s" => Mode::Server,
         Some(ref s) if &s[..] == "-c" => Mode::Client,
-        _ => { usage(); return; }
+        _ => usage(),
     };
 
     // Parse the address argument or use a default if none is provided
     let addr = match (args.next(), args.next()) {
         (None, None) => "127.0.0.1:8080".to_string(),
         (Some(ip), Some(port)) => format!("{}:{}", ip, port),
-        _ => { usage(); return; }
+        _ => usage(),
     };
     let addr: &str = &addr;
 
