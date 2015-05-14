@@ -1907,4 +1907,24 @@ mod test {
         assert_eq!(received.len(), data.len());
         assert_eq!(received, data);
     }
+
+    #[test]
+    fn test_base_delay_calculation() {
+        let minute_in_microseconds = 60 * 10i64.pow(6);
+        let samples = vec![(0, 10), (1, 8), (2, 12), (3, 7),
+                           (minute_in_microseconds + 1, 11),
+                           (minute_in_microseconds + 2, 19),
+                           (minute_in_microseconds + 3, 9)];
+        let addr = next_test_ip4();
+        let mut socket = UtpSocket::bind(addr).unwrap();
+
+        for (timestamp, delay) in samples{
+            socket.update_base_delay(timestamp, timestamp + delay);
+        }
+
+        let expected = vec![9, 7];
+        let actual = socket.base_delays.iter().map(|d| d.received_at - d.sent_at).collect::<Vec<_>>();
+        assert_eq!(expected, actual);
+        assert_eq!(socket.min_base_delay(), 7);
+    }
 }
