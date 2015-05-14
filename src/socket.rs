@@ -159,6 +159,9 @@ pub struct UtpSocket {
     /// Rolling window of the difference between sending a packet and receiving its acknowledgement
     current_delays: Vec<DelayDifferenceSample>,
 
+    /// Start of the current minute for sampling purposes
+    last_rollover: i64,
+
     /// Current congestion timeout in milliseconds
     congestion_timeout: u64,
 
@@ -199,6 +202,7 @@ impl UtpSocket {
                 remote_wnd_size: 0,
                 current_delays: Vec::new(),
                 base_delays: VecDeque::with_capacity(BASE_HISTORY),
+                last_rollover: 0,
                 congestion_timeout: INITIAL_CONGESTION_TIMEOUT,
                 cwnd: INIT_CWND * MSS,
             })
@@ -513,19 +517,29 @@ impl UtpSocket {
         Ok(())
     }
 
+    // Insert a new sample in the base delay list.
+    //
+    // The base delay list contains at most `BASE_HISTORY` samples, each sample is the minimum
+    // measured over a period of a minute.
     fn update_base_delay(&mut self, v: i64, now: i64) {
         let minute_in_microseconds = 60 * 10i64.pow(6);
 
-        if self.base_delays.is_empty() || now - self.base_delays[0].received_at > minute_in_microseconds {
-            // Drop the oldest sample and save minimum for current minute
+        if self.base_delays.is_empty() || now - self.last_rollover > minute_in_microseconds {
+            // Update last rollover
+            self.last_rollover = now;
+
+            // Drop the oldest sample, if need be
             if self.base_delays.len() == BASE_HISTORY {
-                self.base_delays.pop_back();
+                self.base_delays.pop_front();
             }
-            self.base_delays.push_front(DelaySample{ received_at: now, sent_at: v });
+
+            // Insert new sample
+            self.base_delays.push_back(DelaySample{ received_at: now, sent_at: v });
         } else {
             // Replace sample for the current minute if the delay is lower
-            if v < self.base_delays[0].sent_at {
-                self.base_delays[0] = DelaySample{ received_at: now, sent_at: v};
+            let last_idx = self.base_delays.len() - 1;
+            if now - v < self.base_delays[last_idx].received_at - self.base_delays[last_idx].sent_at {
+                self.base_delays[last_idx] = DelaySample{ received_at: now, sent_at: v };
             }
         }
     }
@@ -1922,7 +1936,7 @@ mod test {
             socket.update_base_delay(timestamp, timestamp + delay);
         }
 
-        let expected = vec![9, 7];
+        let expected = vec![7, 9];
         let actual = socket.base_delays.iter().map(|d| d.received_at - d.sent_at).collect::<Vec<_>>();
         assert_eq!(expected, actual);
         assert_eq!(socket.min_base_delay(), 7);
