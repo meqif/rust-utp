@@ -61,11 +61,6 @@ enum SocketState {
 type TimestampSender = i64;
 type TimestampReceived = i64;
 
-struct DelaySample {
-    received_at: TimestampReceived,
-    sent_at: TimestampSender,
-}
-
 struct DelayDifferenceSample {
     received_at: TimestampReceived,
     difference: TimestampSender,
@@ -154,7 +149,7 @@ pub struct UtpSocket {
     remote_wnd_size: u32,
 
     /// Rolling window of packet delay to remote peer
-    base_delays: VecDeque<DelaySample>,
+    base_delays: VecDeque<i64>,
 
     /// Rolling window of the difference between sending a packet and receiving its acknowledgement
     current_delays: Vec<DelayDifferenceSample>,
@@ -521,7 +516,7 @@ impl UtpSocket {
     //
     // The base delay list contains at most `BASE_HISTORY` samples, each sample is the minimum
     // measured over a period of a minute.
-    fn update_base_delay(&mut self, v: i64, now: i64) {
+    fn update_base_delay(&mut self, base_delay: i64, now: i64) {
         let minute_in_microseconds = 60 * 10i64.pow(6);
 
         if self.base_delays.is_empty() || now - self.last_rollover > minute_in_microseconds {
@@ -534,12 +529,12 @@ impl UtpSocket {
             }
 
             // Insert new sample
-            self.base_delays.push_back(DelaySample{ received_at: now, sent_at: v });
+            self.base_delays.push_back(base_delay);
         } else {
             // Replace sample for the current minute if the delay is lower
             let last_idx = self.base_delays.len() - 1;
-            if now - v < self.base_delays[last_idx].received_at - self.base_delays[last_idx].sent_at {
-                self.base_delays[last_idx] = DelaySample{ received_at: now, sent_at: v };
+            if base_delay < self.base_delays[last_idx] {
+                self.base_delays[last_idx] = base_delay;
             }
         }
     }
@@ -583,7 +578,7 @@ impl UtpSocket {
 
     /// Calculates the lowest base delay in the current window.
     fn min_base_delay(&self) -> i64 {
-        self.base_delays.iter().map(|ref x| x.received_at - x.sent_at).min().unwrap_or(0)
+        self.base_delays.iter().map(|x| *x).min().unwrap_or(0)
     }
 
     /// Builds the selective acknowledgment extension data for usage in packets.
@@ -790,7 +785,7 @@ impl UtpSocket {
 
         // Update base and current delay
         let now = now_microseconds() as i64;
-        self.update_base_delay(packet.timestamp_microseconds() as i64, now);
+        self.update_base_delay(packet.timestamp_difference_microseconds() as i64, now);
         self.update_current_delay(packet.timestamp_difference_microseconds() as i64, now);
 
         let off_target: f64 = (TARGET as f64 - self.queuing_delay() as f64) / TARGET as f64;
