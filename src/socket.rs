@@ -753,9 +753,25 @@ impl UtpSocket {
         return queuing_delay;
     }
 
+    /// Calculates the new congestion window size, increasing it or decreasing it.
+    ///
+    /// This is the core of uTP, the [LEDBAT][ledbat_rfc] congestion algorithm. It depends on
+    /// estimating the queuing delay between the two peers, and adjusting the congestion window
+    /// accordingly.
+    ///
+    /// `off_target` is a normalized value representing the difference between the current queuing
+    /// delay and a fixed target delay (`TARGET`). `off_target` ranges between -1.0 and 1.0. A
+    /// positive value makes the congestion window increase, while a negative value makes the
+    /// congestion window decrease.
+    ///
+    /// `bytes_newly_acked` is the number of bytes acknowledged by an inbound `State` packet. It may
+    /// be the size of the packet explicitly acknowledged by the inbound packet (i.e., with sequence
+    /// number equal to the inbound packet's acknowledgement number), or every packet implicitly
+    /// acknowledged (every packet with sequence number between the previous inbound `State` packet's
+    /// acknowledgement number and the current inbound `State` packet's acknowledgement number).
+    ///
+    ///[ledbat_rfc]: https://tools.ietf.org/html/rfc6817
     fn update_congestion_window(&mut self, off_target: f64, bytes_newly_acked: u32) {
-        // FIXME: More investigation is needed to ascertain the true cause of the miscalculation of
-        // the congestion window increase. For now, we simply ignore meaninglessly large increases.
         let flightsize = self.curr_window;
 
         let cwnd_increase = GAIN * off_target * bytes_newly_acked as f64 * MSS as f64;
