@@ -1940,11 +1940,11 @@ mod test {
         let mut socket = UtpSocket::bind(addr).unwrap();
 
         for (timestamp, delay) in samples{
-            socket.update_base_delay(timestamp, timestamp + delay);
+            socket.update_base_delay(delay, timestamp + delay);
         }
 
         let expected = vec![7, 9];
-        let actual = socket.base_delays.iter().map(|d| d.received_at - d.sent_at).collect::<Vec<_>>();
+        let actual = socket.base_delays.iter().map(|&x| x).collect::<Vec<_>>();
         assert_eq!(expected, actual);
         assert_eq!(socket.min_base_delay(), 7);
     }
