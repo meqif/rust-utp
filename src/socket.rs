@@ -792,7 +792,15 @@ impl UtpSocket {
         debug!("off_target: {}", off_target);
 
         // Update congestion window size
-        self.update_congestion_window(off_target, packet.len() as u32);
+        let acked_packet_len = self.send_window.iter()
+            .find(|p| p.seq_nr() == packet.ack_nr())
+            .map(|p| p.len());
+
+        if let Some(bytes_newly_acked) = acked_packet_len {
+            self.update_congestion_window(off_target, bytes_newly_acked as u32);
+        } else {
+            debug!("{:?}", acked_packet_len);
+        }
 
         // Update congestion timeout
         let rtt = (TARGET - off_target as i64) / 1000; // in milliseconds
