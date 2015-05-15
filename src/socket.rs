@@ -808,14 +808,15 @@ impl UtpSocket {
         debug!("off_target: {}", off_target);
 
         // Update congestion window size
-        let acked_packet_len = self.send_window.iter()
-            .find(|p| p.seq_nr() == packet.ack_nr())
-            .map(|p| p.len());
+        if let Some(index) = self.send_window.iter().position(|p| packet.ack_nr() == p.seq_nr()) {
+            // Calculate the sum of the size of every packet implicitly and explictly acknowledged
+            // by the inbout packet (i.e., every packet whose sequence number precedes the inbound
+            // packet's acknowledgement number, plus the packet whose sequence number matches)
+            let bytes_newly_acked = self.send_window.iter()
+                .take(index + 1)
+                .fold(0, |acc, p| acc + p.len());
 
-        if let Some(bytes_newly_acked) = acked_packet_len {
             self.update_congestion_window(off_target, bytes_newly_acked as u32);
-        } else {
-            debug!("{:?}", acked_packet_len);
         }
 
         // Update congestion timeout
