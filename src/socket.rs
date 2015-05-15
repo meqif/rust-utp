@@ -711,6 +711,8 @@ impl UtpSocket {
             (SocketState::FinSent, PacketType::State) => {
                 if packet.ack_nr() == self.seq_nr {
                     self.state = SocketState::Closed;
+                } else {
+                    self.handle_state_packet(packet);
                 }
                 Ok(None)
             }
