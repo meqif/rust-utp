@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::error::Error;
 use std::mem::transmute;
 use std::fmt;
