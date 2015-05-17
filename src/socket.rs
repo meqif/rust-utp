@@ -744,7 +744,7 @@ impl UtpSocket {
     fn queuing_delay(&self) -> i64 {
         let filtered_current_delay = self.filtered_current_delay();
         let min_base_delay = self.min_base_delay();
-        let queuing_delay = filtered_current_delay.abs() - min_base_delay.abs();
+        let queuing_delay = filtered_current_delay - min_base_delay;
 
         debug!("filtered_current_delay: {}", filtered_current_delay);
         debug!("min_base_delay: {}", min_base_delay);
