@@ -801,8 +801,8 @@ impl UtpSocket {
 
         // Update base and current delay
         let now = now_microseconds() as i64;
-        self.update_base_delay(now - packet.timestamp_microseconds() as i64, now);
-        self.update_current_delay(now - packet.timestamp_microseconds() as i64, now);
+        self.update_base_delay(packet.timestamp_difference_microseconds() as i64, now);
+        self.update_current_delay(packet.timestamp_difference_microseconds() as i64, now);
 
         let off_target: f64 = (TARGET as f64 - self.queuing_delay() as f64) / TARGET as f64;
         debug!("off_target: {}", off_target);
