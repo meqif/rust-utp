@@ -497,7 +497,7 @@ impl UtpSocket {
             debug!("current window: {}", self.send_window.len());
             let max_inflight = min(self.cwnd, self.remote_wnd_size);
             let max_inflight = max(MIN_CWND * MSS, max_inflight);
-            while self.curr_window + packet.len() as u32 > max_inflight {
+            while self.curr_window >= max_inflight {
                 let mut buf = [0; BUF_SIZE];
                 try!(self.recv(&mut buf));
             }
