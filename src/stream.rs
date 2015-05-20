@@ -1,5 +1,5 @@
 use std::io::{Read, Write, Result};
-use std::net::{ToSocketAddrs};
+use std::net::{ToSocketAddrs, SocketAddr};
 use socket::UtpSocket;
 
 /// A structure that represents a uTP (Micro Transport Protocol) stream between a local socket and a
@@ -41,7 +41,10 @@ impl UtpStream {
     /// If more than one valid address is specified, only the first will be used.
     pub fn connect<A: ToSocketAddrs>(dst: A) -> Result<UtpStream> {
         // Port 0 means the operating system gets to choose it
-        let my_addr = "0.0.0.0:0";
+        let my_addr = match dst.to_socket_addrs().unwrap().next().unwrap() {
+            SocketAddr::V4(_) => "127.0.0.1:0",
+            SocketAddr::V6(_) => "::1:0",
+        };
         UtpSocket::bind(my_addr)
             .and_then(|s| s.connect(dst))
             .and_then(|s| Ok(UtpStream { socket: s }))
