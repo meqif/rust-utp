@@ -929,9 +929,48 @@ mod test {
         ("127.0.0.1", next_test_port())
     }
 
+    fn next_test_ip6<'a>() -> (&'a str, u16) {
+        ("::1", next_test_port())
+    }
+
     #[test]
     fn test_socket_ipv4() {
         let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
+
+        let client = iotry!(UtpSocket::bind(client_addr));
+        let mut server = iotry!(UtpSocket::bind(server_addr));
+
+        assert!(server.state == SocketState::New);
+        assert!(client.state == SocketState::New);
+
+        // Check proper difference in client's send connection id and receive connection id
+        assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
+
+        thread::spawn(move || {
+            let mut client = iotry!(client.connect(server_addr));
+            assert!(client.state == SocketState::Connected);
+            assert_eq!(client.connected_to,
+                       server_addr.to_socket_addrs().unwrap().next().unwrap());
+            iotry!(client.close());
+            drop(client);
+        });
+
+        let mut buf = [0u8; BUF_SIZE];
+        match server.recv_from(&mut buf) {
+            e => println!("{:?}", e),
+        }
+        // After establishing a new connection, the server's ids are a mirror of the client's.
+        assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
+        assert_eq!(server.connected_to,
+                   client_addr.to_socket_addrs().unwrap().next().unwrap());
+
+        assert!(server.state == SocketState::Closed);
+        drop(server);
+    }
+
+    #[test]
+    fn test_socket_ipv6() {
+        let (server_addr, client_addr) = (next_test_ip6(), next_test_ip6());
 
         let client = iotry!(UtpSocket::bind(client_addr));
         let mut server = iotry!(UtpSocket::bind(server_addr));

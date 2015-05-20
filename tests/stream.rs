@@ -19,9 +19,29 @@ fn next_test_ip4<'a>() -> (&'a str, u16) {
     ("127.0.0.1", next_test_port())
 }
 
+fn next_test_ip6<'a>() -> (&'a str, u16) {
+    ("::1", next_test_port())
+}
+
 #[test]
 fn test_stream_open_and_close() {
     let server_addr = next_test_ip4();
+    let mut server = iotry!(UtpStream::bind(server_addr));
+
+    thread::spawn(move || {
+        let mut client = iotry!(UtpStream::connect(server_addr));
+        iotry!(client.close());
+        drop(client);
+    });
+
+    let mut received = vec!();
+    iotry!(server.read_to_end(&mut received));
+    iotry!(server.close());
+}
+
+#[test]
+fn test_stream_open_and_close_ipv6() {
+    let server_addr = next_test_ip6();
     let mut server = iotry!(UtpStream::bind(server_addr));
 
     thread::spawn(move || {
