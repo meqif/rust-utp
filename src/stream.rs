@@ -42,8 +42,8 @@ impl UtpStream {
     pub fn connect<A: ToSocketAddrs>(dst: A) -> Result<UtpStream> {
         // Port 0 means the operating system gets to choose it
         let my_addr = match dst.to_socket_addrs().unwrap().next().unwrap() {
-            SocketAddr::V4(_) => "127.0.0.1:0",
-            SocketAddr::V6(_) => "::1:0",
+            SocketAddr::V4(_) => "0.0.0.0:0",
+            SocketAddr::V6(_) => ":::0",
         };
         UtpSocket::bind(my_addr)
             .and_then(|s| s.connect(dst))
