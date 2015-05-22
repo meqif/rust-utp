@@ -478,9 +478,6 @@ impl UtpSocket {
         // Send every packet in the queue
         try!(self.send());
 
-        // Wait until every packet is acknowledged
-        try!(self.flush());
-
         Ok(total_length)
     }
 
