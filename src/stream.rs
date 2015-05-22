@@ -70,8 +70,7 @@ impl Write for UtpStream {
         self.socket.send_to(buf)
     }
 
-    // TODO: Actually implement flushing
     fn flush(&mut self) -> Result<()> {
-        Ok(())
+        self.socket.flush()
     }
 }

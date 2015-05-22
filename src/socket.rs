@@ -257,11 +257,7 @@ impl UtpSocket {
     /// This method allows both peers to receive all packets still in
     /// flight.
     pub fn close(&mut self) -> Result<()> {
-        // Wait for acknowledgment on pending sent packets
-        let mut buf = [0u8; BUF_SIZE];
-        while !self.send_window.is_empty() {
-            try!(self.recv(&mut buf));
-        }
+        try!(self.flush());
 
         // Nothing to do if the socket's already closed or not connected
         if self.state == SocketState::Closed ||
@@ -282,6 +278,7 @@ impl UtpSocket {
         self.state = SocketState::FinSent;
 
         // Receive JAKE
+        let mut buf = [0; BUF_SIZE];
         while self.state != SocketState::Closed {
             try!(self.recv(&mut buf));
         }
@@ -478,16 +475,24 @@ impl UtpSocket {
             }
         }
 
-        // Flush unsent packet queue
+        // Send every packet in the queue
         try!(self.send());
 
-        // Consume acknowledgements until latest packet
-        let mut buf = [0; BUF_SIZE];
-        while self.last_acked < self.seq_nr - 1 {
+        // Wait until every packet is acknowledged
+        try!(self.flush());
+
+        Ok(total_length)
+    }
+
+    /// Consumes acknowledgements for every pending packet.
+    pub fn flush(&mut self) -> Result<()> {
+        let mut buf = [0u8; BUF_SIZE];
+        while !self.send_window.is_empty() {
+            debug!("packets in send window: {}", self.send_window.len());
             try!(self.recv(&mut buf));
         }
 
-        Ok(total_length)
+        Ok(())
     }
 
     /// Sends every packet in the unsent packet queue.
