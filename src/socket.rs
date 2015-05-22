@@ -613,6 +613,7 @@ impl UtpSocket {
                 // FIXME: Unchecked result
                 let _ = self.socket.send_to(&packet.bytes()[..], self.connected_to);
                 debug!("sent {:?}", packet);
+                self.curr_window += packet.len() as u32;
             }
         }
     }
