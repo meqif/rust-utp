@@ -799,16 +799,6 @@ impl UtpSocket {
             self.duplicate_ack_count = 1;
         }
 
-        // Update base and current delay
-        let now = now_microseconds() as i64;
-        self.update_base_delay(packet.timestamp_difference_microseconds() as i64, now);
-        self.update_current_delay(packet.timestamp_difference_microseconds() as i64, now);
-
-        let off_target: f64 = (TARGET as f64 - self.queuing_delay() as f64) / TARGET as f64;
-        debug!("off_target: {}", off_target);
-        assert!(off_target <= 1.0);
-        assert!(off_target >= -1.0);
-
         // Update congestion window size
         if let Some(index) = self.send_window.iter().position(|p| packet.ack_nr() == p.seq_nr()) {
             // Calculate the sum of the size of every packet implicitly and explictly acknowledged
@@ -818,12 +808,24 @@ impl UtpSocket {
                 .take(index + 1)
                 .fold(0, |acc, p| acc + p.len());
 
-            self.update_congestion_window(off_target, bytes_newly_acked as u32);
-        }
+            // Update base and current delay
+            let now = now_microseconds() as i64;
+            let our_delay = now - self.send_window[index].timestamp_microseconds() as i64;
+            debug!("our_delay: {}", our_delay);
+            self.update_base_delay(our_delay, now);
+            self.update_current_delay(our_delay, now);
 
-        // Update congestion timeout
-        let rtt = (TARGET - off_target as i64) / 1000; // in milliseconds
-        self.update_congestion_timeout(rtt as i32);
+            let off_target: f64 = (TARGET as f64 - self.queuing_delay() as f64) / TARGET as f64;
+            debug!("off_target: {}", off_target);
+            debug_assert!(off_target <= 1.0);
+            debug_assert!(off_target >= -1.0);
+
+            self.update_congestion_window(off_target, bytes_newly_acked as u32);
+
+            // Update congestion timeout
+            let rtt = (TARGET - off_target as i64) / 1000; // in milliseconds
+            self.update_congestion_timeout(rtt as i32);
+        }
 
         let mut packet_loss_detected: bool = !self.send_window.is_empty() &&
                                              self.duplicate_ack_count == 3;
