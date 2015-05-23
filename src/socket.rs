@@ -817,8 +817,6 @@ impl UtpSocket {
 
             let off_target: f64 = (TARGET as f64 - self.queuing_delay() as f64) / TARGET as f64;
             debug!("off_target: {}", off_target);
-            debug_assert!(off_target <= 1.0);
-            debug_assert!(off_target >= -1.0);
 
             self.update_congestion_window(off_target, bytes_newly_acked as u32);
 
