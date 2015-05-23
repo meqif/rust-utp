@@ -1,5 +1,5 @@
 use std::cmp::{min, max};
-use std::collections::{LinkedList, VecDeque};
+use std::collections::VecDeque;
 use std::net::{ToSocketAddrs, SocketAddr, UdpSocket};
 use std::io::{Result, Error, ErrorKind};
 use util::{now_microseconds, ewma};
@@ -119,7 +119,7 @@ pub struct UtpSocket {
     send_window: Vec<Packet>,
 
     /// Packets not yet sent
-    unsent_queue: LinkedList<Packet>,
+    unsent_queue: VecDeque<Packet>,
 
     /// How many ACKs did the socket receive for packet with sequence number equal to `ack_nr`
     duplicate_ack_count: u32,
@@ -185,7 +185,7 @@ impl UtpSocket {
                 state: SocketState::New,
                 incoming_buffer: Vec::new(),
                 send_window: Vec::new(),
-                unsent_queue: LinkedList::new(),
+                unsent_queue: VecDeque::new(),
                 duplicate_ack_count: 0,
                 last_acked: 0,
                 last_acked_timestamp: 0,
