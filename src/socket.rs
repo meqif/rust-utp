@@ -824,7 +824,6 @@ impl UtpSocket {
         // Update congestion timeout
         let rtt = (TARGET - off_target as i64) / 1000; // in milliseconds
         self.update_congestion_timeout(rtt as i32);
-        assert!(self.queuing_delay() / 1000 < 2 * self.rtt as i64);
 
         let mut packet_loss_detected: bool = !self.send_window.is_empty() &&
                                              self.duplicate_ack_count == 3;
