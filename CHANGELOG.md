@@ -1,5 +1,11 @@
 # Change Log
 
+## [0.3.1]
+
+### Fixed
+
+- Removed assertions about `off_target`, which were killing innocent connections.
+
 ## [0.3.0]
 
 ### Fixed
