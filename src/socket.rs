@@ -835,7 +835,7 @@ impl UtpSocket {
             if extension.get_type() == ExtensionType::SelectiveAck {
                 // If three or more packets are acknowledged past the implicit missing one,
                 // assume it was lost.
-                if extension.iter().filter(|&received| received).count() >= 3 {
+                if extension.iter().count_ones() >= 3 {
                     self.resend_lost_packet(packet.ack_nr() + 1);
                     packet_loss_detected = true;
                 }

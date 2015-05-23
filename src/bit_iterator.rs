@@ -15,6 +15,11 @@ impl<'a> BitIterator<'a> {
     pub fn from_bytes(obj: &'a Vec<u8>) -> BitIterator {
         BitIterator { object: obj, next_idx: 0, end_idx: obj.len() * U8BITS }
     }
+
+    /// Returns the number of ones in the binary representation of the underlying object.
+    pub fn count_ones(&self) -> u32 {
+        self.object.iter().fold(0, |acc, bv| acc + bv.count_ones())
+    }
 }
 
 impl<'a> Iterator for BitIterator<'a> {
