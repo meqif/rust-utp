@@ -1,5 +1,18 @@
 # Change Log
 
+## [0.3.0]
+
+### Fixed
+
+- Fixed bug when adjusting congestion window caused by miscalculating the delay between peers.
+- Fixed bug where missing packets weren't being re-sent after sending a FIN.
+- Fixed bug where a stream wouldn't bind to an address of the appropriate family when the remote peer had an IPv6 address.
+- Fixed bug where the congestion window would only shrink when packet loss was detected and not on delay changes.
+
+### Changed
+
+- A call to `UtpStream::write` or `UtpSocket::send_to` no longer blocks until every packet is acknowledged. To force the old, slower behaviour, call `flush` after the usual calls (usually you won't need to do this, as the socket/stream is flushed on close/drop).
+
 ## [0.2.8]
 
 ### Fixed
