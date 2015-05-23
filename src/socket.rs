@@ -468,6 +468,8 @@ impl UtpSocket {
             packet.set_connection_id(self.sender_connection_id);
 
             self.unsent_queue.push_back(packet);
+
+            // `OverflowingOps` is marked unstable, so we can't use `overflowing_add` here
             if self.seq_nr == ::std::u16::MAX {
                 self.seq_nr = 0;
             } else {
