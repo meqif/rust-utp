@@ -516,7 +516,7 @@ impl UtpSocket {
         debug!("current window: {}", self.send_window.len());
         let max_inflight = min(self.cwnd, self.remote_wnd_size);
         let max_inflight = max(MIN_CWND * MSS, max_inflight);
-        while self.curr_window >= max_inflight {
+        while self.curr_window >= max_inflight && self.duplicate_ack_count < 3 {
             debug!("self.curr_window: {}", self.curr_window);
             debug!("max_inflight: {}", max_inflight);
             debug!("self.duplicate_ack_count: {}", self.duplicate_ack_count);
