@@ -154,6 +154,9 @@ pub struct UtpSocket {
     /// Rolling window of the difference between sending a packet and receiving its acknowledgement
     current_delays: Vec<DelayDifferenceSample>,
 
+    /// Difference between timestamp of the latest packet received and time of reception
+    their_delay: u32,
+
     /// Start of the current minute for sampling purposes
     last_rollover: i64,
 
@@ -197,6 +200,7 @@ impl UtpSocket {
                 remote_wnd_size: 0,
                 current_delays: Vec::new(),
                 base_delays: VecDeque::with_capacity(BASE_HISTORY),
+                their_delay: 0,
                 last_rollover: 0,
                 congestion_timeout: INITIAL_CONGESTION_TIMEOUT,
                 cwnd: INIT_CWND * MSS,
@@ -508,6 +512,7 @@ impl UtpSocket {
 
             let mut packet = packet;
             packet.set_timestamp_microseconds(now_microseconds());
+            packet.set_timestamp_difference_microseconds(self.their_delay);
             try!(self.socket.send_to(&packet.bytes()[..], dst));
             debug!("sent {:?}", packet);
             self.curr_window += packet.len() as u32;
@@ -675,8 +680,18 @@ impl UtpSocket {
             return Ok(Some(self.prepare_reply(packet, PacketType::Reset)));
         }
 
+        // Update remote window size
         self.remote_wnd_size = packet.wnd_size();
         debug!("self.remote_wnd_size: {}", self.remote_wnd_size);
+
+        // Update remote peer's delay between them sending the packet and us receiving it
+        let now = now_microseconds();
+        self.their_delay = if now > packet.timestamp_microseconds() {
+            now - packet.timestamp_microseconds()
+        } else {
+            packet.timestamp_microseconds() - now
+        };
+        debug!("self.their_delay: {}", self.their_delay);
 
         match (self.state, packet.get_type()) {
             (SocketState::New, PacketType::Syn) => {
