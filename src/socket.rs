@@ -891,13 +891,6 @@ impl UtpSocket {
             }
         }
 
-        // Packet lost, halve the congestion window
-        if packet_loss_detected {
-            debug!("packet loss detected, halving congestion window");
-            self.cwnd = max(self.cwnd / 2, MIN_CWND * MSS);
-            debug!("cwnd: {}", self.cwnd);
-        }
-
         // Three duplicate ACKs, must resend packets since `ack_nr + 1`
         // TODO: checking if the send buffer isn't empty isn't a
         // foolproof way to differentiate between triple-ACK and three
@@ -908,6 +901,13 @@ impl UtpSocket {
                 if seq_nr <= packet.ack_nr() { continue; }
                 self.resend_lost_packet(seq_nr);
             }
+        }
+
+        // Packet lost, halve the congestion window
+        if packet_loss_detected {
+            debug!("packet loss detected, halving congestion window");
+            self.cwnd = max(self.cwnd / 2, MIN_CWND * MSS);
+            debug!("cwnd: {}", self.cwnd);
         }
 
         // Success, advance send window
