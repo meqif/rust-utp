@@ -876,7 +876,7 @@ impl UtpSocket {
                 }
 
                 for seq_nr in extension.iter().enumerate()
-                    .filter(|&(_idx, received)| received)
+                    .filter(|&(_idx, received)| !received)
                     .map(|(idx, _received)| packet.ack_nr() + 2 + idx as u16) {
                     if self.send_window.last().map(|p| seq_nr < p.seq_nr()).unwrap_or(false) {
                         debug!("SACK: packet {} lost", seq_nr);
