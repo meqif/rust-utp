@@ -609,11 +609,24 @@ impl UtpSocket {
     }
 
     fn resend_lost_packet(&mut self, lost_packet_nr: u16) {
-        match self.send_window.iter().find(|pkt| pkt.seq_nr() == lost_packet_nr) {
+        match self.send_window.iter().position(|pkt| pkt.seq_nr() == lost_packet_nr) {
             None => debug!("Packet {} not found", lost_packet_nr),
-            Some(packet) => {
+            Some(position) => {
+                debug!("current window: {}", self.send_window.len());
+                let max_inflight = min(self.cwnd, self.remote_wnd_size);
+                let max_inflight = max(MIN_CWND * MSS, max_inflight);
+                while self.curr_window >= max_inflight {
+                    let mut buf = [0; BUF_SIZE];
+                    let _ = self.recv(&mut buf);
+                }
+
+                debug!("self.send_window.len(): {}", self.send_window.len());
+                debug!("position: {}", position);
+                let mut packet = self.send_window[position].clone();
+                packet.set_timestamp_microseconds(now_microseconds());
                 // FIXME: Unchecked result
-                let _ = self.socket.send_to(&packet.bytes()[..], self.connected_to);
+                let dst = self.connected_to;
+                let _ = self.socket.send_to(&packet.bytes()[..], dst);
                 debug!("sent {:?}", packet);
                 // We intentionally don't increase `curr_window` because otherwise a packet's length
                 // would be counted more than once
