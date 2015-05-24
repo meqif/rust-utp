@@ -500,24 +500,32 @@ impl UtpSocket {
 
     /// Sends every packet in the unsent packet queue.
     fn send(&mut self) -> Result<()> {
-        let dst = self.connected_to;
         while let Some(packet) = self.unsent_queue.pop_front() {
-            debug!("current window: {}", self.send_window.len());
-            let max_inflight = min(self.cwnd, self.remote_wnd_size);
-            let max_inflight = max(MIN_CWND * MSS, max_inflight);
-            while self.curr_window >= max_inflight {
-                let mut buf = [0; BUF_SIZE];
-                try!(self.recv(&mut buf));
-            }
-
             let mut packet = packet;
-            packet.set_timestamp_microseconds(now_microseconds());
-            packet.set_timestamp_difference_microseconds(self.their_delay);
-            try!(self.socket.send_to(&packet.bytes()[..], dst));
-            debug!("sent {:?}", packet);
+            try!(self.send_packet(&mut packet));
             self.curr_window += packet.len() as u32;
             self.send_window.push(packet);
         }
+        Ok(())
+    }
+
+    /// Send one packet.
+    #[inline(always)]
+    fn send_packet(&mut self, packet: &mut Packet) -> Result<()> {
+        let dst = self.connected_to;
+        debug!("current window: {}", self.send_window.len());
+        let max_inflight = min(self.cwnd, self.remote_wnd_size);
+        let max_inflight = max(MIN_CWND * MSS, max_inflight);
+        while self.curr_window >= max_inflight {
+            let mut buf = [0; BUF_SIZE];
+            try!(self.recv(&mut buf));
+        }
+
+        packet.set_timestamp_microseconds(now_microseconds());
+        packet.set_timestamp_difference_microseconds(self.their_delay);
+        try!(self.socket.send_to(&packet.bytes()[..], dst));
+        debug!("sent {:?}", packet);
+
         Ok(())
     }
 
@@ -617,22 +625,12 @@ impl UtpSocket {
         match self.send_window.iter().position(|pkt| pkt.seq_nr() == lost_packet_nr) {
             None => debug!("Packet {} not found", lost_packet_nr),
             Some(position) => {
-                debug!("current window: {}", self.send_window.len());
-                let max_inflight = min(self.cwnd, self.remote_wnd_size);
-                let max_inflight = max(MIN_CWND * MSS, max_inflight);
-                while self.curr_window >= max_inflight {
-                    let mut buf = [0; BUF_SIZE];
-                    let _ = self.recv(&mut buf);
-                }
-
                 debug!("self.send_window.len(): {}", self.send_window.len());
                 debug!("position: {}", position);
                 let mut packet = self.send_window[position].clone();
-                packet.set_timestamp_microseconds(now_microseconds());
                 // FIXME: Unchecked result
-                let dst = self.connected_to;
-                let _ = self.socket.send_to(&packet.bytes()[..], dst);
-                debug!("sent {:?}", packet);
+                let _ = self.send_packet(&mut packet);
+
                 // We intentionally don't increase `curr_window` because otherwise a packet's length
                 // would be counted more than once
             }
