@@ -517,9 +517,15 @@ impl UtpSocket {
         let max_inflight = min(self.cwnd, self.remote_wnd_size);
         let max_inflight = max(MIN_CWND * MSS, max_inflight);
         while self.curr_window >= max_inflight {
+            debug!("self.curr_window: {}", self.curr_window);
+            debug!("max_inflight: {}", max_inflight);
+            debug!("self.duplicate_ack_count: {}", self.duplicate_ack_count);
             let mut buf = [0; BUF_SIZE];
             try!(self.recv(&mut buf));
         }
+
+        // TODO: Check if it still makes to send packet --- we might be trying to resend a lost
+        // packet that was acknowledged in the previous recv loop
 
         packet.set_timestamp_microseconds(now_microseconds());
         packet.set_timestamp_difference_microseconds(self.their_delay);
@@ -622,6 +628,7 @@ impl UtpSocket {
     }
 
     fn resend_lost_packet(&mut self, lost_packet_nr: u16) {
+        debug!("---> resend_lost_packet({}) <---", lost_packet_nr);
         match self.send_window.iter().position(|pkt| pkt.seq_nr() == lost_packet_nr) {
             None => debug!("Packet {} not found", lost_packet_nr),
             Some(position) => {
@@ -635,6 +642,7 @@ impl UtpSocket {
                 // would be counted more than once
             }
         }
+        debug!("---> END resend_lost_packet <---");
     }
 
     /// Forgets sent packets that were acknowledged by the remote peer.
