@@ -923,14 +923,21 @@ impl UtpSocket {
     /// Inserting a duplicate of a packet will replace the one in the buffer if
     /// it's more recent (larger timestamp).
     fn insert_into_buffer(&mut self, packet: Packet) {
-        // Find index following the most recent packet before the one we wish to insert
-        let i = self.incoming_buffer.iter().filter(|p| p.seq_nr() < packet.seq_nr()).count();
+        // Immediately push to the end if the packet's sequence number comes after the last
+        // packet's.
+        if self.incoming_buffer.last().map(|p| packet.seq_nr() > p.seq_nr()).unwrap_or(false) {
+            self.incoming_buffer.push(packet);
+        } else {
+            // Find index following the most recent packet before the one we wish to insert
+            let i = self.incoming_buffer.iter().filter(|p| p.seq_nr() < packet.seq_nr()).count();
 
-        // Remove packet if it's a duplicate
-        if self.incoming_buffer.get(i).map(|p| p.seq_nr() == packet.seq_nr()).unwrap_or(false) {
-            self.incoming_buffer.remove(i);
+            // Remove packet if it's a duplicate
+            if self.incoming_buffer.get(i).map(|p| p.seq_nr() == packet.seq_nr()).unwrap_or(false) {
+                self.incoming_buffer.remove(i);
+            }
+
+            self.incoming_buffer.insert(i, packet);
         }
-        self.incoming_buffer.insert(i, packet);
     }
 }
 
