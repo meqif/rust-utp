@@ -170,6 +170,21 @@ impl PacketHeader {
     }
 }
 
+impl Default for PacketHeader {
+    fn default() -> PacketHeader {
+        PacketHeader {
+            type_ver: (PacketType::Data as u8) << 4 | 1,
+            extension: 0,
+            connection_id: 0,
+            timestamp_microseconds: 0,
+            timestamp_difference_microseconds: 0,
+            wnd_size: 0,
+            seq_nr: 0,
+            ack_nr: 0,
+        }
+    }
+}
+
 impl fmt::Debug for PacketHeader {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "(type: {:?}, version: {}, extension: {}, \
@@ -199,16 +214,7 @@ impl Packet {
     /// Construct a new, empty packet.
     pub fn new() -> Packet {
         Packet {
-            header: PacketHeader {
-                type_ver: (PacketType::Data as u8) << 4 | 1,
-                extension: 0,
-                connection_id: 0,
-                timestamp_microseconds: 0,
-                timestamp_difference_microseconds: 0,
-                wnd_size: 0,
-                seq_nr: 0,
-                ack_nr: 0,
-            },
+            header: PacketHeader::default(),
             extensions: Vec::new(),
             payload: Vec::new(),
         }
