@@ -220,6 +220,27 @@ impl Packet {
         }
     }
 
+    /// Constructs a new data packet with the given payload.
+    pub fn with_payload(payload: &[u8]) -> Packet {
+        let mut header = PacketHeader::default();
+        header.set_type(PacketType::Data);
+
+        let elts = payload.len();
+        let mut v = Vec::with_capacity(elts);
+
+        unsafe {
+            use std::ptr;
+            v.set_len(elts);
+            ptr::copy_nonoverlapping(payload.as_ptr(), v.as_mut_ptr(), elts);
+        }
+
+        Packet {
+            header: header,
+            extensions: Vec::new(),
+            payload: v,
+        }
+    }
+
     #[inline]
     pub fn set_type(&mut self, t: PacketType) {
         self.header.set_type(t);
@@ -486,6 +507,41 @@ mod tests {
         let window_size: u32 = 1048576;
         let mut pkt = Packet::new();
         pkt.set_type(Data);
+        pkt.header.timestamp_microseconds = timestamp.to_be();
+        pkt.header.timestamp_difference_microseconds = timestamp_diff.to_be();
+        pkt.header.connection_id = connection_id.to_be();
+        pkt.header.seq_nr = seq_nr.to_be();
+        pkt.header.ack_nr = ack_nr.to_be();
+        pkt.header.wnd_size = window_size.to_be();
+        pkt.payload = payload.clone();
+        let header = pkt.header;
+        let buf = [0x01, 0x00, 0x41, 0xa8, 0x00, 0xe9, 0x03, 0x89,
+                   0x65, 0xbf, 0x5d, 0xba, 0x00, 0x10, 0x00, 0x00,
+                   0x3a, 0xf2, 0x42, 0xc8, 0x48, 0x65, 0x6c, 0x6c,
+                   0x6f, 0x0a];
+
+        assert_eq!(pkt.len(), buf.len());
+        assert_eq!(pkt.len(), HEADER_SIZE + payload.len());
+        assert_eq!(pkt.payload, payload);
+        assert_eq!(header.get_version(), 1);
+        assert_eq!(header.get_type(), Data);
+        assert_eq!(header.extension, 0);
+        assert_eq!(pkt.connection_id(), connection_id);
+        assert_eq!(pkt.seq_nr(), seq_nr);
+        assert_eq!(pkt.ack_nr(), ack_nr);
+        assert_eq!(pkt.wnd_size(), window_size);
+        assert_eq!(pkt.timestamp_microseconds(), timestamp);
+        assert_eq!(pkt.timestamp_difference_microseconds(), timestamp_diff);
+        assert_eq!(pkt.bytes(), buf.to_vec());
+    }
+
+    #[test]
+    fn test_packet_encode_with_payload() {
+        let payload = "Hello\n".as_bytes().to_vec();
+        let (timestamp, timestamp_diff): (u32, u32) = (15270793, 1707040186);
+        let (connection_id, seq_nr, ack_nr): (u16, u16, u16) = (16808, 15090, 17096);
+        let window_size: u32 = 1048576;
+        let mut pkt = Packet::with_payload(&payload[..]);
         pkt.header.timestamp_microseconds = timestamp.to_be();
         pkt.header.timestamp_difference_microseconds = timestamp_diff.to_be();
         pkt.header.connection_id = connection_id.to_be();

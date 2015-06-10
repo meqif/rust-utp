@@ -458,15 +458,7 @@ impl UtpSocket {
         let total_length = buf.len();
 
         for chunk in buf.chunks(MSS as usize - HEADER_SIZE) {
-            let mut packet = Packet::new();
-            packet.set_type(PacketType::Data);
-            unsafe {
-                use std::ptr;
-                let elts = chunk.len();
-                packet.payload = Vec::with_capacity(elts);
-                packet.payload.set_len(elts);
-                ptr::copy_nonoverlapping(chunk.as_ptr(), packet.payload.as_mut_ptr(), elts);
-            }
+            let mut packet = Packet::with_payload(chunk);
             packet.set_seq_nr(self.seq_nr);
             packet.set_ack_nr(self.ack_nr);
             packet.set_connection_id(self.sender_connection_id);
