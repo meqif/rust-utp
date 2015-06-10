@@ -109,31 +109,34 @@ struct PacketHeader {
 }
 
 impl PacketHeader {
-    /// Set type of packet to the specified type.
+    /// Sets the type of packet to the specified type.
     pub fn set_type(&mut self, t: PacketType) {
         let version = 0x0F & self.type_ver;
         self.type_ver = (t as u8) << 4 | version;
     }
 
+    /// Returns the packet's type.
     pub fn get_type(&self) -> PacketType {
         unsafe { transmute(self.type_ver >> 4) }
     }
 
+    /// Returns the packet's version.
     pub fn get_version(&self) -> u8 {
         self.type_ver & 0x0F
     }
 
-    /// Return packet header as a slice of bytes.
+    /// Returns the packet header as a slice of bytes.
     pub fn bytes(&self) -> &[u8] {
         let buf: &[u8; HEADER_SIZE] = unsafe { transmute(self) };
         return &buf[..];
     }
 
+    /// Returns the packet header's length.
     pub fn len(&self) -> usize {
         return HEADER_SIZE;
     }
 
-    /// Read byte buffer and return corresponding packet header.
+    /// Reads a byte buffer and returns the corresponding packet header.
     /// It assumes the fields are in network (big-endian) byte order,
     /// preserving it.
     pub fn decode(buf: &[u8]) -> Result<PacketHeader, ParseError> {
@@ -211,7 +214,7 @@ pub struct Packet {
 }
 
 impl Packet {
-    /// Construct a new, empty packet.
+    /// Constructs a new, empty packet.
     pub fn new() -> Packet {
         Packet {
             header: PacketHeader::default(),
@@ -265,7 +268,7 @@ impl Packet {
     make_setter!(set_timestamp_microseconds, timestamp_microseconds, u32);
     make_setter!(set_timestamp_difference_microseconds, timestamp_difference_microseconds, u32);
 
-    /// Set Selective ACK field in packet header and add appropriate data.
+    /// Sets Selective ACK field in packet header and adds appropriate data.
     ///
     /// The length of the SACK extension is expressed in bytes, which
     /// must be a multiple of 4 and at least 4.
@@ -319,7 +322,7 @@ impl Packet {
         self.header.len() + self.payload.len() + ext_len
     }
 
-    /// Decode a byte slice and construct the equivalent Packet.
+    /// Decodes a byte slice and construct the equivalent Packet.
     ///
     /// Note that this method makes no attempt to guess the payload size, saving
     /// all except the initial 20 bytes corresponding to the header as payload.
