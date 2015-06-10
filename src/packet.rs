@@ -154,7 +154,7 @@ impl PacketHeader {
 impl Deref for PacketHeader {
     type Target = [u8];
 
-    /// Return packet header as a slice of bytes.
+    /// Returns the packet header as a slice of bytes.
     fn deref(&self) -> &[u8] {
         let buf: &[u8; HEADER_SIZE] = unsafe { transmute(self) };
         return &buf[..];
