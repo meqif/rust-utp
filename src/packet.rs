@@ -3,6 +3,7 @@
 use std::error::Error;
 use std::mem::transmute;
 use std::fmt;
+use std::ops::Deref;
 use bit_iterator::BitIterator;
 
 pub const HEADER_SIZE: usize = 20;
@@ -27,6 +28,23 @@ macro_rules! make_setter {
             self.header.$field = new.to_be();
         }
     }
+}
+
+/// A trait for objects that can be represented as a vector of bytes.
+pub trait Encodable {
+    /// Returns a vector of bytes representing the data structure in a way that can be sent over the
+    /// network.
+    fn to_bytes(&self) -> Vec<u8>;
+}
+
+/// A trait for objects that can be decoded from slices of bytes.
+pub trait Decodable {
+    /// Decodes a slice of bytes and returns an equivalent object.
+    ///
+    /// If the slice of bytes represents a valid instance of the type, it returns `Ok`, containing
+    /// the corresponding object; if a parse error is found, it returns `Err` with the appropriate
+    /// `ParseError`.
+    fn from_bytes(&[u8]) -> Result<Self, ParseError>;
 }
 
 #[derive(Debug)]
@@ -84,15 +102,17 @@ impl Extension {
         self.ty
     }
 
-    pub fn to_bytes(&self) -> Vec<u8> {
+    pub fn iter(&self) -> BitIterator {
+        BitIterator::from_bytes(&self.data)
+    }
+}
+
+impl Encodable for Extension {
+    fn to_bytes(&self) -> Vec<u8> {
         let mut data = Vec::with_capacity(self.data.len() + 1);
         data.push(self.data.len() as u8);
         data.extend(self.data.iter().map(|&x| x));
         return data;
-    }
-
-    pub fn iter(&self) -> BitIterator {
-        BitIterator::from_bytes(&self.data)
     }
 }
 
@@ -125,21 +145,27 @@ impl PacketHeader {
         self.type_ver & 0x0F
     }
 
-    /// Returns the packet header as a slice of bytes.
-    pub fn bytes(&self) -> &[u8] {
-        let buf: &[u8; HEADER_SIZE] = unsafe { transmute(self) };
-        return &buf[..];
-    }
-
     /// Returns the packet header's length.
     pub fn len(&self) -> usize {
         return HEADER_SIZE;
     }
+}
 
+impl Deref for PacketHeader {
+    type Target = [u8];
+
+    /// Return packet header as a slice of bytes.
+    fn deref(&self) -> &[u8] {
+        let buf: &[u8; HEADER_SIZE] = unsafe { transmute(self) };
+        return &buf[..];
+    }
+}
+
+impl Decodable for PacketHeader {
     /// Reads a byte buffer and returns the corresponding packet header.
     /// It assumes the fields are in network (big-endian) byte order,
     /// preserving it.
-    pub fn decode(buf: &[u8]) -> Result<PacketHeader, ParseError> {
+    fn from_bytes(buf: &[u8]) -> Result<PacketHeader, ParseError> {
         // Check length
         if buf.len() < HEADER_SIZE {
             return Err(ParseError::InvalidPacketLength);
@@ -286,13 +312,20 @@ impl Packet {
         self.header.extension |= ExtensionType::SelectiveAck as u8;
     }
 
-    pub fn bytes(&self) -> Vec<u8> {
+    pub fn len(&self) -> usize {
+        let ext_len = self.extensions.iter().fold(0, |acc, ext| acc + ext.len() + 1);
+        self.header.len() + self.payload.len() + ext_len
+    }
+}
+
+impl Encodable for Packet {
+    fn to_bytes(&self) -> Vec<u8> {
         use std::ptr;
         let mut buf: Vec<u8> = Vec::with_capacity(self.len());
 
         // Copy header
         unsafe {
-            ptr::copy(self.header.bytes().as_ptr(), buf.as_mut_ptr(), self.header.len());
+            ptr::copy(self.header.as_ptr(), buf.as_mut_ptr(), self.header.len());
             buf.set_len(self.header.len());
         }
 
@@ -316,19 +349,16 @@ impl Packet {
 
         return buf;
     }
+}
 
-    pub fn len(&self) -> usize {
-        let ext_len = self.extensions.iter().fold(0, |acc, ext| acc + ext.len() + 1);
-        self.header.len() + self.payload.len() + ext_len
-    }
-
+impl Decodable for Packet {
     /// Decodes a byte slice and construct the equivalent Packet.
     ///
     /// Note that this method makes no attempt to guess the payload size, saving
     /// all except the initial 20 bytes corresponding to the header as payload.
     /// It's the caller's responsability to use an appropriately sized buffer.
-    pub fn decode(buf: &[u8]) -> Result<Packet, ParseError> {
-        let header = try!(PacketHeader::decode(buf));
+    fn from_bytes(buf: &[u8]) -> Result<Packet, ParseError> {
+        let header = try!(PacketHeader::from_bytes(buf));
 
         let mut extensions = Vec::new();
         let mut idx = HEADER_SIZE;
@@ -417,7 +447,7 @@ mod tests {
     fn test_packet_decode() {
         let buf = [0x21, 0x00, 0x41, 0xa8, 0x99, 0x2f, 0xd0, 0x2a, 0x9f, 0x4a,
                    0x26, 0x21, 0x00, 0x10, 0x00, 0x00, 0x3a, 0xf2, 0x6c, 0x79];
-        let pkt = Packet::decode(&buf);
+        let pkt = Packet::from_bytes(&buf);
         assert!(pkt.is_ok());
         let pkt = pkt.unwrap();
         assert_eq!(pkt.header.get_version(), 1);
@@ -438,7 +468,7 @@ mod tests {
         let buf = [0x21, 0x01, 0x41, 0xa7, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                    0x00, 0x00, 0x00, 0x00, 0x05, 0xdc, 0xab, 0x53, 0x3a, 0xf5,
                    0x00, 0x04, 0x00, 0x00, 0x00, 0x00];
-        let packet = Packet::decode(&buf);
+        let packet = Packet::from_bytes(&buf);
         assert!(packet.is_ok());
         let packet = packet.unwrap();
         assert_eq!(packet.header.get_version(), 1);
@@ -463,7 +493,7 @@ mod tests {
     fn test_packet_decode_with_missing_extension() {
         let buf = [0x21, 0x01, 0x41, 0xa8, 0x99, 0x2f, 0xd0, 0x2a, 0x9f, 0x4a,
                    0x26, 0x21, 0x00, 0x10, 0x00, 0x00, 0x3a, 0xf2, 0x6c, 0x79];
-        let pkt = Packet::decode(&buf);
+        let pkt = Packet::from_bytes(&buf);
         assert!(pkt.is_err());
     }
 
@@ -472,7 +502,7 @@ mod tests {
         let buf = [0x21, 0x01, 0x41, 0xa8, 0x99, 0x2f, 0xd0, 0x2a, 0x9f, 0x4a,
                    0x26, 0x21, 0x00, 0x10, 0x00, 0x00, 0x3a, 0xf2, 0x6c, 0x79,
                    0x00, 0x04, 0x00];
-        let pkt = Packet::decode(&buf);
+        let pkt = Packet::from_bytes(&buf);
         assert!(pkt.is_err());
     }
 
@@ -482,7 +512,7 @@ mod tests {
                    0x00, 0x00, 0x00, 0x00, 0x05, 0xdc, 0xab, 0x53, 0x3a, 0xf5,
                    0xff, 0x04, 0x00, 0x00, 0x00, 0x00, // Imaginary extension
                    0x00, 0x04, 0x00, 0x00, 0x00, 0x00];
-        let packet = Packet::decode(&buf);
+        let packet = Packet::from_bytes(&buf);
         assert!(packet.is_ok());
         let packet = packet.unwrap();
         assert_eq!(packet.header.get_version(), 1);
@@ -535,7 +565,7 @@ mod tests {
         assert_eq!(pkt.wnd_size(), window_size);
         assert_eq!(pkt.timestamp_microseconds(), timestamp);
         assert_eq!(pkt.timestamp_difference_microseconds(), timestamp_diff);
-        assert_eq!(pkt.bytes(), buf.to_vec());
+        assert_eq!(pkt.to_bytes(), buf.to_vec());
     }
 
     #[test]
@@ -570,7 +600,7 @@ mod tests {
         assert_eq!(pkt.wnd_size(), window_size);
         assert_eq!(pkt.timestamp_microseconds(), timestamp);
         assert_eq!(pkt.timestamp_difference_microseconds(), timestamp_diff);
-        assert_eq!(pkt.bytes(), buf.to_vec());
+        assert_eq!(pkt.to_bytes(), buf.to_vec());
     }
 
     #[test]
@@ -580,7 +610,7 @@ mod tests {
         packet.header.extension = extension.ty as u8;
         packet.extensions.push(extension.clone());
         packet.extensions.push(extension.clone());
-        let bytes = packet.bytes();
+        let bytes = packet.to_bytes();
         assert_eq!(bytes.len(), HEADER_SIZE + (extension.len() + 1) * 2);
         assert_eq!(bytes[1], extension.ty as u8);
         assert_eq!(bytes[HEADER_SIZE], extension.ty as u8);
@@ -595,19 +625,19 @@ mod tests {
                    0x65, 0xbf, 0x5d, 0xba, 0x00, 0x10, 0x00, 0x00,
                    0x3a, 0xf2, 0x42, 0xc8, 0x48, 0x65, 0x6c, 0x6c,
                    0x6f, 0x0a];
-        assert_eq!(&Packet::decode(&buf).unwrap().bytes()[..], &buf[..]);
+        assert_eq!(&Packet::from_bytes(&buf).unwrap().to_bytes()[..], &buf[..]);
     }
 
     #[test]
     fn test_decode_evil_sequence() {
         let buf = [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-        let packet = Packet::decode(&buf);
+        let packet = Packet::from_bytes(&buf);
         assert!(packet.is_err());
     }
 
     #[test]
     fn test_decode_empty_packet() {
-        let packet = Packet::decode(&[]);
+        let packet = Packet::from_bytes(&[]);
         assert!(packet.is_err());
     }
 
@@ -617,7 +647,7 @@ mod tests {
         use quickcheck::{QuickCheck, TestResult};
 
         fn run(x: Vec<u8>) -> TestResult {
-            let packet = Packet::decode(&x[..]);
+            let packet = Packet::from_bytes(&x[..]);
 
             if x.len() < 20 {
                 // Header too small
@@ -656,7 +686,7 @@ mod tests {
                 }
                 TestResult::from_bool(packet.is_ok() || next_kind != 0)
             } else {
-                TestResult::from_bool(packet.is_ok() && packet.unwrap().bytes() == x)
+                TestResult::from_bool(packet.is_ok() && packet.unwrap().to_bytes() == x)
             }
         }
         QuickCheck::new().tests(10000).quickcheck(run as fn(Vec<u8>) -> TestResult)
