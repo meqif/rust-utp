@@ -74,3 +74,9 @@ impl Write for UtpStream {
         self.socket.flush()
     }
 }
+
+impl Into<UtpStream> for UtpSocket {
+    fn into(self) -> UtpStream {
+        UtpStream { socket: self }
+    }
+}
