@@ -1050,7 +1050,7 @@ impl UtpListener {
         }
     }
 
-    /// Returns an iterator over the connections being received by this iterator.
+    /// Returns an iterator over the connections being received by this listener.
     ///
     /// The returned iterator will never return `None`.
     pub fn incoming(&self) -> Incoming {
