@@ -167,115 +167,6 @@ pub struct UtpSocket {
     cwnd: u32,
 }
 
-/// A structure representing a socket server.
-///
-/// # Examples
-///
-/// ```no_run
-/// use utp::{UtpListener, UtpSocket};
-/// use std::thread;
-///
-/// fn handle_client(socket: UtpSocket) {
-///     // ...
-/// }
-///
-/// fn main() {
-///     // Create a listener
-///     let addr = "127.0.0.1:8080";
-///     let listener = UtpListener::bind(addr).unwrap();
-///
-///     loop {
-///         // Spawn a new handler for each new connection
-///         match listener.accept() {
-///             Ok(socket) => { thread::spawn(move || { handle_client(socket) }); },
-///             _ => ()
-///         }
-///     }
-/// }
-/// ```
-pub struct UtpListener {
-    // addr: SocketAddr,
-    socket: UdpSocket,
-}
-
-impl UtpListener {
-    /// Creates a new `UtpListener` bound to a specific address.
-    ///
-    /// The resulting listener is ready for accepting connections.
-    ///
-    /// The address type can be any implementor of the `ToSocketAddr` trait. See its documentation
-    /// for concrete examples.
-    ///
-    /// If more than one valid address is specified, only the first will be used.
-    pub fn bind<A: ToSocketAddrs>(addr: A) -> Result<UtpListener> {
-        let addr = addr.to_socket_addrs().unwrap().next().unwrap();
-        UdpSocket::bind(addr).and_then(|s| Ok(UtpListener { socket: s}))
-    }
-
-    /// Accepts a new incoming connection from this listener.
-    ///
-    /// This function will block the caller until a new uTP connection is established. When
-    /// established, the corresponding `UtpSocket` will be returned.
-    pub fn accept(&self) -> Result<UtpSocket> {
-        let mut buf = [0; BUF_SIZE];
-
-        match self.socket.recv_from(&mut buf) {
-            Ok((nread, src)) => {
-                let packet = try!(Packet::from_bytes(&buf[..nread]).or(Err(SocketError::InvalidPacket)));
-
-                // Ignore non-SYN packets
-                if packet.get_type() != PacketType::Syn {
-                    return Err(Error::from(SocketError::InvalidPacket));
-                }
-
-                // The address of the new socket will depend on the type of the listener.
-                let inner_socket = match self.socket.local_addr().unwrap() {
-                    SocketAddr::V4(_) => UdpSocket::bind("0.0.0.0:0"),
-                    SocketAddr::V6(_) => UdpSocket::bind(":::0"),
-                };
-
-                let mut socket = UtpSocket {
-                    socket: inner_socket.unwrap(),
-                    connected_to: src,
-                    receiver_connection_id: 0,
-                    sender_connection_id: 0,
-                    seq_nr: 1,
-                    ack_nr: 0,
-                    state: SocketState::New,
-                    incoming_buffer: Vec::new(),
-                    send_window: Vec::new(),
-                    unsent_queue: VecDeque::new(),
-                    duplicate_ack_count: 0,
-                    last_acked: 0,
-                    last_acked_timestamp: 0,
-                    last_dropped: 0,
-                    rtt: 0,
-                    rtt_variance: 0,
-                    pending_data: Vec::new(),
-                    curr_window: 0,
-                    remote_wnd_size: 0,
-                    current_delays: Vec::new(),
-                    base_delays: VecDeque::with_capacity(BASE_HISTORY),
-                    their_delay: 0,
-                    last_rollover: 0,
-                    congestion_timeout: INITIAL_CONGESTION_TIMEOUT,
-                    cwnd: INIT_CWND * MSS,
-                };
-
-                // Establish connection with remote peer
-                match socket.handle_packet(&packet, src) {
-                    Ok(Some(reply)) => { try!(socket.socket.send_to(&reply.to_bytes()[..], src)) },
-                    Ok(None) => return Err(Error::new(ErrorKind::Other, "Unexpected error handling packet")),
-                    Err(e) => return Err(e)
-                };
-
-                Ok(socket)
-            },
-            Err(e) => Err(e)
-        }
-    }
-}
-
 impl UtpSocket {
     /// Creates a new UTP socket from the given address.
     ///
@@ -1048,6 +939,115 @@ impl UtpSocket {
 impl Drop for UtpSocket {
     fn drop(&mut self) {
         let _ = self.close();
+    }
+}
+
+/// A structure representing a socket server.
+///
+/// # Examples
+///
+/// ```no_run
+/// use utp::{UtpListener, UtpSocket};
+/// use std::thread;
+///
+/// fn handle_client(socket: UtpSocket) {
+///     // ...
+/// }
+///
+/// fn main() {
+///     // Create a listener
+///     let addr = "127.0.0.1:8080";
+///     let listener = UtpListener::bind(addr).unwrap();
+///
+///     loop {
+///         // Spawn a new handler for each new connection
+///         match listener.accept() {
+///             Ok(socket) => { thread::spawn(move || { handle_client(socket) }); },
+///             _ => ()
+///         }
+///     }
+/// }
+/// ```
+pub struct UtpListener {
+    // addr: SocketAddr,
+    socket: UdpSocket,
+}
+
+impl UtpListener {
+    /// Creates a new `UtpListener` bound to a specific address.
+    ///
+    /// The resulting listener is ready for accepting connections.
+    ///
+    /// The address type can be any implementor of the `ToSocketAddr` trait. See its documentation
+    /// for concrete examples.
+    ///
+    /// If more than one valid address is specified, only the first will be used.
+    pub fn bind<A: ToSocketAddrs>(addr: A) -> Result<UtpListener> {
+        let addr = addr.to_socket_addrs().unwrap().next().unwrap();
+        UdpSocket::bind(addr).and_then(|s| Ok(UtpListener { socket: s}))
+    }
+
+    /// Accepts a new incoming connection from this listener.
+    ///
+    /// This function will block the caller until a new uTP connection is established. When
+    /// established, the corresponding `UtpSocket` will be returned.
+    pub fn accept(&self) -> Result<UtpSocket> {
+        let mut buf = [0; BUF_SIZE];
+
+        match self.socket.recv_from(&mut buf) {
+            Ok((nread, src)) => {
+                let packet = try!(Packet::from_bytes(&buf[..nread]).or(Err(SocketError::InvalidPacket)));
+
+                // Ignore non-SYN packets
+                if packet.get_type() != PacketType::Syn {
+                    return Err(Error::from(SocketError::InvalidPacket));
+                }
+
+                // The address of the new socket will depend on the type of the listener.
+                let inner_socket = match self.socket.local_addr().unwrap() {
+                    SocketAddr::V4(_) => UdpSocket::bind("0.0.0.0:0"),
+                    SocketAddr::V6(_) => UdpSocket::bind(":::0"),
+                };
+
+                let mut socket = UtpSocket {
+                    socket: inner_socket.unwrap(),
+                    connected_to: src,
+                    receiver_connection_id: 0,
+                    sender_connection_id: 0,
+                    seq_nr: 1,
+                    ack_nr: 0,
+                    state: SocketState::New,
+                    incoming_buffer: Vec::new(),
+                    send_window: Vec::new(),
+                    unsent_queue: VecDeque::new(),
+                    duplicate_ack_count: 0,
+                    last_acked: 0,
+                    last_acked_timestamp: 0,
+                    last_dropped: 0,
+                    rtt: 0,
+                    rtt_variance: 0,
+                    pending_data: Vec::new(),
+                    curr_window: 0,
+                    remote_wnd_size: 0,
+                    current_delays: Vec::new(),
+                    base_delays: VecDeque::with_capacity(BASE_HISTORY),
+                    their_delay: 0,
+                    last_rollover: 0,
+                    congestion_timeout: INITIAL_CONGESTION_TIMEOUT,
+                    cwnd: INIT_CWND * MSS,
+                };
+
+                // Establish connection with remote peer
+                match socket.handle_packet(&packet, src) {
+                    Ok(Some(reply)) => { try!(socket.socket.send_to(&reply.to_bytes()[..], src)) },
+                    Ok(None) => return Err(Error::new(ErrorKind::Other, "Unexpected error handling packet")),
+                    Err(e) => return Err(e)
+                };
+
+                Ok(socket)
+            },
+            Err(e) => Err(e)
+        }
     }
 }
 
