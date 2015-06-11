@@ -1,5 +1,11 @@
 # Change Log
 
+## [0.4.0]
+
+### Added
+
+- Added `UtpListener` (similar to [`TcpListener`][http://doc.rust-lang.org/std/net/struct.TcpListener.html]).
+
 ## [0.3.1]
 
 ### Fixed
