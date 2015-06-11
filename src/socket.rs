@@ -167,6 +167,81 @@ pub struct UtpSocket {
     cwnd: u32,
 }
 
+///
+pub struct UtpListener {
+    // addr: SocketAddr,
+    socket: UdpSocket,
+}
+
+///
+impl UtpListener {
+    ///
+    pub fn bind<A: ToSocketAddrs>(addr: A) -> Result<UtpListener> {
+        let addr = addr.to_socket_addrs().unwrap().next().unwrap();
+        UdpSocket::bind(addr).and_then(|s| Ok(UtpListener { socket: s}))
+    }
+
+    ///
+    pub fn accept(&self) -> Result<UtpSocket> {
+        let mut buf = [0; BUF_SIZE];
+
+        match self.socket.recv_from(&mut buf) {
+            Ok((nread, src)) => {
+                let packet = try!(Packet::from_bytes(&buf[..nread]).or(Err(SocketError::InvalidPacket)));
+
+                // Ignore non-SYN packets
+                if packet.get_type() != PacketType::Syn {
+                    return Err(Error::from(SocketError::InvalidPacket));
+                }
+
+                // The address of the new socket will depend on the type of the listener.
+                let inner_socket = match self.socket.local_addr().unwrap() {
+                    SocketAddr::V4(_) => UdpSocket::bind("0.0.0.0:0"),
+                    SocketAddr::V6(_) => UdpSocket::bind(":::0"),
+                };
+
+                let mut socket = UtpSocket {
+                    socket: inner_socket.unwrap(),
+                    connected_to: src,
+                    receiver_connection_id: 0,
+                    sender_connection_id: 0,
+                    seq_nr: 1,
+                    ack_nr: 0,
+                    state: SocketState::New,
+                    incoming_buffer: Vec::new(),
+                    send_window: Vec::new(),
+                    unsent_queue: VecDeque::new(),
+                    duplicate_ack_count: 0,
+                    last_acked: 0,
+                    last_acked_timestamp: 0,
+                    last_dropped: 0,
+                    rtt: 0,
+                    rtt_variance: 0,
+                    pending_data: Vec::new(),
+                    curr_window: 0,
+                    remote_wnd_size: 0,
+                    current_delays: Vec::new(),
+                    base_delays: VecDeque::with_capacity(BASE_HISTORY),
+                    their_delay: 0,
+                    last_rollover: 0,
+                    congestion_timeout: INITIAL_CONGESTION_TIMEOUT,
+                    cwnd: INIT_CWND * MSS,
+                };
+
+                // Establish connection with remote peer
+                match socket.handle_packet(&packet, src) {
+                    Ok(Some(reply)) => { try!(socket.socket.send_to(&reply.to_bytes()[..], src)) },
+                    Ok(None) => return Err(Error::new(ErrorKind::Other, "Unexpected error handling packet")),
+                    Err(e) => return Err(e)
+                };
+
+                Ok(socket)
+            },
+            Err(e) => Err(e)
+        }
+    }
+}
+
 impl UtpSocket {
     /// Creates a new UTP socket from the given address.
     ///
@@ -237,8 +312,8 @@ impl UtpSocket {
             // Validate response
             // self.socket.set_read_timeout(Some(syn_timeout));
             match self.socket.recv_from(&mut buf) {
-                Ok((_read, src)) if src != self.connected_to => continue,
-                Ok((read, _src)) => { len = read; break; },
+                // Ok((_read, src)) if src != self.connected_to => continue,
+                Ok((read, src)) => { self.connected_to = src; len = read; break; },
                 // Err(ref e) if e.kind == TimedOut => {
                 //     debug!("Timed out, retrying");
                 //     syn_timeout *= 2;
@@ -248,6 +323,7 @@ impl UtpSocket {
             };
         }
 
+        let addr = self.connected_to;
         let packet = try!(Packet::from_bytes(&buf[..len]).or(Err(SocketError::InvalidPacket)));
         try!(self.handle_packet(&packet, addr));
 
@@ -707,6 +783,7 @@ impl UtpSocket {
                 Ok(Some(self.prepare_reply(packet, PacketType::Reset)))
             }
             (SocketState::SynSent, PacketType::State) => {
+                self.connected_to = src;
                 self.ack_nr = packet.seq_nr();
                 self.seq_nr += 1;
                 self.state = SocketState::Connected;
@@ -727,11 +804,12 @@ impl UtpSocket {
             (SocketState::Connected, PacketType::Fin) |
             (SocketState::FinSent,   PacketType::Fin) => {
                 // If all packets are received and handled
-                if self.seq_nr == packet.ack_nr() && self.send_window.is_empty() {
+                if packet.ack_nr() == self.seq_nr {
                     self.state = SocketState::Closed;
                     Ok(Some(self.prepare_reply(packet, PacketType::State)))
                 } else {
                     debug!("FIN received but there are missing packets");
+                    self.handle_state_packet(packet);
                     Ok(None)
                 }
             }
