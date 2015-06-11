@@ -991,6 +991,9 @@ impl UtpListener {
     ///
     /// This function will block the caller until a new uTP connection is established. When
     /// established, the corresponding `UtpSocket` will be returned.
+    ///
+    /// Notice that the resulting `UtpSocket` is bound to a different local port than the public
+    /// listening port (which `UtpListener` holds). This may confuse the remote peer!
     pub fn accept(&self) -> Result<UtpSocket> {
         let mut buf = [0; BUF_SIZE];
 
