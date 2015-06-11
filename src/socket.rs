@@ -1049,6 +1049,23 @@ impl UtpListener {
             Err(e) => Err(e)
         }
     }
+
+    /// Returns an iterator over the connections being received by this iterator.
+    ///
+    /// The returned iterator will never return `None`.
+    pub fn incoming(&self) -> Incoming {
+        Incoming { listener: self }
+    }
+}
+
+pub struct Incoming<'a> { listener: &'a UtpListener }
+
+impl<'a> Iterator for Incoming<'a> {
+    type Item = Result<UtpSocket>;
+
+    fn next(&mut self) -> Option<Result<UtpSocket>> {
+        Some(self.listener.accept())
+    }
 }
 
 #[cfg(test)]
