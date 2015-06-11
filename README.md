@@ -88,6 +88,8 @@ fn main() {
 - [x] handle unordered packets
 - [ ] path MTU discovery
 - [x] duplicate packet handling
+- [x] listener abstraction
+- [x] incoming connections iterator
 
 ## License
 

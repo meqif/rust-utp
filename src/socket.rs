@@ -959,9 +959,9 @@ impl Drop for UtpSocket {
 ///     let addr = "127.0.0.1:8080";
 ///     let listener = UtpListener::bind(addr).unwrap();
 ///
-///     loop {
+///     for socket in listener.incoming() {
 ///         // Spawn a new handler for each new connection
-///         match listener.accept() {
+///         match socket {
 ///             Ok(socket) => { thread::spawn(move || { handle_client(socket) }); },
 ///             _ => ()
 ///         }
