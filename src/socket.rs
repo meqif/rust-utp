@@ -167,21 +167,55 @@ pub struct UtpSocket {
     cwnd: u32,
 }
 
+/// A structure representing a socket server.
 ///
+/// # Examples
+///
+/// ```no_run
+/// use utp::{UtpListener, UtpSocket};
+/// use std::thread;
+///
+/// fn handle_client(socket: UtpSocket) {
+///     // ...
+/// }
+///
+/// fn main() {
+///     // Create a listener
+///     let addr = "127.0.0.1:8080";
+///     let listener = UtpListener::bind(addr).unwrap();
+///
+///     loop {
+///         // Spawn a new handler for each new connection
+///         match listener.accept() {
+///             Ok(socket) => { thread::spawn(move || { handle_client(socket) }); },
+///             _ => ()
+///         }
+///     }
+/// }
+/// ```
 pub struct UtpListener {
     // addr: SocketAddr,
     socket: UdpSocket,
 }
 
-///
 impl UtpListener {
+    /// Creates a new `UtpListener` bound to a specific address.
     ///
+    /// The resulting listener is ready for accepting connections.
+    ///
+    /// The address type can be any implementor of the `ToSocketAddr` trait. See its documentation
+    /// for concrete examples.
+    ///
+    /// If more than one valid address is specified, only the first will be used.
     pub fn bind<A: ToSocketAddrs>(addr: A) -> Result<UtpListener> {
         let addr = addr.to_socket_addrs().unwrap().next().unwrap();
         UdpSocket::bind(addr).and_then(|s| Ok(UtpListener { socket: s}))
     }
 
+    /// Accepts a new incoming connection from this listener.
     ///
+    /// This function will block the caller until a new uTP connection is established. When
+    /// established, the corresponding `UtpSocket` will be returned.
     pub fn accept(&self) -> Result<UtpSocket> {
         let mut buf = [0; BUF_SIZE];
 
