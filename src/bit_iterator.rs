@@ -4,7 +4,7 @@ const U8BITS: usize = 8;
 /// Lazy iterator over bits of a vector of bytes, starting with the LSB
 /// (least-significat bit) of the first element of the vector.
 pub struct BitIterator<'a> {
-    object: &'a Vec<u8>,
+    object: &'a [u8],
     next_idx: usize,
     end_idx: usize,
 }
@@ -12,7 +12,7 @@ pub struct BitIterator<'a> {
 impl<'a> BitIterator<'a> {
     /// Creates an iterator from a vector of bytes. Each byte becomes eight bits, with the least
     /// significant bits coming first.
-    pub fn from_bytes(obj: &'a Vec<u8>) -> BitIterator {
+    pub fn from_bytes(obj: &'a [u8]) -> BitIterator {
         BitIterator { object: obj, next_idx: 0, end_idx: obj.len() * U8BITS }
     }
 
