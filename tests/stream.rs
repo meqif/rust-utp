@@ -127,3 +127,15 @@ fn test_stream_successive_reads() {
 
     assert_eq!(server.read(&mut received).unwrap(), 0);
 }
+
+#[test]
+fn test_local_addr() {
+    use std::net::ToSocketAddrs;
+
+    let addr = next_test_ip4();
+    let addr = addr.to_socket_addrs().unwrap().next().unwrap();
+    let stream = UtpStream::bind(addr).unwrap();
+
+    assert!(stream.local_addr().is_ok());
+    assert_eq!(stream.local_addr().unwrap(), addr);
+}

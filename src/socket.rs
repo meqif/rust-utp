@@ -2179,4 +2179,14 @@ mod test {
         assert_eq!(expected, actual);
         assert_eq!(socket.min_base_delay(), 7);
     }
+
+    #[test]
+    fn test_local_addr() {
+        let addr = next_test_ip4();
+        let addr = addr.to_socket_addrs().unwrap().next().unwrap();
+        let socket = UtpSocket::bind(addr).unwrap();
+
+        assert!(socket.local_addr().is_ok());
+        assert_eq!(socket.local_addr().unwrap(), addr);
+    }
 }
