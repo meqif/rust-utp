@@ -995,7 +995,7 @@ impl UtpListener {
     /// Accepts a new incoming connection from this listener.
     ///
     /// This function will block the caller until a new uTP connection is established. When
-    /// established, the corresponding `UtpSocket` will be returned.
+    /// established, the corresponding `UtpSocket` and the peer's remote address will be returned.
     ///
     /// Notice that the resulting `UtpSocket` is bound to a different local port than the public
     /// listening port (which `UtpListener` holds). This may confuse the remote peer!
