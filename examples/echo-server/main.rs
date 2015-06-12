@@ -25,10 +25,10 @@ fn main() {
     let addr = "127.0.0.1:8080";
     let listener = UtpListener::bind(addr).unwrap();
 
-    for socket in listener.incoming() {
+    for connection in listener.incoming() {
         // Spawn a new handler for each new connection
-        match socket {
-            Ok(socket) => { thread::spawn(move || { handle_client(socket) }); },
+        match connection {
+            Ok((socket, _src)) => { thread::spawn(move || { handle_client(socket) }); },
             _ => ()
         }
     }

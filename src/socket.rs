@@ -964,10 +964,10 @@ impl Drop for UtpSocket {
 ///     let addr = "127.0.0.1:8080";
 ///     let listener = UtpListener::bind(addr).unwrap();
 ///
-///     for socket in listener.incoming() {
+///     for connection in listener.incoming() {
 ///         // Spawn a new handler for each new connection
-///         match socket {
-///             Ok(socket) => { thread::spawn(move || { handle_client(socket) }); },
+///         match connection {
+///             Ok((socket, _src)) => { thread::spawn(move || { handle_client(socket) }); },
 ///             _ => ()
 ///         }
 ///     }
@@ -999,7 +999,7 @@ impl UtpListener {
     ///
     /// Notice that the resulting `UtpSocket` is bound to a different local port than the public
     /// listening port (which `UtpListener` holds). This may confuse the remote peer!
-    pub fn accept(&self) -> Result<UtpSocket> {
+    pub fn accept(&self) -> Result<(UtpSocket, SocketAddr)> {
         let mut buf = [0; BUF_SIZE];
 
         match self.socket.recv_from(&mut buf) {
@@ -1052,7 +1052,7 @@ impl UtpListener {
                     Err(e) => return Err(e)
                 };
 
-                Ok(socket)
+                Ok((socket, src))
             },
             Err(e) => Err(e)
         }
@@ -1069,9 +1069,9 @@ impl UtpListener {
 pub struct Incoming<'a> { listener: &'a UtpListener }
 
 impl<'a> Iterator for Incoming<'a> {
-    type Item = Result<UtpSocket>;
+    type Item = Result<(UtpSocket, SocketAddr)>;
 
-    fn next(&mut self) -> Option<Result<UtpSocket>> {
+    fn next(&mut self) -> Option<Result<(UtpSocket, SocketAddr)>> {
         Some(self.listener.accept())
     }
 }
