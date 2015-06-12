@@ -969,7 +969,7 @@ impl Drop for UtpSocket {
 /// }
 /// ```
 pub struct UtpListener {
-    // addr: SocketAddr,
+    /// The public facing UDP socket
     socket: UdpSocket,
 }
 
