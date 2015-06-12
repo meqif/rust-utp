@@ -2,7 +2,8 @@
 //!
 //! This library provides both a socket interface (`UtpSocket`) and a stream interface (`UtpStream`).
 //! I recommend that you use `UtpStream`, as it implements the `Read` and `Write`
-//! traits we all know (and love) from `std::io`, which makes it generally easier to work with than `UtpSocket`.
+//! traits we all know (and love) from `std::io`, which makes it generally easier to work with than
+//! `UtpSocket`.
 //!
 //! [spec]: http://www.bittorrent.org/beps/bep_0029.html
 //!
@@ -43,6 +44,14 @@
 //!         Err(e) => println!("{}", e)
 //!     }
 //! }
+//! ```
+//!
+//! Note that you can easily convert a socket to a stream using the `Into` trait, like so:
+//!
+//! ```no_run
+//! # use utp::{UtpStream, UtpSocket};
+//! let socket = UtpSocket::bind("0.0.0.0:0").unwrap();
+//! let stream: UtpStream = socket.into();
 //! ```
 
 #![deny(missing_docs)]
