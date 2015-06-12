@@ -1,5 +1,17 @@
 # Change Log
 
+## [0.5.0]
+
+### Added
+
+- Added `local_addr` for both `UtpSocket` and `UtpStream`.
+- Added the `Into` trait for easy conversion from `UtpSocket` instances into `UtpStream`.
+
+### Changed
+
+- `UtpListener::accept` now returns both the new socket and the remote peer's address (`Result<UtpSocket, SocketAddr>`), similarly to `TcpListener`.
+- `UtpListener::incoming` now also returns the remote peer's address, similarly to `accept` but unlike `TcpListener::incoming`.
+
 ## [0.4.0]
 
 ### Added
