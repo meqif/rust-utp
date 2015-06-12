@@ -207,6 +207,11 @@ impl UtpSocket {
             })
     }
 
+    /// Returns the socket address that this socket was created from.
+    pub fn local_addr(&self) -> Result<SocketAddr> {
+        self.socket.local_addr()
+    }
+
     /// Opens a connection to a remote host by hostname or IP address.
     ///
     /// The address type can be any implementor of the `ToSocketAddr` trait. See its documentation
