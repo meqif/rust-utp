@@ -57,6 +57,11 @@ impl UtpStream {
     pub fn close(&mut self) -> Result<()> {
         self.socket.close()
     }
+
+    /// Returns the socket address of the local half of this uTP connection.
+    pub fn local_addr(&self) -> Result<SocketAddr> {
+        self.socket.local_addr()
+    }
 }
 
 impl Read for UtpStream {
