@@ -1,5 +1,6 @@
 use std::io::{Read, Write, Result};
 use std::net::{ToSocketAddrs, SocketAddr};
+use std::ops::Deref;
 use socket::UtpSocket;
 
 /// A structure that represents a uTP (Micro Transport Protocol) stream between a local socket and a
@@ -83,5 +84,13 @@ impl Write for UtpStream {
 impl Into<UtpStream> for UtpSocket {
     fn into(self) -> UtpStream {
         UtpStream { socket: self }
+    }
+}
+
+impl Deref for UtpStream {
+    type Target = UtpSocket;
+
+    fn deref(&self) -> &UtpSocket {
+        &self.socket
     }
 }
