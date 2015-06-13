@@ -42,12 +42,7 @@ impl UtpStream {
     /// If more than one valid address is specified, only the first will be used.
     pub fn connect<A: ToSocketAddrs>(dst: A) -> Result<UtpStream> {
         // Port 0 means the operating system gets to choose it
-        let my_addr = match dst.to_socket_addrs().unwrap().next().unwrap() {
-            SocketAddr::V4(_) => "0.0.0.0:0",
-            SocketAddr::V6(_) => ":::0",
-        };
-        UtpSocket::bind(my_addr)
-            .and_then(|s| s.connect(dst))
+        UtpSocket::connect(dst)
             .and_then(|s| Ok(UtpStream { socket: s }))
     }
 

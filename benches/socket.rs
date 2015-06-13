@@ -32,8 +32,7 @@ fn bench_connection_setup_and_teardown(b: &mut Bencher) {
         let mut server = iotry!(UtpSocket::bind(server_addr));
 
         thread::spawn(move || {
-            let client = iotry!(UtpSocket::bind("0.0.0.0:0"));
-            let mut client = iotry!(client.connect(server_addr));
+            let mut client = iotry!(UtpSocket::connect(server_addr));
             iotry!(client.close());
         });
 
@@ -61,8 +60,7 @@ fn bench_transfer_one_packet(b: &mut Bencher) {
         let mut server = iotry!(UtpSocket::bind(server_addr));
 
         thread::spawn(move || {
-            let client = iotry!(UtpSocket::bind("0.0.0.0:0"));
-            let mut client = iotry!(client.connect(server_addr));
+            let mut client = iotry!(UtpSocket::connect(server_addr));
             iotry!(client.send_to(&data[..]));
             iotry!(client.close());
         });
@@ -92,8 +90,7 @@ fn bench_transfer_one_megabyte(b: &mut Bencher) {
         let mut server = iotry!(UtpSocket::bind(server_addr));
 
         thread::spawn(move || {
-            let client = iotry!(UtpSocket::bind("0.0.0.0:0"));
-            let mut client = iotry!(client.connect(server_addr));
+            let mut client = iotry!(UtpSocket::connect(server_addr));
             iotry!(client.send_to(&data[..]));
             iotry!(client.close());
         });
