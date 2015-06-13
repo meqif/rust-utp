@@ -1064,6 +1064,11 @@ impl UtpListener {
     pub fn incoming(&self) -> Incoming {
         Incoming { listener: self }
     }
+
+    /// Returns the local socket address of this listener.
+    pub fn local_addr(&self) -> Result<SocketAddr> {
+        self.socket.local_addr()
+    }
 }
 
 pub struct Incoming<'a> { listener: &'a UtpListener }
@@ -1081,7 +1086,7 @@ mod test {
     use std::thread;
     use std::net::ToSocketAddrs;
     use std::io::ErrorKind;
-    use super::{UtpSocket, SocketState, BUF_SIZE};
+    use super::{UtpSocket, UtpListener, SocketState, BUF_SIZE};
     use packet::{Packet, PacketType, Encodable, Decodable};
     use util::now_microseconds;
     use rand;
@@ -2188,5 +2193,15 @@ mod test {
 
         assert!(socket.local_addr().is_ok());
         assert_eq!(socket.local_addr().unwrap(), addr);
+    }
+
+    #[test]
+    fn test_listener_local_addr() {
+        let addr = next_test_ip4();
+        let addr = addr.to_socket_addrs().unwrap().next().unwrap();
+        let listener = UtpListener::bind(addr).unwrap();
+
+        assert!(listener.local_addr().is_ok());
+        assert_eq!(listener.local_addr().unwrap(), addr);
     }
 }
