@@ -1,5 +1,11 @@
 # Change Log
 
+## [0.5.1]
+
+### Added
+
+- Added `local_addr` for both `UtpSocket` and `UtpStream`.
+
 ## [0.5.0]
 
 ### Added
