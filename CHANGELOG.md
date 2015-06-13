@@ -1,5 +1,15 @@
 # Change Log
 
+## [0.6.0]
+
+### Added
+
+- Implemented the `Deref` trait for easy conversion from `UtpStream` instances into the underlying `UtpSocket`.
+
+### Changed
+
+- `UtpSocket::connect` is now a function instead of a method on a `UtpSocket` instance (i.e., it doesn't require a socket to be called).
+
 ## [0.5.1]
 
 ### Added
