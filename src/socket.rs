@@ -1136,8 +1136,46 @@ impl CloneableSocket {
 
     ///
     pub fn send_to(&mut self, buf: &[u8]) -> Result<usize> {
-        let mut socket = self.inner.lock().unwrap();
-        socket.send_to(buf)
+        let total_length = buf.len();
+
+        for chunk in buf.chunks(MSS as usize - HEADER_SIZE) {
+            let mut socket = self.inner.lock().unwrap();
+
+            if socket.state == SocketState::Closed {
+                return Err(Error::from(SocketError::ConnectionClosed));
+            }
+
+            let mut packet = Packet::with_payload(chunk);
+            packet.set_seq_nr(socket.seq_nr);
+            packet.set_ack_nr(socket.ack_nr);
+            packet.set_connection_id(socket.sender_connection_id);
+
+            // `OverflowingOps` is marked unstable, so we can't use `overflowing_add` here
+            if socket.seq_nr == ::std::u16::MAX {
+                socket.seq_nr = 0;
+            } else {
+                socket.seq_nr += 1;
+            }
+            drop(socket);
+
+            loop {
+                let mut socket = self.inner.lock().unwrap();
+
+                let max_inflight = min(socket.cwnd, socket.remote_wnd_size);
+                let max_inflight = max(MIN_CWND * MSS, max_inflight);
+
+                if socket.curr_window <= max_inflight {
+                    try!(self.raw_socket.send_to(&packet.to_bytes()[..], socket.connected_to));
+                    socket.curr_window += packet.len() as u32;
+                    socket.send_window.push(packet);
+                    break;
+                }
+
+                drop(socket);
+            }
+        }
+
+        Ok(total_length)
     }
 
     ///
