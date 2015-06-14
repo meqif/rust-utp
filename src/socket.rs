@@ -352,7 +352,11 @@ impl UtpSocket {
             Ok(x) => x,
             Err(e) => return Err(e),
         };
-        let packet = match Packet::from_bytes(&b[..read]) {
+        self.handler(&b[..read], src, buf)
+    }
+
+    fn handler(&mut self, b: &[u8], src: SocketAddr, buf: &mut [u8]) -> Result<(usize,SocketAddr)> {
+        let packet = match Packet::from_bytes(b) {
             Ok(packet) => packet,
             Err(e) => {
                 debug!("{}", e);
@@ -1085,6 +1089,63 @@ impl<'a> Iterator for Incoming<'a> {
 
     fn next(&mut self) -> Option<Result<(UtpSocket, SocketAddr)>> {
         Some(self.listener.accept())
+    }
+}
+
+use std::sync::{Arc, Mutex};
+
+///
+pub struct CloneableSocket {
+    inner: Arc<Mutex<UtpSocket>>,
+    raw_socket: UdpSocket,
+}
+
+impl CloneableSocket {
+    ///
+    pub fn bind<A: ToSocketAddrs>(addr: A) -> Result<CloneableSocket> {
+        match UtpSocket::bind(addr) {
+            Ok(s) => {
+                let raw_socket = s.socket.try_clone().unwrap();
+                Ok(CloneableSocket { inner: Arc::new(Mutex::new(s)), raw_socket: raw_socket })
+            }
+            Err(e) => Err(e)
+        }
+    }
+
+    ///
+    pub fn connect<A: ToSocketAddrs>(other: A) -> Result<CloneableSocket> {
+        match UtpSocket::connect(other) {
+            Ok(s) => {
+                let raw_socket = s.socket.try_clone().unwrap();
+                Ok(CloneableSocket { inner: Arc::new(Mutex::new(s)), raw_socket: raw_socket })
+            }
+            Err(e) => Err(e)
+        }
+    }
+
+    ///
+    pub fn recv(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
+        let mut b = [0; BUF_SIZE + HEADER_SIZE];
+        let (read, src) = match self.raw_socket.recv_from(&mut b) {
+            Ok(x) => x,
+            Err(e) => return Err(e),
+        };
+        let mut socket = self.inner.lock().unwrap();
+        socket.handler(&b[..read], src, buf)
+    }
+
+    ///
+    pub fn send_to(&mut self, buf: &[u8]) -> Result<usize> {
+        let mut socket = self.inner.lock().unwrap();
+        socket.send_to(buf)
+    }
+
+    ///
+    pub fn try_clone(&self) -> CloneableSocket {
+        CloneableSocket {
+            inner: self.inner.clone(),
+            raw_socket: self.raw_socket.try_clone().unwrap()
+        }
     }
 }
 

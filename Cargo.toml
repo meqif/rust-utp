@@ -36,3 +36,9 @@ name = "echo-server"
 path = "examples/echo-server/main.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "concurrent-server"
+path = "examples/concurrent-reads-and-writes/main.rs"
+test = false
+bench = false

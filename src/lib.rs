@@ -65,6 +65,7 @@ extern crate num;
 // Public API
 pub use socket::UtpSocket;
 pub use socket::UtpListener;
+pub use socket::CloneableSocket;
 pub use stream::UtpStream;
 
 mod util;
