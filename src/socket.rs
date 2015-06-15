@@ -1101,6 +1101,13 @@ pub struct CloneableSocket {
 }
 
 impl CloneableSocket {
+
+    ///
+    pub fn new(s : UtpSocket) -> Result<CloneableSocket> {
+        let raw_socket = s.socket.try_clone().unwrap();
+        Ok(CloneableSocket { inner: Arc::new(Mutex::new(s)), raw_socket: raw_socket })
+    }
+
     ///
     pub fn bind<A: ToSocketAddrs>(addr: A) -> Result<CloneableSocket> {
         match UtpSocket::bind(addr) {
@@ -1121,6 +1128,23 @@ impl CloneableSocket {
             }
             Err(e) => Err(e)
         }
+    }
+
+    ///
+    pub fn close(&mut self) -> Result<()> {
+        Ok(())
+    }
+
+    /// Returns the socket address that this socket was created from.
+    pub fn local_addr(&self) -> Result<SocketAddr> {
+        let socket = self.inner.lock().unwrap();
+        socket.local_addr()
+    }
+
+    /// Consumes acknowledgements for every pending packet.
+    pub fn flush(&mut self) -> Result<()> {
+        let mut socket = self.inner.lock().unwrap();
+        socket.flush()
     }
 
     ///
