@@ -1146,7 +1146,7 @@ impl UtpCloneableSocket {
     /// On success, returns the number of bytes read and the sender's address.
     /// Returns 0 bytes read after receiving a FIN packet when the remaining
     /// inflight packets are consumed.
-    pub fn recv(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
+    pub fn recv_from(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
         let mut b = [0; BUF_SIZE + HEADER_SIZE];
         let (read, src) = match self.raw_socket.recv_from(&mut b) {
             Ok(x) => x,

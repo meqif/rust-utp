@@ -16,7 +16,7 @@ fn main() {
         let socket = receiving_socket;
         let mut buf = [0; 1500];
         loop {
-            match socket.recv(&mut buf) {
+            match socket.recv_from(&mut buf) {
                 Ok((0, _src)) => break,
                 Ok((n, _src)) => println!("<=== received {:?}", &buf[..n]),
                 Err(e) => println!("Error in receiver: {:?}", e),
