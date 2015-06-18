@@ -1147,6 +1147,21 @@ impl UtpCloneableSocket {
     /// Returns 0 bytes read after receiving a FIN packet when the remaining
     /// inflight packets are consumed.
     pub fn recv_from(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
+        let socket = self.inner.lock().unwrap();
+        // If the socket received a reset packet and all data has been flushed, then it can't
+        // receive anything else
+        if socket.state == SocketState::ResetReceived {
+            return Err(Error::from(SocketError::ConnectionReset));
+        }
+
+        // A closed socket with no pending data can only "read" 0 new bytes.
+        if socket.state == SocketState::Closed {
+            return Ok((0, socket.connected_to));
+        }
+
+        // Release lock
+        drop(socket);
+
         let mut b = [0; BUF_SIZE + HEADER_SIZE];
         let (read, src) = match self.raw_socket.recv_from(&mut b) {
             Ok(x) => x,
