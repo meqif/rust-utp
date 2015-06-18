@@ -1185,6 +1185,23 @@ impl UtpCloneableSocket {
             raw_socket: self.raw_socket.try_clone().unwrap()
         }
     }
+
+    ///
+    pub fn local_addr(&self) -> Result<SocketAddr> {
+        self.raw_socket.local_addr()
+    }
+
+    ///
+    pub fn flush(&mut self) -> Result<()> {
+        let mut socket = self.inner.lock().unwrap();
+        socket.flush()
+    }
+
+    ///
+    pub fn close(&self) -> Result<()> {
+        let mut socket = self.inner.lock().unwrap();
+        socket.close()
+    }
 }
 
 impl From<UtpSocket> for UtpCloneableSocket {
