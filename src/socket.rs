@@ -1187,6 +1187,16 @@ impl UtpCloneableSocket {
     }
 }
 
+impl From<UtpSocket> for UtpCloneableSocket {
+    fn from(s: UtpSocket) -> UtpCloneableSocket {
+        let raw_socket = s.socket.try_clone().unwrap();
+        UtpCloneableSocket {
+            inner: Arc::new(Mutex::new(s)),
+            raw_socket: raw_socket
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use std::thread;
