@@ -1100,8 +1100,21 @@ pub struct UtpCloneableSocket {
     raw_socket: UdpSocket,
 }
 
+/// A structure that represents a uTP (Micro Transport Protocol) connection between a local socket
+/// and a remote socket.
+///
+/// This socket can be freely cloned and shared between threads, unlike its thread-unsafe sibling,
+/// `UtpSocket`.
+///
+/// The socket will be closed when the value is dropped (either explicitly or when it goes out of
+/// scope).
 impl UtpCloneableSocket {
+    /// Creates a new `UtpCloneableSocket` from the given address.
     ///
+    /// The address type can be any implementor of the `ToSocketAddr` trait. See its documentation
+    /// for concrete examples.
+    ///
+    /// If more than one valid address is specified, only the first will be used.
     pub fn bind<A: ToSocketAddrs>(addr: A) -> Result<UtpCloneableSocket> {
         match UtpSocket::bind(addr) {
             Ok(s) => {
@@ -1112,7 +1125,12 @@ impl UtpCloneableSocket {
         }
     }
 
+    /// Opens a connection to a remote host by hostname or IP address.
     ///
+    /// The address type can be any implementor of the `ToSocketAddr` trait. See its documentation
+    /// for concrete examples.
+    ///
+    /// If more than one valid address is specified, only the first will be used.
     pub fn connect<A: ToSocketAddrs>(other: A) -> Result<UtpCloneableSocket> {
         match UtpSocket::connect(other) {
             Ok(s) => {
@@ -1123,7 +1141,11 @@ impl UtpCloneableSocket {
         }
     }
 
+    /// Receives data from socket.
     ///
+    /// On success, returns the number of bytes read and the sender's address.
+    /// Returns 0 bytes read after receiving a FIN packet when the remaining
+    /// inflight packets are consumed.
     pub fn recv(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
         let mut b = [0; BUF_SIZE + HEADER_SIZE];
         let (read, src) = match self.raw_socket.recv_from(&mut b) {
@@ -1134,7 +1156,16 @@ impl UtpCloneableSocket {
         socket.handler(&b[..read], src, buf)
     }
 
-    ///
+    /// Sends data on the socket to the remote peer. On success, returns the number of bytes written.
+    //
+    // # Implementation details
+    //
+    // This method inserts packets into the send buffer and keeps trying to
+    // advance the send window until an ACK corresponding to the last packet is
+    // received.
+    //
+    // Note that the buffer passed to `send_to` might exceed the maximum packet
+    // size, which will result in the data being split over several packets.
     pub fn send_to(&mut self, buf: &[u8]) -> Result<usize> {
         let total_length = buf.len();
 
@@ -1178,7 +1209,11 @@ impl UtpCloneableSocket {
         Ok(total_length)
     }
 
+    /// Creates a new independently owned handle to the underlying socket.
     ///
+    /// The returned `UtpCloneableSocket` is a reference to the same socket that this object
+    /// references. Both handles will read and write the same socket, and options set on one socket
+    /// will be propagated to the other socket.
     pub fn try_clone(&self) -> UtpCloneableSocket {
         UtpCloneableSocket {
             inner: self.inner.clone(),
@@ -1186,18 +1221,21 @@ impl UtpCloneableSocket {
         }
     }
 
-    ///
+    /// Returns the socket address that this socket was created from.
     pub fn local_addr(&self) -> Result<SocketAddr> {
         self.raw_socket.local_addr()
     }
 
-    ///
+    /// Consumes acknowledgements for every pending packet.
     pub fn flush(&mut self) -> Result<()> {
         let mut socket = self.inner.lock().unwrap();
         socket.flush()
     }
 
+    /// Gracefully closes connection to peer.
     ///
+    /// This method allows both peers to receive all packets still in
+    /// flight.
     pub fn close(&self) -> Result<()> {
         let mut socket = self.inner.lock().unwrap();
         socket.close()
