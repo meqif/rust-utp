@@ -1,7 +1,7 @@
 extern crate utp;
 extern crate env_logger;
 
-use utp::CloneableSocket;
+use utp::UtpCloneableSocket;
 use std::thread;
 
 fn main() {
@@ -9,7 +9,7 @@ fn main() {
     env_logger::init().unwrap();
 
     let addr = "127.0.0.1:8080";
-    let mut socket = CloneableSocket::connect(addr).unwrap();
+    let mut socket = UtpCloneableSocket::connect(addr).unwrap();
     let receiving_socket = socket.try_clone();
 
     thread::spawn(move || {

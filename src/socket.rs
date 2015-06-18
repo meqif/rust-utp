@@ -1095,29 +1095,29 @@ impl<'a> Iterator for Incoming<'a> {
 use std::sync::{Arc, Mutex};
 
 ///
-pub struct CloneableSocket {
+pub struct UtpCloneableSocket {
     inner: Arc<Mutex<UtpSocket>>,
     raw_socket: UdpSocket,
 }
 
-impl CloneableSocket {
+impl UtpCloneableSocket {
     ///
-    pub fn bind<A: ToSocketAddrs>(addr: A) -> Result<CloneableSocket> {
+    pub fn bind<A: ToSocketAddrs>(addr: A) -> Result<UtpCloneableSocket> {
         match UtpSocket::bind(addr) {
             Ok(s) => {
                 let raw_socket = s.socket.try_clone().unwrap();
-                Ok(CloneableSocket { inner: Arc::new(Mutex::new(s)), raw_socket: raw_socket })
+                Ok(UtpCloneableSocket { inner: Arc::new(Mutex::new(s)), raw_socket: raw_socket })
             }
             Err(e) => Err(e)
         }
     }
 
     ///
-    pub fn connect<A: ToSocketAddrs>(other: A) -> Result<CloneableSocket> {
+    pub fn connect<A: ToSocketAddrs>(other: A) -> Result<UtpCloneableSocket> {
         match UtpSocket::connect(other) {
             Ok(s) => {
                 let raw_socket = s.socket.try_clone().unwrap();
-                Ok(CloneableSocket { inner: Arc::new(Mutex::new(s)), raw_socket: raw_socket })
+                Ok(UtpCloneableSocket { inner: Arc::new(Mutex::new(s)), raw_socket: raw_socket })
             }
             Err(e) => Err(e)
         }
@@ -1179,8 +1179,8 @@ impl CloneableSocket {
     }
 
     ///
-    pub fn try_clone(&self) -> CloneableSocket {
-        CloneableSocket {
+    pub fn try_clone(&self) -> UtpCloneableSocket {
+        UtpCloneableSocket {
             inner: self.inner.clone(),
             raw_socket: self.raw_socket.try_clone().unwrap()
         }
