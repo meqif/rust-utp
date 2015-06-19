@@ -1132,13 +1132,7 @@ impl UtpCloneableSocket {
     ///
     /// If more than one valid address is specified, only the first will be used.
     pub fn connect<A: ToSocketAddrs>(other: A) -> Result<UtpCloneableSocket> {
-        match UtpSocket::connect(other) {
-            Ok(s) => {
-                let raw_socket = s.socket.try_clone().unwrap();
-                Ok(UtpCloneableSocket { inner: Arc::new(Mutex::new(s)), raw_socket: raw_socket })
-            }
-            Err(e) => Err(e)
-        }
+        UtpSocket::connect(other).map(From::from)
     }
 
     /// Receives data from socket.
