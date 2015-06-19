@@ -1116,13 +1116,7 @@ impl UtpCloneableSocket {
     ///
     /// If more than one valid address is specified, only the first will be used.
     pub fn bind<A: ToSocketAddrs>(addr: A) -> Result<UtpCloneableSocket> {
-        match UtpSocket::bind(addr) {
-            Ok(s) => {
-                let raw_socket = s.socket.try_clone().unwrap();
-                Ok(UtpCloneableSocket { inner: Arc::new(Mutex::new(s)), raw_socket: raw_socket })
-            }
-            Err(e) => Err(e)
-        }
+        UtpSocket::bind(addr).map(From::from)
     }
 
     /// Opens a connection to a remote host by hostname or IP address.
