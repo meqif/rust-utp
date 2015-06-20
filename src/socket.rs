@@ -1252,7 +1252,7 @@ impl UtpCloneableSocket {
     ///
     /// This method allows both peers to receive all packets still in
     /// flight.
-    pub fn close(&self) -> Result<()> {
+    pub fn close(&mut self) -> Result<()> {
         let mut socket = self.inner.lock().unwrap();
         socket.close()
     }

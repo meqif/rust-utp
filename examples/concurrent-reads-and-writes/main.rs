@@ -13,7 +13,7 @@ fn main() {
     let receiving_socket = socket.try_clone();
 
     thread::spawn(move || {
-        let socket = receiving_socket;
+        let mut socket = receiving_socket;
         let mut buf = [0; 1500];
         loop {
             match socket.recv_from(&mut buf) {
