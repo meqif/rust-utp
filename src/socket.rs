@@ -211,6 +211,11 @@ impl UtpSocket {
         self.socket.local_addr()
     }
 
+    /// Returns the socket address that this socket is connected to.
+    pub fn peer_addr(&self) -> Result<SocketAddr> {
+        Ok(self.connected_to)
+    }
+
     /// Opens a connection to a remote host by hostname or IP address.
     ///
     /// The address type can be any implementor of the `ToSocketAddr` trait. See its documentation
@@ -1240,6 +1245,12 @@ impl UtpCloneableSocket {
     /// Returns the socket address that this socket was created from.
     pub fn local_addr(&self) -> Result<SocketAddr> {
         self.raw_socket.local_addr()
+    }
+
+    /// Returns the socket address that this socket is connected to.
+    pub fn peer_addr(&self) -> Result<SocketAddr> {
+        let socket = self.inner.lock().unwrap();
+        Ok(socket.connected_to)
     }
 
     /// Consumes acknowledgements for every pending packet.
