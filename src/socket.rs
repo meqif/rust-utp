@@ -739,7 +739,8 @@ impl UtpSocket {
             (SocketState::SynSent, _) => {
                 Err(Error::from(SocketError::InvalidReply))
             }
-            (SocketState::Connected, PacketType::Data) => {
+            (SocketState::Connected, PacketType::Data) |
+            (SocketState::FinSent, PacketType::Data) => {
                 Ok(self.handle_data_packet(packet))
             },
             (SocketState::Connected, PacketType::State) => {
@@ -779,7 +780,13 @@ impl UtpSocket {
     }
 
     fn handle_data_packet(&mut self, packet: &Packet) -> Option<Packet> {
-        let mut reply = self.prepare_reply(packet, PacketType::State);
+        // If a FIN was previously sent, reply with a FIN packet acknowledging the received packet.
+        let packet_type = if self.state == SocketState::FinSent {
+            PacketType::Fin
+        } else {
+            PacketType::State
+        };
+        let mut reply = self.prepare_reply(packet, packet_type);
 
         if packet.seq_nr().wrapping_sub(self.ack_nr) > 1 {
             debug!("current ack_nr ({}) is behind received packet seq_nr ({})",
