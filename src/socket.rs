@@ -1200,6 +1200,7 @@ impl UtpCloneableSocket {
             }
             drop(socket);
 
+            let mut tries = 0;
             loop {
                 let mut socket = self.inner.lock().unwrap();
 
@@ -1208,12 +1209,16 @@ impl UtpCloneableSocket {
 
                 if socket.curr_window <= max_inflight {
                     try!(self.raw_socket.send_to(&packet.to_bytes()[..], socket.connected_to));
+                    debug!("sent {:?}", packet);
                     socket.curr_window += packet.len() as u32;
                     socket.send_window.push(packet);
                     break;
+                } else if tries > 3 {
+                    let mut buf = [0; 0];
+                    socket.recv(&mut buf).unwrap();
                 }
-
                 drop(socket);
+                tries += 1;
             }
         }
 
