@@ -31,7 +31,7 @@ impl UtpStream {
     ///
     /// If more than one valid address is specified, only the first will be used.
     pub fn bind<A: ToSocketAddrs>(addr: A) -> Result<UtpStream> {
-        UtpSocket::bind(addr).and_then(|s| Ok(UtpStream { socket: s }))
+        UtpSocket::bind(addr).map(|s| UtpStream { socket: s })
     }
 
     /// Opens a uTP connection to a remote host by hostname or IP address.
@@ -42,8 +42,7 @@ impl UtpStream {
     /// If more than one valid address is specified, only the first will be used.
     pub fn connect<A: ToSocketAddrs>(dst: A) -> Result<UtpStream> {
         // Port 0 means the operating system gets to choose it
-        UtpSocket::connect(dst)
-            .and_then(|s| Ok(UtpStream { socket: s }))
+        UtpSocket::connect(dst).map(|s| UtpStream { socket: s })
     }
 
     /// Gracefully closes connection to peer.
