@@ -741,15 +741,25 @@ impl UtpSocket {
             },
             (SocketState::Connected, PacketType::Fin) |
             (SocketState::FinSent,   PacketType::Fin) => {
-                // If all packets are received and handled
-                if packet.ack_nr() == self.seq_nr {
-                    self.state = SocketState::Closed;
-                    Ok(Some(self.prepare_reply(packet, PacketType::State)))
-                } else {
-                    debug!("FIN received but there are missing packets");
-                    self.handle_state_packet(packet);
-                    Ok(None)
+                if packet.ack_nr() < self.seq_nr {
+                    debug!("FIN received but there are missing acknowledgments for sent packets");
                 }
+                let mut reply = self.prepare_reply(packet, PacketType::State);
+                if packet.seq_nr().wrapping_sub(self.ack_nr) > 1 {
+                    debug!("current ack_nr ({}) is behind received packet seq_nr ({})",
+                           self.ack_nr, packet.seq_nr());
+
+                    // Set SACK extension payload if the packet is not in order
+                    let sack = self.build_selective_ack();
+
+                    if sack.len() > 0 {
+                        reply.set_sack(sack);
+                    }
+                }
+
+                // Give up, the remote peer might not care about our missing packets
+                self.state = SocketState::Closed;
+                Ok(Some(reply))
             }
             (SocketState::FinSent, PacketType::State) => {
                 if packet.ack_nr() == self.seq_nr {
