@@ -1259,7 +1259,7 @@ mod test {
     use std::thread;
     use std::net::ToSocketAddrs;
     use std::io::ErrorKind;
-    use super::{UtpSocket, UtpListener, SocketState, BUF_SIZE};
+    use super::{UtpSocket, UtpCloneableSocket, UtpListener, SocketState, BUF_SIZE};
     use packet::{Packet, PacketType, Encodable, Decodable};
     use util::now_microseconds;
     use rand;
@@ -2346,5 +2346,84 @@ mod test {
 
         assert!(listener.local_addr().is_ok());
         assert_eq!(listener.local_addr().unwrap(), addr);
+    }
+
+    // ----------------
+
+    #[test]
+    fn test_mutex_socket_ipv4() {
+        let server_addr = next_test_ip4();
+
+        let mut server = iotry!(UtpCloneableSocket::bind(server_addr));
+
+        thread::spawn(move || {
+            let mut client = iotry!(UtpSocket::connect(server_addr));
+            iotry!(client.close());
+            drop(client);
+        });
+
+        let mut buf = [0u8; BUF_SIZE];
+        match server.recv_from(&mut buf) {
+            e => println!("{:?}", e),
+        }
+        drop(server);
+    }
+
+    #[test]
+    fn test_mutex_socket_small_data() {
+        let server_addr = next_test_ip4();
+        let data = [1,2,3,4,5,6,7,8,9];
+
+        let mut server = iotry!(UtpCloneableSocket::bind(server_addr));
+
+        thread::spawn(move || {
+            let mut client = iotry!(UtpSocket::connect(server_addr));
+            client.send_to(&data);
+            iotry!(client.close());
+            drop(client);
+        });
+
+        let mut buf = [0u8; BUF_SIZE];
+        let mut received: Vec<u8> = vec!();
+        loop {
+            match server.recv_from(&mut buf) {
+                Ok((0, _src)) => break,
+                Ok((n, _src)) => received.extend(&buf[..n]),
+                e => println!("{:?}", e),
+            }
+
+        }
+        assert_eq!(&received[..], &data[..]);
+        drop(server);
+    }
+
+    #[test]
+    fn test_mutex_socket_data() {
+        let server_addr = next_test_ip4();
+        let len = 1024 * 1024;
+        let data = (0..len).map(|x| x as u8).collect::<Vec<u8>>();
+        let to_send = data.clone();
+
+        let mut server = iotry!(UtpCloneableSocket::bind(server_addr));
+
+        thread::spawn(move || {
+            let mut client = iotry!(UtpSocket::connect(server_addr));
+            client.send_to(&to_send);
+            iotry!(client.close());
+            drop(client);
+        });
+
+        let mut buf = [0u8; BUF_SIZE];
+        let mut received: Vec<u8> = Vec::with_capacity(len);
+        loop {
+            match server.recv_from(&mut buf) {
+                Ok((0, _src)) => break,
+                Ok((n, _src)) => received.extend(&buf[..n]),
+                e => println!("{:?}", e),
+            }
+
+        }
+        assert_eq!(&received[..], &data[..]);
+        drop(server);
     }
 }
