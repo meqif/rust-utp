@@ -2402,7 +2402,7 @@ mod test {
         loop {
             match server.recv_from(&mut buf) {
                 Ok((0, _src)) => break,
-                Ok((n, _src)) => received.extend(&buf[..n]),
+                Ok((n, _src)) => received.extend(buf[..n].to_vec()),
                 e => println!("{:?}", e),
             }
 
@@ -2432,7 +2432,7 @@ mod test {
         loop {
             match server.recv_from(&mut buf) {
                 Ok((0, _src)) => break,
-                Ok((n, _src)) => received.extend(&buf[..n]),
+                Ok((n, _src)) => received.extend(buf[..n].to_vec()),
                 e => println!("{:?}", e),
             }
 
