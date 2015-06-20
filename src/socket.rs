@@ -52,7 +52,6 @@ enum SocketState {
     New,
     Connected,
     SynSent,
-    FinReceived,
     FinSent,
     ResetReceived,
     Closed,
