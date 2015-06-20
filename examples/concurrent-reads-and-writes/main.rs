@@ -17,9 +17,12 @@ fn main() {
         let mut buf = [0; 1500];
         loop {
             match socket.recv_from(&mut buf) {
-                Ok((0, _src)) => break,
+                Ok((0, _src)) => (),
                 Ok((n, _src)) => println!("<=== received {:?}", &buf[..n]),
-                Err(e) => println!("Error in receiver: {:?}", e),
+                Err(e) => {
+                    println!("Error in receiver: {:?}", e);
+                    break;
+                }
             }
         }
     });
@@ -31,7 +34,11 @@ fn main() {
                 println!("===> sent {}", i);
                 i = (i + 1) % 10;
             },
-            Err(e) => println!("Error in sender: {:?}", e)
+            Err(e) => {
+                println!("Error in sender: {:?}", e);
+                break;
+            }
         }
+        std::thread::sleep_ms(1000);
     }
 }
