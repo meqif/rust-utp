@@ -4,7 +4,7 @@ extern crate test;
 extern crate utp;
 
 use test::Bencher;
-use utp::UtpSocket;
+use utp::{UtpSocket, UtpCloneableSocket};
 use std::sync::Arc;
 use std::thread;
 
@@ -91,6 +91,90 @@ fn bench_transfer_one_megabyte(b: &mut Bencher) {
 
         thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
+            iotry!(client.send_to(&data[..]));
+            iotry!(client.close());
+        });
+
+        loop {
+            match server.recv_from(&mut buf) {
+                Ok((0, _src)) => break,
+                Ok(_) => (),
+                Err(e) => panic!("{}", e)
+            }
+        }
+        iotry!(server.close());
+    });
+    b.bytes = len as u64;
+}
+
+#[bench]
+fn bench_mutex_connection_setup_and_teardown(b: &mut Bencher) {
+    let server_addr = next_test_ip4();
+    let mut buf = [0; 1500];
+
+    b.iter(|| {
+        let mut server = iotry!(UtpCloneableSocket::bind(server_addr));
+
+        thread::spawn(move || {
+            let mut client = iotry!(UtpCloneableSocket::connect(server_addr));
+            iotry!(client.close());
+        });
+
+        loop {
+            match server.recv_from(&mut buf) {
+                Ok((0, _src)) => break,
+                Ok(_) => (),
+                Err(e) => panic!("{}", e)
+            }
+        }
+        iotry!(server.close());
+    });
+}
+
+#[bench]
+fn bench_mutex_transfer_one_packet(b: &mut Bencher) {
+    let len = 1024;
+    let server_addr = next_test_ip4();
+    let mut buf = [0; 1500];
+    let data = (0..len).map(|x| x as u8).collect::<Vec<u8>>();
+    let data_arc = Arc::new(data);
+
+    b.iter(|| {
+        let data = data_arc.clone();
+        let mut server = iotry!(UtpCloneableSocket::bind(server_addr));
+
+        thread::spawn(move || {
+            let mut client = iotry!(UtpCloneableSocket::connect(server_addr));
+            iotry!(client.send_to(&data[..]));
+            iotry!(client.close());
+        });
+
+        loop {
+            match server.recv_from(&mut buf) {
+                Ok((0, _src)) => break,
+                Ok(_) => (),
+                Err(e) => panic!("{}", e)
+            }
+        }
+        iotry!(server.close());
+    });
+    b.bytes = len as u64;
+}
+
+#[bench]
+fn bench_mutex_transfer_one_megabyte(b: &mut Bencher) {
+    let len = 1024 * 1024;
+    let server_addr = next_test_ip4();
+    let mut buf = [0; 1500];
+    let data = (0..len).map(|x| x as u8).collect::<Vec<u8>>();
+    let data_arc = Arc::new(data);
+
+    b.iter(|| {
+        let data = data_arc.clone();
+        let mut server = iotry!(UtpCloneableSocket::bind(server_addr));
+
+        thread::spawn(move || {
+            let mut client = iotry!(UtpCloneableSocket::connect(server_addr));
             iotry!(client.send_to(&data[..]));
             iotry!(client.close());
         });
