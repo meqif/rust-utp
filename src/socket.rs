@@ -1133,29 +1133,38 @@ impl UtpCloneableSocket {
     /// On success, returns the number of bytes read and the sender's address.
     /// Returns 0 bytes read after receiving a FIN packet when the remaining
     /// inflight packets are consumed.
-    pub fn recv_from(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
-        let socket = self.inner.lock().unwrap();
-        // If the socket received a reset packet and all data has been flushed, then it can't
-        // receive anything else
-        if socket.state == SocketState::ResetReceived {
-            return Err(Error::from(SocketError::ConnectionReset));
-        }
-
-        // A closed socket with no pending data can only "read" 0 new bytes.
-        if socket.state == SocketState::Closed {
-            return Ok((0, socket.connected_to));
-        }
-
-        // Release lock
-        drop(socket);
-
+    pub fn recv_from(&mut self, buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
         let mut b = [0; BUF_SIZE + HEADER_SIZE];
-        let (read, src) = match self.raw_socket.recv_from(&mut b) {
-            Ok(x) => x,
-            Err(e) => return Err(e),
-        };
-        let mut socket = self.inner.lock().unwrap();
-        socket.handler(&b[..read], src, buf)
+        loop {
+            let socket = self.inner.lock().unwrap();
+            // If the socket received a reset packet and all data has been flushed, then it can't
+            // receive anything else
+            if socket.state == SocketState::ResetReceived {
+                return Err(Error::from(SocketError::ConnectionReset));
+            }
+
+            // A closed socket with no pending data can only "read" 0 new bytes.
+            if socket.state == SocketState::Closed {
+                return Ok((0, socket.connected_to));
+            }
+
+            // Release lock
+            drop(socket);
+
+            // Wait on the raw UDP socket for a non empty packet.
+            let (read, src) = match self.raw_socket.recv_from(&mut b) {
+                Ok(x) => x,
+                Err(e) => return Err(e),
+            };
+            if read == 0 { continue; }
+
+            // Handle the received packet
+            let mut socket = self.inner.lock().unwrap();
+            match socket.handler(&b[..read], src, buf) {
+                Ok((0, _src)) => continue,
+                e => return e
+            }
+        }
     }
 
     /// Sends data on the socket to the remote peer. On success, returns the number of bytes written.
