@@ -6,30 +6,6 @@ use util::{now_microseconds, ewma};
 use packet::{Packet, PacketType, Encodable, Decodable, ExtensionType, HEADER_SIZE};
 use rand;
 
-trait WithReadTimeout {
-    fn recv_timeout(&mut self, &mut [u8], i64) -> Result<(usize, SocketAddr)>;
-}
-
-impl WithReadTimeout for UdpSocket {
-    #[cfg(unix)]
-    fn recv_timeout(&mut self, buf: &mut [u8], timeout: i64) -> Result<(usize, SocketAddr)> {
-        use nix::sys::socket::{SockLevel, sockopt, setsockopt};
-        use nix::sys::time::TimeVal;
-        use std::os::unix::io::AsRawFd;
-
-        setsockopt(self.as_raw_fd(),
-                   SockLevel::Socket,
-                   sockopt::ReceiveTimeout,
-                   &TimeVal::milliseconds(timeout)).unwrap();
-        self.recv_from(buf)
-    }
-
-    #[cfg(windows)]
-    fn recv_timeout(&mut self, buf: &mut [u8], _timeout: i64) -> Result<(usize, SocketAddr)> {
-        self.recv_from(buf)
-    }
-}
-
 // For simplicity's sake, let us assume no packet will ever exceed the
 // Ethernet maximum transfer unit of 1500 bytes.
 const BUF_SIZE: usize = 1500;

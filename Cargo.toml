@@ -19,23 +19,9 @@ log = "0.3"
 env_logger = "0.3"
 rand = "0.3"
 
-[target.x86_64-unknown-linux-gnu.dependencies]
-nix = "*"
-
-[target.i686-unknown-linux-gnu.dependencies]
-nix = "*"
-
-[target.x86_64-apple-darwin.dependencies]
-nix = "*"
-
-[target.i686-apple-darwin.dependencies]
-nix = "*"
-
-[target.i686-pc-windows-gnu.dependencies]
-libc = "*"
-
-[target.x86_64-pc-windows-gnu.dependencies]
-libc = "*"
+[dependencies.with_read_timeout]
+path = "with_read_timeout"
+version = "*"
 
 [dev-dependencies]
 quickcheck = "*"
