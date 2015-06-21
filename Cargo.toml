@@ -31,6 +31,12 @@ nix = "*"
 [target.i686-apple-darwin.dependencies]
 nix = "*"
 
+[target.i686-pc-windows-gnu.dependencies]
+libc = "*"
+
+[target.x86_64-pc-windows-gnu.dependencies]
+libc = "*"
+
 [dev-dependencies]
 quickcheck = "*"
 

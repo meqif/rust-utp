@@ -11,6 +11,7 @@ trait WithReadTimeout {
 }
 
 impl WithReadTimeout for UdpSocket {
+    #[cfg(unix)]
     fn recv_timeout(&mut self, buf: &mut [u8], timeout: i64) -> Result<(usize, SocketAddr)> {
         use nix::sys::socket::{SockLevel, sockopt, setsockopt};
         use nix::sys::time::TimeVal;
@@ -20,6 +21,11 @@ impl WithReadTimeout for UdpSocket {
                    SockLevel::Socket,
                    sockopt::ReceiveTimeout,
                    &TimeVal::milliseconds(timeout)).unwrap();
+        self.recv_from(buf)
+    }
+
+    #[cfg(windows)]
+    fn recv_timeout(&mut self, buf: &mut [u8], _timeout: i64) -> Result<(usize, SocketAddr)> {
         self.recv_from(buf)
     }
 }
