@@ -5,6 +5,7 @@ use std::io::{Result, Error, ErrorKind};
 use util::{now_microseconds, ewma};
 use packet::{Packet, PacketType, Encodable, Decodable, ExtensionType, HEADER_SIZE};
 use rand;
+use with_read_timeout::WithReadTimeout;
 
 // For simplicity's sake, let us assume no packet will ever exceed the
 // Ethernet maximum transfer unit of 1500 bytes.
@@ -234,7 +235,7 @@ impl UtpSocket {
         let mut len = 0;
         let mut buf = [0; BUF_SIZE];
 
-        // let syn_timeout = socket.congestion_timeout;
+        let mut syn_timeout = socket.congestion_timeout as i64;
         for _ in (0u8..5) {
             packet.set_timestamp_microseconds(now_microseconds());
 
@@ -246,14 +247,14 @@ impl UtpSocket {
 
             // Validate response
             // socket.socket.set_read_timeout(Some(syn_timeout));
-            match socket.socket.recv_from(&mut buf) {
+            match socket.socket.recv_timeout(&mut buf, syn_timeout) {
                 // Ok((_read, src)) if src != socket.connected_to => continue,
                 Ok((read, src)) => { socket.connected_to = src; len = read; break; },
-                // Err(ref e) if e.kind == TimedOut => {
-                //     debug!("Timed out, retrying");
-                //     syn_timeout *= 2;
-                //     continue;
-                // },
+                Err(ref e) if e.kind() == ErrorKind::WouldBlock => {
+                    debug!("Timed out, retrying");
+                    syn_timeout *= 2;
+                    continue;
+                },
                 Err(e) => return Err(e),
             };
         }
