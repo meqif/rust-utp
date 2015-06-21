@@ -93,3 +93,10 @@ mod select {
                       timeout: *mut libc::timeval) -> libc::c_int;
     }
 }
+
+#[test]
+fn test_socket_timeout() {
+    let mut socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+    let mut buf = [0; 10];
+    assert!(socket.recv_timeout(&mut buf, 100).is_err());
+}
