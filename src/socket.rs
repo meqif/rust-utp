@@ -16,9 +16,10 @@ const TARGET: i64 = 100_000; // 100 milliseconds
 const MSS: u32 = 1400;
 const MIN_CWND: u32 = 2;
 const INIT_CWND: u32 = 2;
+const CONNECTION_TIMEOUT : u32 = 20_000; // 20 seconds
 const INITIAL_CONGESTION_TIMEOUT: u64 = 1000; // one second
 const MIN_CONGESTION_TIMEOUT: u64 = 500; // 500 ms
-const MAX_CONGESTION_TIMEOUT: u64 = 60_000; // one minute
+const MAX_CONGESTION_TIMEOUT: u64 = 6_000; // 6 seconds
 const BASE_HISTORY: usize = 10; // base delays history size
 
 #[derive(Debug)]
@@ -255,13 +256,16 @@ impl UtpSocket {
             match socket.socket.recv_timeout(&mut buf, syn_timeout) {
                 // Ok((_read, src)) if src != socket.connected_to => continue,
                 Ok((read, src)) => { socket.connected_to = src; len = read; break; },
-                Err(ref e) if (e.kind() == ErrorKind::WouldBlock ||
-                               e.kind() == ErrorKind::TimedOut) => {
-                    debug!("Timed out, retrying");
-                    syn_timeout *= 2;
-                    continue;
+                Err(ref e) => {
+                    if e.kind() == ErrorKind::WouldBlock ||
+                        e.kind() == ErrorKind::TimedOut {
+                        debug!("Timed out, retrying");
+                        syn_timeout *= 2;
+                        continue;
+                    } else if e.kind() == ErrorKind::Interrupted {
+                        continue;
+                    }
                 },
-                Err(e) => return Err(e),
             };
         }
 
@@ -274,12 +278,8 @@ impl UtpSocket {
 
         return Ok(socket);
     }
-
-    /// Gracefully closes connection to peer.
-    ///
-    /// This method allows both peers to receive all packets still in
-    /// flight.
-    pub fn close(&mut self) -> Result<()> {
+    
+    fn send_fin(&mut self) -> Result<()> {
         try!(self.flush());
 
         // Nothing to do if the socket's already closed or not connected
@@ -288,7 +288,7 @@ impl UtpSocket {
             self.state == SocketState::SynSent {
             return Ok(());
         }
-
+        
         let mut packet = Packet::new();
         packet.set_connection_id(self.sender_connection_id);
         packet.set_seq_nr(self.seq_nr);
@@ -299,10 +299,33 @@ impl UtpSocket {
         // Send FIN
         try!(self.socket.send_to(&packet.to_bytes()[..], self.connected_to));
         self.state = SocketState::FinSent;
+        
+        Ok(())
+    }
+
+    /// Gracefully closes connection to peer.
+    ///
+    /// This method allows both peers to receive all packets still in
+    /// flight.
+    pub fn close(&mut self) -> Result<()> {
+        
+        // Send the FIN packet
+        try!(self.send_fin());
+
+        // Nothing to do if the socket's already closed or not connected
+        if self.state == SocketState::Closed ||
+            self.state == SocketState::New ||
+            self.state == SocketState::SynSent {
+            return Ok(());
+        }
 
         // Receive JAKE
         let mut buf = [0; BUF_SIZE];
-        while self.state != SocketState::Closed {
+        let now = now_microseconds();
+        while (now_microseconds() - now) / 1000 < CONNECTION_TIMEOUT {
+            if self.state == SocketState::Closed {
+                break;
+            }
             try!(self.recv(&mut buf));
         }
 
@@ -326,7 +349,8 @@ impl UtpSocket {
                 return Err(Error::from(SocketError::ConnectionReset));
             }
 
-            loop {
+            let now = now_microseconds();
+            while (now_microseconds() - now) / 1000 < CONNECTION_TIMEOUT {
                 // A closed socket with no pending data can only "read" 0 new bytes.
                 if self.state == SocketState::Closed {
                     return Ok((0, self.connected_to));
@@ -338,6 +362,10 @@ impl UtpSocket {
                     Err(e) => return Err(e)
                 }
             }
+            // Send the FIN packet and force close
+            try!(self.send_fin());
+            self.state = SocketState::Closed;
+            Err(Error::new(ErrorKind::ConnectionAborted, "Connection lost"))
         }
     }
 
@@ -346,18 +374,22 @@ impl UtpSocket {
         let timeout = if self.state != SocketState::New {
             debug!("setting read timeout of {} ms", self.congestion_timeout);
             self.congestion_timeout as i64
-        } else { 0 };
+        } else { CONNECTION_TIMEOUT as i64 };
         let (read, src) = match self.socket.recv_timeout(&mut b, timeout) {
-            Err(ref e) if (e.kind() == ErrorKind::WouldBlock ||
-                           e.kind() == ErrorKind::TimedOut) => {
-                debug!("recv_from timed out");
-                self.congestion_timeout = self.congestion_timeout * 2;
-                self.cwnd = MSS;
-                self.send_fast_resend_request();
-                return Ok((0, self.connected_to));
+            Err(e) => {
+                if e.kind() == ErrorKind::WouldBlock ||
+                    e.kind() == ErrorKind::TimedOut {
+                    debug!("recv_from timed out");
+                    self.congestion_timeout = self.congestion_timeout * 2;
+                    self.cwnd = MSS;
+                    self.send_fast_resend_request();
+                    return Ok((0, self.connected_to));
+                } else if e.kind() == ErrorKind::Interrupted {
+                    return Ok((0, self.connected_to));
+                }
+                return Err(e);
             },
             Ok(x) => x,
-            Err(e) => return Err(e),
         };
         self.handler(&b[..read], src, buf)
     }
@@ -1056,59 +1088,63 @@ impl UtpListener {
     pub fn accept(&self) -> Result<(UtpSocket, SocketAddr)> {
         let mut buf = [0; BUF_SIZE];
 
-        match self.socket.recv_from(&mut buf) {
-            Ok((nread, src)) => {
-                let packet = try!(Packet::from_bytes(&buf[..nread]).or(Err(SocketError::InvalidPacket)));
+        loop {
+            match self.socket.recv_from(&mut buf) {
+                Ok((nread, src)) => {
+                    let packet = try!(Packet::from_bytes(&buf[..nread]).or(Err(SocketError::InvalidPacket)));
 
-                // Ignore non-SYN packets
-                if packet.get_type() != PacketType::Syn {
-                    return Err(Error::from(SocketError::InvalidPacket));
+                    // Ignore non-SYN packets
+                    if packet.get_type() != PacketType::Syn {
+                        return Err(Error::from(SocketError::InvalidPacket));
+                    }
+
+                    // The address of the new socket will depend on the type of the listener.
+                    let inner_socket = match self.socket.local_addr().unwrap() {
+                        SocketAddr::V4(_) => UdpSocket::bind("0.0.0.0:0"),
+                        SocketAddr::V6(_) => UdpSocket::bind(":::0"),
+                    };
+
+                    let mut socket = UtpSocket {
+                        socket: inner_socket.unwrap(),
+                        connected_to: src,
+                        receiver_connection_id: 0,
+                        sender_connection_id: 0,
+                        seq_nr: 1,
+                        ack_nr: 0,
+                        state: SocketState::New,
+                        incoming_buffer: Vec::new(),
+                        send_window: Vec::new(),
+                        unsent_queue: VecDeque::new(),
+                        duplicate_ack_count: 0,
+                        last_acked: 0,
+                        last_acked_timestamp: 0,
+                        last_dropped: 0,
+                        rtt: 0,
+                        rtt_variance: 0,
+                        pending_data: Vec::new(),
+                        curr_window: 0,
+                        remote_wnd_size: 0,
+                        current_delays: Vec::new(),
+                        base_delays: VecDeque::with_capacity(BASE_HISTORY),
+                        their_delay: 0,
+                        last_rollover: 0,
+                        congestion_timeout: INITIAL_CONGESTION_TIMEOUT,
+                        cwnd: INIT_CWND * MSS,
+                    };
+
+                    // Establish connection with remote peer
+                    match socket.handle_packet(&packet, src) {
+                        Ok(Some(reply)) => { try!(socket.socket.send_to(&reply.to_bytes()[..], src)) },
+                        Ok(None) => return Err(Error::new(ErrorKind::Other, "Unexpected error handling packet")),
+                        Err(e) => return Err(e)
+                    };
+
+                    return Ok((socket, src))
+                },
+                Err(e) => if e.kind() != ErrorKind::Interrupted {
+                    return Err(e)
                 }
-
-                // The address of the new socket will depend on the type of the listener.
-                let inner_socket = match self.socket.local_addr().unwrap() {
-                    SocketAddr::V4(_) => UdpSocket::bind("0.0.0.0:0"),
-                    SocketAddr::V6(_) => UdpSocket::bind(":::0"),
-                };
-
-                let mut socket = UtpSocket {
-                    socket: inner_socket.unwrap(),
-                    connected_to: src,
-                    receiver_connection_id: 0,
-                    sender_connection_id: 0,
-                    seq_nr: 1,
-                    ack_nr: 0,
-                    state: SocketState::New,
-                    incoming_buffer: Vec::new(),
-                    send_window: Vec::new(),
-                    unsent_queue: VecDeque::new(),
-                    duplicate_ack_count: 0,
-                    last_acked: 0,
-                    last_acked_timestamp: 0,
-                    last_dropped: 0,
-                    rtt: 0,
-                    rtt_variance: 0,
-                    pending_data: Vec::new(),
-                    curr_window: 0,
-                    remote_wnd_size: 0,
-                    current_delays: Vec::new(),
-                    base_delays: VecDeque::with_capacity(BASE_HISTORY),
-                    their_delay: 0,
-                    last_rollover: 0,
-                    congestion_timeout: INITIAL_CONGESTION_TIMEOUT,
-                    cwnd: INIT_CWND * MSS,
-                };
-
-                // Establish connection with remote peer
-                match socket.handle_packet(&packet, src) {
-                    Ok(Some(reply)) => { try!(socket.socket.send_to(&reply.to_bytes()[..], src)) },
-                    Ok(None) => return Err(Error::new(ErrorKind::Other, "Unexpected error handling packet")),
-                    Err(e) => return Err(e)
-                };
-
-                Ok((socket, src))
-            },
-            Err(e) => Err(e)
+            }
         }
     }
 
@@ -1179,7 +1215,8 @@ impl UtpCloneableSocket {
     /// inflight packets are consumed.
     pub fn recv_from(&mut self, buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
         let mut b = [0; BUF_SIZE + HEADER_SIZE];
-        loop {
+        let now = now_microseconds();
+        while (now_microseconds() - now) / 1000 < CONNECTION_TIMEOUT {
             let socket = self.inner.lock().unwrap();
             // If the socket received a reset packet and all data has been flushed, then it can't
             // receive anything else
@@ -1198,7 +1235,11 @@ impl UtpCloneableSocket {
             // Wait on the raw UDP socket for a non empty packet.
             let (read, src) = match self.raw_socket.recv_from(&mut b) {
                 Ok(x) => x,
-                Err(e) => return Err(e),
+                Err(e) => if e.kind() != ErrorKind::Interrupted {
+                    return Err(e);
+                } else {
+                    continue;
+                },
             };
             if read == 0 { continue; }
 
@@ -1209,6 +1250,9 @@ impl UtpCloneableSocket {
                 e => return e
             }
         }
+        let mut socket = self.inner.lock().unwrap();
+        let _ = socket.close();
+        Err(Error::new(ErrorKind::ConnectionAborted, "Connection lost"))
     }
 
     /// Sends data on the socket to the remote peer. On success, returns the number of bytes written.
@@ -2437,7 +2481,7 @@ mod test {
 
         thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
-            client.send_to(&data);
+            iotry!(client.send_to(&data));
             iotry!(client.close());
             drop(client);
         });
@@ -2467,7 +2511,7 @@ mod test {
 
         thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
-            client.send_to(&to_send);
+            iotry!(client.send_to(&to_send));
             iotry!(client.close());
             drop(client);
         });
