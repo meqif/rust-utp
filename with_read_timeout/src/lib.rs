@@ -37,9 +37,7 @@ impl WithReadTimeout for UdpSocket {
 
         // Initialize relevant data structures
         let mut readfds = fd_set::new();
-
-        // TODO: Properly create C NULL pointers
-        let mut null: &mut fd_set = unsafe { std::mem::transmute(0usize) };
+        let null = std::ptr::null_mut();
 
         fd_set(&mut readfds, self.as_raw_socket());
 
