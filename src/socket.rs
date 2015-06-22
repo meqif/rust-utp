@@ -342,14 +342,15 @@ impl UtpSocket {
         //     debug!("setting read timeout of {} ms", self.congestion_timeout);
         //     self.socket.set_read_timeout(Some(self.congestion_timeout));
         // }
-        let (read, src) = match self.socket.recv_from(&mut b) {
-            // Err(ref e) if e.kind == TimedOut => {
-            //     debug!("recv_from timed out");
-            //     self.congestion_timeout = self.congestion_timeout * 2;
-            //     self.cwnd = MSS;
-            //     self.send_fast_resend_request();
-            //     return Ok((0, self.connected_to));
-            // },
+        let (read, src) = match self.socket.recv_timeout(&mut b, self.congestion_timeout as i64) {
+            Err(ref e) if (e.kind() == ErrorKind::WouldBlock ||
+                           e.kind() == ErrorKind::TimedOut) => {
+                debug!("recv_from timed out");
+                self.congestion_timeout = self.congestion_timeout * 2;
+                self.cwnd = MSS;
+                self.send_fast_resend_request();
+                return Ok((0, self.connected_to));
+            },
             Ok(x) => x,
             Err(e) => return Err(e),
         };
@@ -631,6 +632,25 @@ impl UtpSocket {
         }
 
         return sack;
+    }
+
+    /// Sends a fast resend request to the remote peer.
+    ///
+    /// A fast resend request consists of sending three STATE packets (acknowledging the last
+    /// received packet) in quick succession.
+    fn send_fast_resend_request(&self) {
+        for _ in 0..3 {
+            let mut packet = Packet::new();
+            packet.set_type(PacketType::State);
+            let self_t_micro: u32 = now_microseconds();
+            let other_t_micro: u32 = 0;
+            packet.set_timestamp_microseconds(self_t_micro);
+            packet.set_timestamp_difference_microseconds((self_t_micro - other_t_micro));
+            packet.set_connection_id(self.sender_connection_id);
+            packet.set_seq_nr(self.seq_nr);
+            packet.set_ack_nr(self.ack_nr);
+            let _ = self.socket.send_to(&packet.to_bytes()[..], self.connected_to);
+        }
     }
 
     fn resend_lost_packet(&mut self, lost_packet_nr: u16) {
