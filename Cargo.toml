@@ -19,6 +19,10 @@ log = "0.3"
 env_logger = "0.3"
 rand = "0.3"
 
+[dependencies.with_read_timeout]
+path = "with_read_timeout"
+version = "*"
+
 [dev-dependencies]
 quickcheck = "*"
 
