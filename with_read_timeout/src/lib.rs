@@ -3,7 +3,7 @@ extern crate nix;
 #[cfg(windows)]
 extern crate libc;
 
-use std::io::Result;
+use std::io::{Error, ErrorKind, Result};
 use std::net::{UdpSocket, SocketAddr};
 
 /// A trait to make time-limited reads from socket-like objects.
@@ -25,14 +25,23 @@ impl WithReadTimeout for UdpSocket {
                    SockLevel::Socket,
                    sockopt::ReceiveTimeout,
                    &TimeVal::milliseconds(timeout)).unwrap();
-        self.recv_from(buf)
+
+        fn map_os_error(e: Error) -> Error {
+            // TODO: Replace with constant from libc
+            const EAGAIN: i32 = 35;
+
+            match e.raw_os_error() {
+                Some(EAGAIN) => Error::new(ErrorKind::WouldBlock, ""),
+                _ => e
+            }
+        }
+        self.recv_from(buf).map_err(map_os_error)
     }
 
     #[cfg(windows)]
     fn recv_timeout(&mut self, buf: &mut [u8], timeout: i64) -> Result<(usize, SocketAddr)> {
         use select::fd_set;
         use std::os::windows::io::AsRawSocket;
-        use std::io::{Error, ErrorKind};
         use libc;
 
         // Initialize relevant data structures
