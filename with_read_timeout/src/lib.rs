@@ -32,7 +32,7 @@ impl WithReadTimeout for UdpSocket {
     fn recv_timeout(&mut self, buf: &mut [u8], timeout: i64) -> Result<(usize, SocketAddr)> {
         use select::fd_set;
         use std::os::windows::io::AsRawSocket;
-        use std::io::Error;
+        use std::io::{Error, ErrorKind};
         use libc;
 
         // Initialize relevant data structures
@@ -49,7 +49,11 @@ impl WithReadTimeout for UdpSocket {
             tv_usec: (timeout as i32 % 1000) * 1000,
         };
 
-        if unsafe { select::select(0, &mut readfds, null, null, &mut tv) } == -1 {
+        // In Windows, the first argument to `select` is ignored.
+        let retval = unsafe { select::select(0, &mut readfds, null, null, &mut tv) };
+        if retval == 0 {
+            return Err(Error::new(ErrorKind::TimedOut, "Time limit expired"));
+        } else if retval < 0 {
             return Err(Error::last_os_error());
         }
 
