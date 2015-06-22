@@ -16,9 +16,10 @@ const TARGET: i64 = 100_000; // 100 milliseconds
 const MSS: u32 = 1400;
 const MIN_CWND: u32 = 2;
 const INIT_CWND: u32 = 2;
+const CONNECTION_TIMEOUT : u32 = 20_000; // 20 seconds
 const INITIAL_CONGESTION_TIMEOUT: u64 = 1000; // one second
 const MIN_CONGESTION_TIMEOUT: u64 = 500; // 500 ms
-const MAX_CONGESTION_TIMEOUT: u64 = 60_000; // one minute
+const MAX_CONGESTION_TIMEOUT: u64 = 6_000; // 6 seconds
 const BASE_HISTORY: usize = 10; // base delays history size
 
 #[derive(Debug)]
@@ -274,12 +275,8 @@ impl UtpSocket {
 
         return Ok(socket);
     }
-
-    /// Gracefully closes connection to peer.
-    ///
-    /// This method allows both peers to receive all packets still in
-    /// flight.
-    pub fn close(&mut self) -> Result<()> {
+    
+    fn send_fin(&mut self) -> Result<()> {
         try!(self.flush());
 
         // Nothing to do if the socket's already closed or not connected
@@ -288,7 +285,7 @@ impl UtpSocket {
             self.state == SocketState::SynSent {
             return Ok(());
         }
-
+        
         let mut packet = Packet::new();
         packet.set_connection_id(self.sender_connection_id);
         packet.set_seq_nr(self.seq_nr);
@@ -299,10 +296,33 @@ impl UtpSocket {
         // Send FIN
         try!(self.socket.send_to(&packet.to_bytes()[..], self.connected_to));
         self.state = SocketState::FinSent;
+        
+        Ok(())
+    }
+
+    /// Gracefully closes connection to peer.
+    ///
+    /// This method allows both peers to receive all packets still in
+    /// flight.
+    pub fn close(&mut self) -> Result<()> {
+        
+        // Send the FIN packet
+        try!(self.send_fin());
+
+        // Nothing to do if the socket's already closed or not connected
+        if self.state == SocketState::Closed ||
+            self.state == SocketState::New ||
+            self.state == SocketState::SynSent {
+            return Ok(());
+        }
 
         // Receive JAKE
         let mut buf = [0; BUF_SIZE];
-        while self.state != SocketState::Closed {
+        let now = now_microseconds();
+        while (now_microseconds() - now) / 1000 < CONNECTION_TIMEOUT {
+            if self.state == SocketState::Closed {
+                break;
+            }
             try!(self.recv(&mut buf));
         }
 
@@ -326,7 +346,8 @@ impl UtpSocket {
                 return Err(Error::from(SocketError::ConnectionReset));
             }
 
-            loop {
+            let now = now_microseconds();
+            while (now_microseconds() - now) / 1000 < CONNECTION_TIMEOUT {
                 // A closed socket with no pending data can only "read" 0 new bytes.
                 if self.state == SocketState::Closed {
                     return Ok((0, self.connected_to));
@@ -338,6 +359,10 @@ impl UtpSocket {
                     Err(e) => return Err(e)
                 }
             }
+            // Send the FIN packet and force close
+            try!(self.send_fin());
+            self.state = SocketState::Closed;
+            Err(Error::new(ErrorKind::ConnectionAborted, "Connection lost"))
         }
     }
 
@@ -346,7 +371,7 @@ impl UtpSocket {
         let timeout = if self.state != SocketState::New {
             debug!("setting read timeout of {} ms", self.congestion_timeout);
             self.congestion_timeout as i64
-        } else { 0 };
+        } else { CONNECTION_TIMEOUT as i64 };
         let (read, src) = match self.socket.recv_timeout(&mut b, timeout) {
             Err(ref e) if (e.kind() == ErrorKind::WouldBlock ||
                            e.kind() == ErrorKind::TimedOut) => {
@@ -1179,7 +1204,8 @@ impl UtpCloneableSocket {
     /// inflight packets are consumed.
     pub fn recv_from(&mut self, buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
         let mut b = [0; BUF_SIZE + HEADER_SIZE];
-        loop {
+        let now = now_microseconds();
+        while (now_microseconds() - now) / 1000 < CONNECTION_TIMEOUT {
             let socket = self.inner.lock().unwrap();
             // If the socket received a reset packet and all data has been flushed, then it can't
             // receive anything else
@@ -1209,6 +1235,9 @@ impl UtpCloneableSocket {
                 e => return e
             }
         }
+        let mut socket = self.inner.lock().unwrap();
+        let _ = socket.close();
+        Err(Error::new(ErrorKind::ConnectionAborted, "Connection lost"))
     }
 
     /// Sends data on the socket to the remote peer. On success, returns the number of bytes written.
