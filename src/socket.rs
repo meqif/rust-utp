@@ -5,6 +5,7 @@ use std::io::{Result, Error, ErrorKind};
 use util::{now_microseconds, ewma};
 use packet::{Packet, PacketType, Encodable, Decodable, ExtensionType, HEADER_SIZE};
 use rand;
+use with_read_timeout::WithReadTimeout;
 
 // For simplicity's sake, let us assume no packet will ever exceed the
 // Ethernet maximum transfer unit of 1500 bytes.
@@ -234,7 +235,7 @@ impl UtpSocket {
         let mut len = 0;
         let mut buf = [0; BUF_SIZE];
 
-        // let syn_timeout = socket.congestion_timeout;
+        let mut syn_timeout = socket.congestion_timeout as i64;
         for _ in (0u8..5) {
             packet.set_timestamp_microseconds(now_microseconds());
 
@@ -246,14 +247,15 @@ impl UtpSocket {
 
             // Validate response
             // socket.socket.set_read_timeout(Some(syn_timeout));
-            match socket.socket.recv_from(&mut buf) {
+            match socket.socket.recv_timeout(&mut buf, syn_timeout) {
                 // Ok((_read, src)) if src != socket.connected_to => continue,
                 Ok((read, src)) => { socket.connected_to = src; len = read; break; },
-                // Err(ref e) if e.kind == TimedOut => {
-                //     debug!("Timed out, retrying");
-                //     syn_timeout *= 2;
-                //     continue;
-                // },
+                Err(ref e) if (e.kind() == ErrorKind::WouldBlock ||
+                               e.kind() == ErrorKind::TimedOut) => {
+                    debug!("Timed out, retrying");
+                    syn_timeout *= 2;
+                    continue;
+                },
                 Err(e) => return Err(e),
             };
         }
@@ -336,18 +338,19 @@ impl UtpSocket {
 
     fn recv(&mut self, buf: &mut[u8]) -> Result<(usize,SocketAddr)> {
         let mut b = [0; BUF_SIZE + HEADER_SIZE];
-        // if self.state != SocketState::New {
-        //     debug!("setting read timeout of {} ms", self.congestion_timeout);
-        //     self.socket.set_read_timeout(Some(self.congestion_timeout));
-        // }
-        let (read, src) = match self.socket.recv_from(&mut b) {
-            // Err(ref e) if e.kind == TimedOut => {
-            //     debug!("recv_from timed out");
-            //     self.congestion_timeout = self.congestion_timeout * 2;
-            //     self.cwnd = MSS;
-            //     self.send_fast_resend_request();
-            //     return Ok((0, self.connected_to));
-            // },
+        let timeout = if self.state != SocketState::New {
+            debug!("setting read timeout of {} ms", self.congestion_timeout);
+            self.congestion_timeout as i64
+        } else { 0 };
+        let (read, src) = match self.socket.recv_timeout(&mut b, timeout) {
+            Err(ref e) if (e.kind() == ErrorKind::WouldBlock ||
+                           e.kind() == ErrorKind::TimedOut) => {
+                debug!("recv_from timed out");
+                self.congestion_timeout = self.congestion_timeout * 2;
+                self.cwnd = MSS;
+                self.send_fast_resend_request();
+                return Ok((0, self.connected_to));
+            },
             Ok(x) => x,
             Err(e) => return Err(e),
         };
@@ -629,6 +632,25 @@ impl UtpSocket {
         }
 
         return sack;
+    }
+
+    /// Sends a fast resend request to the remote peer.
+    ///
+    /// A fast resend request consists of sending three STATE packets (acknowledging the last
+    /// received packet) in quick succession.
+    fn send_fast_resend_request(&self) {
+        for _ in 0..3 {
+            let mut packet = Packet::new();
+            packet.set_type(PacketType::State);
+            let self_t_micro: u32 = now_microseconds();
+            let other_t_micro: u32 = 0;
+            packet.set_timestamp_microseconds(self_t_micro);
+            packet.set_timestamp_difference_microseconds((self_t_micro - other_t_micro));
+            packet.set_connection_id(self.sender_connection_id);
+            packet.set_seq_nr(self.seq_nr);
+            packet.set_ack_nr(self.ack_nr);
+            let _ = self.socket.send_to(&packet.to_bytes()[..], self.connected_to);
+        }
     }
 
     fn resend_lost_packet(&mut self, lost_packet_nr: u16) {
@@ -1662,62 +1684,57 @@ mod test {
         iotry!(server.recv_from(&mut buf));
     }
 
-    // #[test]
-    // #[ignore]
-    // // `std::net::UdpSocket` no longer supports timeouts, so this test is deprecated for now.
-    // fn test_socket_timeout_request() {
-    //     let (server_addr, client_addr) = (next_test_ip4().to_socket_addrs().unwrap().next().unwrap(),
-    //                                       next_test_ip4().to_socket_addrs().unwrap().next().unwrap());
+    #[test]
+    fn test_socket_timeout_request() {
+        let (server_addr, client_addr) = (next_test_ip4().to_socket_addrs().unwrap().next().unwrap(),
+                                          next_test_ip4().to_socket_addrs().unwrap().next().unwrap());
 
-    //     let client = iotry!(UtpSocket::bind(client_addr));
-    //     let mut server = iotry!(UtpSocket::bind(server_addr));
-    //     const LEN: usize = 512;
-    //     let data = (0..LEN).map(|idx| idx as u8).collect::<Vec<u8>>();
-    //     let d = data.clone();
+        let client = iotry!(UtpSocket::bind(client_addr));
+        let mut server = iotry!(UtpSocket::bind(server_addr));
+        const LEN: usize = 512;
+        let data = (0..LEN).map(|idx| idx as u8).collect::<Vec<u8>>();
+        let d = data.clone();
 
-    //     assert!(server.state == SocketState::New);
-    //     assert!(client.state == SocketState::New);
+        assert!(server.state == SocketState::New);
+        assert!(client.state == SocketState::New);
 
-    //     // Check proper difference in client's send connection id and receive connection id
-    //     assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
+        // Check proper difference in client's send connection id and receive connection id
+        assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
 
-    //     thread::spawn(move || {
-    //         let mut client = iotry!(UtpSocket::connect(server_addr));
-    //         assert!(client.state == SocketState::Connected);
-    //         assert_eq!(client.connected_to, server_addr);
-    //         iotry!(client.send_to(&d[..]));
-    //         drop(client);
-    //     });
+        thread::spawn(move || {
+            let mut client = iotry!(UtpSocket::connect(server_addr));
+            assert!(client.state == SocketState::Connected);
+            assert_eq!(client.connected_to, server_addr);
+            iotry!(client.send_to(&d[..]));
+            drop(client);
+        });
 
-    //     let mut buf = [0u8; BUF_SIZE];
-    //     match server.recv(&mut buf) {
-    //         e => println!("{:?}", e),
-    //     }
-    //     // After establishing a new connection, the server's ids are a mirror of the client's.
-    //     assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
-    //     assert_eq!(server.connected_to, client_addr);
+        let mut buf = [0u8; BUF_SIZE];
+        server.recv(&mut buf).unwrap();
+        // After establishing a new connection, the server's ids are a mirror of the client's.
+        assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
 
-    //     assert!(server.state == SocketState::Connected);
+        assert!(server.state == SocketState::Connected);
 
-    //     // Purposefully read from UDP socket directly and discard it, in order
-    //     // to behave as if the packet was lost and thus trigger the timeout
-    //     // handling in the *next* call to `UtpSocket.recv_from`.
-    //     iotry!(server.socket.recv_from(&mut buf));
+        // Purposefully read from UDP socket directly and discard it, in order
+        // to behave as if the packet was lost and thus trigger the timeout
+        // handling in the *next* call to `UtpSocket.recv_from`.
+        iotry!(server.socket.recv_from(&mut buf));
 
-    //     // Set a much smaller than usual timeout, for quicker test completion
-    //     server.congestion_timeout = 50;
+        // Set a much smaller than usual timeout, for quicker test completion
+        server.congestion_timeout = 50;
 
-    //     // Now wait for the previously discarded packet
-    //     loop {
-    //         match server.recv_from(&mut buf) {
-    //             Ok((0, _)) => continue,
-    //             Ok(_) => break,
-    //             Err(e) => panic!("{:?}", e),
-    //         }
-    //     }
+        // Now wait for the previously discarded packet
+        loop {
+            match server.recv_from(&mut buf) {
+                Ok((0, _)) => continue,
+                Ok(_) => break,
+                Err(e) => panic!("{}", e),
+            }
+        }
 
-    //     drop(server);
-    // }
+        drop(server);
+    }
 
     #[test]
     fn test_sorted_buffer_insertion() {
