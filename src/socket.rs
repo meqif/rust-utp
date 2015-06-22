@@ -338,11 +338,11 @@ impl UtpSocket {
 
     fn recv(&mut self, buf: &mut[u8]) -> Result<(usize,SocketAddr)> {
         let mut b = [0; BUF_SIZE + HEADER_SIZE];
-        // if self.state != SocketState::New {
-        //     debug!("setting read timeout of {} ms", self.congestion_timeout);
-        //     self.socket.set_read_timeout(Some(self.congestion_timeout));
-        // }
-        let (read, src) = match self.socket.recv_timeout(&mut b, self.congestion_timeout as i64) {
+        let timeout = if self.state != SocketState::New {
+            debug!("setting read timeout of {} ms", self.congestion_timeout);
+            self.congestion_timeout as i64
+        } else { 0 };
+        let (read, src) = match self.socket.recv_timeout(&mut b, timeout) {
             Err(ref e) if (e.kind() == ErrorKind::WouldBlock ||
                            e.kind() == ErrorKind::TimedOut) => {
                 debug!("recv_from timed out");
