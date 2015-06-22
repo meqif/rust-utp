@@ -21,10 +21,12 @@ impl WithReadTimeout for UdpSocket {
         use nix::sys::time::TimeVal;
         use std::os::unix::io::AsRawFd;
 
-        setsockopt(self.as_raw_fd(),
-                   SockLevel::Socket,
-                   sockopt::ReceiveTimeout,
-                   &TimeVal::milliseconds(timeout)).unwrap();
+        if timeout > 0 {
+            setsockopt(self.as_raw_fd(),
+                       SockLevel::Socket,
+                       sockopt::ReceiveTimeout,
+                       &TimeVal::milliseconds(timeout)).unwrap();
+        }
 
         fn map_os_error(e: Error) -> Error {
             // TODO: Replace with constant from libc
@@ -35,6 +37,7 @@ impl WithReadTimeout for UdpSocket {
                 _ => e
             }
         }
+
         self.recv_from(buf).map_err(map_os_error)
     }
 
@@ -44,24 +47,26 @@ impl WithReadTimeout for UdpSocket {
         use std::os::windows::io::AsRawSocket;
         use libc;
 
-        // Initialize relevant data structures
-        let mut readfds = fd_set::new();
-        let null = std::ptr::null_mut();
+        if timeout > 0 {
+            // Initialize relevant data structures
+            let mut readfds = fd_set::new();
+            let null = std::ptr::null_mut();
 
-        fd_set(&mut readfds, self.as_raw_socket());
+            fd_set(&mut readfds, self.as_raw_socket());
 
-        // Set timeout
-        let mut tv = libc::timeval {
-            tv_sec: timeout as i32 / 1000,
-            tv_usec: (timeout as i32 % 1000) * 1000,
-        };
+            // Set timeout
+            let mut tv = libc::timeval {
+                tv_sec: timeout as i32 / 1000,
+                tv_usec: (timeout as i32 % 1000) * 1000,
+            };
 
-        // In Windows, the first argument to `select` is ignored.
-        let retval = unsafe { select::select(0, &mut readfds, null, null, &mut tv) };
-        if retval == 0 {
-            return Err(Error::new(ErrorKind::TimedOut, "Time limit expired"));
-        } else if retval < 0 {
-            return Err(Error::last_os_error());
+            // In Windows, the first argument to `select` is ignored.
+            let retval = unsafe { select::select(0, &mut readfds, null, null, &mut tv) };
+            if retval == 0 {
+                return Err(Error::new(ErrorKind::TimedOut, "Time limit expired"));
+            } else if retval < 0 {
+                return Err(Error::last_os_error());
+            }
         }
 
         self.recv_from(buf)
