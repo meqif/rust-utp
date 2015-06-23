@@ -280,7 +280,6 @@ impl UtpSocket {
     }
     
     fn send_fin(&mut self) -> Result<()> {
-        try!(self.flush());
 
         // Nothing to do if the socket's already closed or not connected
         if self.state == SocketState::Closed ||
@@ -308,6 +307,7 @@ impl UtpSocket {
     /// This method allows both peers to receive all packets still in
     /// flight.
     pub fn close(&mut self) -> Result<()> {
+        try!(self.flush());
         
         // Send the FIN packet
         try!(self.send_fin());
@@ -328,6 +328,7 @@ impl UtpSocket {
             }
             try!(self.recv(&mut buf));
         }
+        self.state = SocketState::Closed;
 
         Ok(())
     }
@@ -1347,8 +1348,32 @@ impl UtpCloneableSocket {
     /// This method allows both peers to receive all packets still in
     /// flight.
     pub fn close(&mut self) -> Result<()> {
+        // Send the FIN packet
+        {
+            let mut socket = self.inner.lock().unwrap();
+            try!(socket.send_fin());
+        }
+        
+        // Iterate packet receive until connection closes or we time out
+        let mut buf = [0; BUF_SIZE];
+        let now = now_microseconds();
+        while (now_microseconds() - now) / 1000 < CONNECTION_TIMEOUT {
+            {
+                let socket = self.inner.lock().unwrap();
+                if socket.state == SocketState::Closed {
+                    break;
+                }
+            }
+            match self.recv_from(&mut buf) {
+                    Ok((0, _src)) => continue,
+                    Ok(_) => return Ok(()),
+                    Err(e) => return Err(e)
+            }
+        }
         let mut socket = self.inner.lock().unwrap();
-        socket.close()
+        socket.state = SocketState::Closed;
+        
+        Ok(())
     }
 }
 
