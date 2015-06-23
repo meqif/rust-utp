@@ -1,6 +1,3 @@
-#[cfg(unix)]
-extern crate nix;
-#[cfg(windows)]
 extern crate libc;
 
 use std::io::{Error, ErrorKind, Result};
@@ -15,49 +12,24 @@ pub trait WithReadTimeout {
 }
 
 impl WithReadTimeout for UdpSocket {
-    #[cfg(unix)]
     fn recv_timeout(&mut self, buf: &mut [u8], timeout: i64) -> Result<(usize, SocketAddr)> {
-        use nix::sys::socket::{SockLevel, sockopt, setsockopt};
-        use nix::sys::time::TimeVal;
-        use std::os::unix::io::AsRawFd;
-
-        setsockopt(self.as_raw_fd(),
-                   SockLevel::Socket,
-                   sockopt::ReceiveTimeout,
-                   &TimeVal::milliseconds(timeout)).unwrap();
-
-        fn map_os_error(e: Error) -> Error {
-            // TODO: Replace with constant from libc
-            const EAGAIN: i32 = 35;
-
-            match e.raw_os_error() {
-                Some(EAGAIN) => Error::new(ErrorKind::WouldBlock, ""),
-                _ => e
-            }
-        }
-        self.recv_from(buf).map_err(map_os_error)
-    }
-
-    #[cfg(windows)]
-    fn recv_timeout(&mut self, buf: &mut [u8], timeout: i64) -> Result<(usize, SocketAddr)> {
-        use select::fd_set;
-        use std::os::windows::io::AsRawSocket;
+        use select::{fd_set, nfds};
         use libc;
 
         // Initialize relevant data structures
         let mut readfds = fd_set::new();
         let null = std::ptr::null_mut();
 
-        fd_set(&mut readfds, self.as_raw_socket());
+        fd_set(&mut readfds, &self);
+        let nfds = select::nfds(&self);
 
         // Set timeout
         let mut tv = libc::timeval {
-            tv_sec: timeout as i32 / 1000,
-            tv_usec: (timeout as i32 % 1000) * 1000,
+            tv_sec: timeout / 1000,
+            tv_usec: (timeout % 1000) * 1000,
         };
 
-        // In Windows, the first argument to `select` is ignored.
-        let retval = unsafe { select::select(0, &mut readfds, null, null, &mut tv) };
+        let retval = unsafe { select::select(nfds, &mut readfds, null, null, &mut tv) };
         if retval == 0 {
             return Err(Error::new(ErrorKind::TimedOut, "Time limit expired"));
         } else if retval < 0 {
@@ -68,9 +40,95 @@ impl WithReadTimeout for UdpSocket {
     }
 }
 
+// Most of the following was copied from 'rust/src/libstd/sys/unix/c.rs'
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+mod select {
+    use std::net::UdpSocket;
+    use std::os::unix::io::AsRawFd;
+    pub const FD_SETSIZE: usize = 1024;
+
+    #[repr(C)]
+    pub struct fd_set {
+        fds_bits: [i32; (FD_SETSIZE / 32)]
+    }
+    
+    pub fn nfds(socket : &UdpSocket) -> libc::c_int {
+        socket.as_raw_fd() + 1
+    }
+
+    pub fn fd_set(set: &mut fd_set, socket : &UdpSocket) {
+        let fd = socket.as_raw_fd() as usize;
+        set.fds_bits[(fd / 32) as usize] |= 1 << ((fd % 32) as usize);
+    }
+
+    impl fd_set {
+        pub fn new() -> fd_set {
+            fd_set {
+                fds_bits: [0; (FD_SETSIZE / 32)],
+            }
+        }
+    }
+    
+    extern {
+        pub fn select(nfds: libc::c_int,
+                  readfds: *mut fd_set,
+                  writefds: *mut fd_set,
+                  errorfds: *mut fd_set,
+                  timeout: *mut libc::timeval) -> libc::c_int;
+    }
+}
+
+#[cfg(any(target_os = "android",
+          target_os = "freebsd",
+          target_os = "dragonfly",
+          target_os = "bitrig",
+          target_os = "openbsd",
+          target_os = "linux"))]
+mod select {
+    use std::net::UdpSocket;
+    use std::os::unix::io::AsRawFd;
+    use libc;
+
+    pub const FD_SETSIZE: usize = 1024;
+    pub const ULONG_BITS: usize = 8*8;  // FIXME: How do I actually calculate this? size_of isn't constexpr :(
+
+    #[repr(C)]
+    pub struct fd_set {
+        fds_bits: [libc::c_ulong; (FD_SETSIZE / ULONG_BITS)]
+    }
+
+    pub fn nfds(socket : &UdpSocket) -> libc::c_int {
+        socket.as_raw_fd() + 1
+    }
+
+    pub fn fd_set(set: &mut fd_set, socket : &UdpSocket) {
+        let fd = socket.as_raw_fd() as usize;
+        set.fds_bits[fd / ULONG_BITS] |= 1 << (fd % ULONG_BITS);
+    }
+
+    impl fd_set {
+        pub fn new() -> fd_set {
+            fd_set {
+                fds_bits: [0; (FD_SETSIZE / ULONG_BITS)],
+            }
+        }
+    }
+    
+    extern {
+        pub fn select(nfds: libc::c_int,
+                  readfds: *mut fd_set,
+                  writefds: *mut fd_set,
+                  errorfds: *mut fd_set,
+                  timeout: *mut libc::timeval) -> libc::c_int;
+    }
+}
+
+
 // Most of the following was copied from 'rust/src/libstd/sys/windows/net.rs'
 #[cfg(windows)]
 mod select {
+    use std::net::UdpSocket;
+    use std::os::windows::io::AsRawSocket;
     use libc;
 
     pub const FD_SETSIZE: usize = 64;
@@ -81,7 +139,12 @@ mod select {
         fd_array: [libc::SOCKET; FD_SETSIZE],
     }
 
-    pub fn fd_set(set: &mut fd_set, s: libc::SOCKET) {
+    pub fn nfds(socket : &UdpSocket) -> libc::c_int {
+        0
+    }
+
+    pub fn fd_set(set: &mut fd_set, socket : &UdpSocket) {
+        let s = socket.as_raw_handle();
         set.fd_array[set.fd_count as usize] = s;
         set.fd_count += 1;
     }
