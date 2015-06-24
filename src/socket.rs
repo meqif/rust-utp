@@ -5,7 +5,7 @@ use std::io::{Result, Error, ErrorKind};
 use util::{now_microseconds, ewma};
 use packet::{Packet, PacketType, Encodable, Decodable, ExtensionType, HEADER_SIZE};
 use rand;
-use with_read_timeout::WithReadTimeout;
+use with_read_timeout::{RecvTimeoutCtx, WithReadTimeout};
 
 // For simplicity's sake, let us assume no packet will ever exceed the
 // Ethernet maximum transfer unit of 1500 bytes.
@@ -95,6 +95,9 @@ pub struct UtpSocket {
     /// The wrapped UDP socket
     socket: UdpSocket,
 
+    /// Used to early exit reads on the UDP socket
+    recv_timeout_ctx : Arc<RecvTimeoutCtx>,
+
     /// Remote peer
     connected_to: SocketAddr,
 
@@ -181,6 +184,7 @@ impl UtpSocket {
         UdpSocket::bind(addr).map(|s|
             UtpSocket {
                 socket: s,
+                recv_timeout_ctx: Arc::new(UdpSocket::recv_timeout_init().unwrap()),
                 connected_to: addr,
                 receiver_connection_id: connection_id,
                 sender_connection_id: connection_id + 1,
@@ -253,7 +257,7 @@ impl UtpSocket {
 
             // Validate response
             // socket.socket.set_read_timeout(Some(syn_timeout));
-            match socket.socket.recv_timeout(&mut buf, syn_timeout) {
+            match socket.socket.recv_timeout(&socket.recv_timeout_ctx, &mut buf, syn_timeout) {
                 // Ok((_read, src)) if src != socket.connected_to => continue,
                 Ok((read, src)) => { socket.connected_to = src; len = read; break; },
                 Err(ref e) => {
@@ -376,7 +380,7 @@ impl UtpSocket {
             debug!("setting read timeout of {} ms", self.congestion_timeout);
             self.congestion_timeout as i64
         } else { CONNECTION_TIMEOUT as i64 };
-        let (read, src) = match self.socket.recv_timeout(&mut b, timeout) {
+        let (read, src) = match self.socket.recv_timeout(&self.recv_timeout_ctx, &mut b, timeout) {
             Err(e) => {
                 if e.kind() == ErrorKind::WouldBlock ||
                     e.kind() == ErrorKind::TimedOut {
@@ -1107,6 +1111,7 @@ impl UtpListener {
 
                     let mut socket = UtpSocket {
                         socket: inner_socket.unwrap(),
+                        recv_timeout_ctx: Arc::new(UdpSocket::recv_timeout_init().unwrap()),
                         connected_to: src,
                         receiver_connection_id: 0,
                         sender_connection_id: 0,
@@ -1178,6 +1183,7 @@ use std::sync::{Arc, Mutex};
 pub struct UtpCloneableSocket {
     inner: Arc<Mutex<UtpSocket>>,
     raw_socket: UdpSocket,
+    recv_timeout_ctx : Arc<RecvTimeoutCtx>,
 }
 
 /// A structure that represents a uTP (Micro Transport Protocol) connection between a local socket
@@ -1233,10 +1239,11 @@ impl UtpCloneableSocket {
             // Release lock
             drop(socket);
 
-            // Wait on the raw UDP socket for a non empty packet.
-            let (read, src) = match self.raw_socket.recv_from(&mut b) {
+            // Wait on the raw UDP socket for a non empty packet. Need to timeout so
+            // we can poll if the connection was closed in another thread.
+            let (read, src) = match self.raw_socket.recv_timeout(&self.recv_timeout_ctx, &mut b, CONNECTION_TIMEOUT as i64) {
                 Ok(x) => x,
-                Err(e) => if e.kind() != ErrorKind::Interrupted {
+                Err(e) => if e.kind() != ErrorKind::Interrupted && e.kind() != ErrorKind::TimedOut {
                     return Err(e);
                 } else {
                     continue;
@@ -1322,7 +1329,8 @@ impl UtpCloneableSocket {
     pub fn try_clone(&self) -> UtpCloneableSocket {
         UtpCloneableSocket {
             inner: self.inner.clone(),
-            raw_socket: self.raw_socket.try_clone().unwrap()
+            raw_socket: self.raw_socket.try_clone().unwrap(),
+            recv_timeout_ctx : self.recv_timeout_ctx.clone(),
         }
     }
 
@@ -1339,8 +1347,15 @@ impl UtpCloneableSocket {
 
     /// Consumes acknowledgements for every pending packet.
     pub fn flush(&mut self) -> Result<()> {
-        let mut socket = self.inner.lock().unwrap();
-        socket.flush()
+        // Disabled as also deadlocks if there is an async read
+        //let mut socket = self.inner.lock().unwrap();
+        //socket.flush()
+        Ok(())
+    }
+    
+    /// Cause any reads occurring in any threads to unblock.
+    pub fn break_reads(&self) -> Result<()> {
+        self.recv_timeout_ctx.break_reads()
     }
 
     /// Gracefully closes connection to peer.
@@ -1348,10 +1363,11 @@ impl UtpCloneableSocket {
     /// This method allows both peers to receive all packets still in
     /// flight.
     pub fn close(&mut self) -> Result<()> {
-        // Send the FIN packet
+        // Send the FIN packet and stop reads blocking
         {
             let mut socket = self.inner.lock().unwrap();
             try!(socket.send_fin());
+            try!(self.break_reads());
         }
         
         // Iterate packet receive until connection closes or we time out
@@ -1380,9 +1396,11 @@ impl UtpCloneableSocket {
 impl From<UtpSocket> for UtpCloneableSocket {
     fn from(s: UtpSocket) -> UtpCloneableSocket {
         let raw_socket = s.socket.try_clone().unwrap();
+        let ctx = s.recv_timeout_ctx.clone();
         UtpCloneableSocket {
             inner: Arc::new(Mutex::new(s)),
-            raw_socket: raw_socket
+            raw_socket: raw_socket,
+            recv_timeout_ctx : ctx,
         }
     }
 }
