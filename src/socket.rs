@@ -168,6 +168,40 @@ pub struct UtpSocket {
 }
 
 impl UtpSocket {
+    /// Creates a new UTP from the given UDP socket and remote peer's address.
+    ///
+    /// The connection identifier of the resulting socket is randomly generated.
+    fn from_raw_parts(s: UdpSocket, src: SocketAddr) -> UtpSocket {
+        let connection_id = rand::random::<u16>();
+        UtpSocket {
+            socket: s,
+            connected_to: src,
+            receiver_connection_id: connection_id,
+            sender_connection_id: connection_id + 1,
+            seq_nr: 1,
+            ack_nr: 0,
+            state: SocketState::New,
+            incoming_buffer: Vec::new(),
+            send_window: Vec::new(),
+            unsent_queue: VecDeque::new(),
+            duplicate_ack_count: 0,
+            last_acked: 0,
+            last_acked_timestamp: 0,
+            last_dropped: 0,
+            rtt: 0,
+            rtt_variance: 0,
+            pending_data: Vec::new(),
+            curr_window: 0,
+            remote_wnd_size: 0,
+            current_delays: Vec::new(),
+            base_delays: VecDeque::with_capacity(BASE_HISTORY),
+            their_delay: 0,
+            last_rollover: 0,
+            congestion_timeout: INITIAL_CONGESTION_TIMEOUT,
+            cwnd: INIT_CWND * MSS,
+        }
+    }
+
     /// Creates a new UTP socket from the given address.
     ///
     /// The address type can be any implementor of the `ToSocketAddr` trait. See its documentation
@@ -176,35 +210,7 @@ impl UtpSocket {
     /// If more than one valid address is specified, only the first will be used.
     pub fn bind<A: ToSocketAddrs>(addr: A) -> Result<UtpSocket> {
         let addr = addr.to_socket_addrs().unwrap().next().unwrap();
-        let connection_id = rand::random::<u16>();
-        UdpSocket::bind(addr).map(|s|
-            UtpSocket {
-                socket: s,
-                connected_to: addr,
-                receiver_connection_id: connection_id,
-                sender_connection_id: connection_id + 1,
-                seq_nr: 1,
-                ack_nr: 0,
-                state: SocketState::New,
-                incoming_buffer: Vec::new(),
-                send_window: Vec::new(),
-                unsent_queue: VecDeque::new(),
-                duplicate_ack_count: 0,
-                last_acked: 0,
-                last_acked_timestamp: 0,
-                last_dropped: 0,
-                rtt: 0,
-                rtt_variance: 0,
-                pending_data: Vec::new(),
-                curr_window: 0,
-                remote_wnd_size: 0,
-                current_delays: Vec::new(),
-                base_delays: VecDeque::with_capacity(BASE_HISTORY),
-                their_delay: 0,
-                last_rollover: 0,
-                congestion_timeout: INITIAL_CONGESTION_TIMEOUT,
-                cwnd: INIT_CWND * MSS,
-            })
+        UdpSocket::bind(addr).map(|s| UtpSocket::from_raw_parts(s, addr))
     }
 
     /// Returns the socket address that this socket was created from.
@@ -1062,33 +1068,7 @@ impl UtpListener {
                     SocketAddr::V6(_) => UdpSocket::bind(":::0"),
                 };
 
-                let mut socket = UtpSocket {
-                    socket: inner_socket.unwrap(),
-                    connected_to: src,
-                    receiver_connection_id: 0,
-                    sender_connection_id: 0,
-                    seq_nr: 1,
-                    ack_nr: 0,
-                    state: SocketState::New,
-                    incoming_buffer: Vec::new(),
-                    send_window: Vec::new(),
-                    unsent_queue: VecDeque::new(),
-                    duplicate_ack_count: 0,
-                    last_acked: 0,
-                    last_acked_timestamp: 0,
-                    last_dropped: 0,
-                    rtt: 0,
-                    rtt_variance: 0,
-                    pending_data: Vec::new(),
-                    curr_window: 0,
-                    remote_wnd_size: 0,
-                    current_delays: Vec::new(),
-                    base_delays: VecDeque::with_capacity(BASE_HISTORY),
-                    their_delay: 0,
-                    last_rollover: 0,
-                    congestion_timeout: INITIAL_CONGESTION_TIMEOUT,
-                    cwnd: INIT_CWND * MSS,
-                };
+                let mut socket = try!(inner_socket.map(|s| UtpSocket::from_raw_parts(s, src)));
 
                 // Establish connection with remote peer
                 match socket.handle_packet(&packet, src) {
