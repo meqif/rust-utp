@@ -1371,7 +1371,8 @@ impl UtpCloneableSocket {
         }
         
         // Iterate packet receive until connection closes or we time out
-        let mut buf = [0; BUF_SIZE];
+        let mut buf = [0 as u8; BUF_SIZE];
+        let mut b = [0; BUF_SIZE + HEADER_SIZE];
         let now = now_microseconds();
         while (now_microseconds() - now) / 1000 < CONNECTION_TIMEOUT {
             {
@@ -1380,11 +1381,21 @@ impl UtpCloneableSocket {
                     break;
                 }
             }
-            match self.recv_from(&mut buf) {
-                    Ok((0, _src)) => continue,
-                    Ok(_) => return Ok(()),
-                    Err(e) => return Err(e)
-            }
+            // Wait on the raw UDP socket for a non empty packet. Need to timeout so
+            // we can poll if the connection was closed in another thread.
+            let (read, src) = match self.raw_socket.recv_timeout(&self.recv_timeout_ctx, &mut b, 1000 as i64) {
+                Ok(x) => x,
+                Err(e) => if e.kind() != ErrorKind::Interrupted && e.kind() != ErrorKind::TimedOut {
+                    return Err(e);
+                } else {
+                    continue;
+                },
+            };
+            if read == 0 { continue; }
+
+            // Handle the received packet
+            let mut socket = self.inner.lock().unwrap();
+            let _ = socket.handler(&b[..read], src, &mut buf);
         }
         let mut socket = self.inner.lock().unwrap();
         socket.state = SocketState::Closed;

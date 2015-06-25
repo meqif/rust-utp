@@ -54,7 +54,7 @@ impl WithReadTimeout for UdpSocket {
     }
     
     fn recv_timeout(&mut self, ctx : &RecvTimeoutCtx, buf: &mut [u8], timeout: i64) -> Result<(usize, SocketAddr)> {
-        use select::{fd_set, nfds};
+        use select::{fd_set, fd_zero, nfds};
         use libc;
 
         // Initialize relevant data structures
@@ -80,8 +80,21 @@ impl WithReadTimeout for UdpSocket {
         // Was it the breaking fd?
         if select::break_set(&readfds, ctx) {
             // If socket fd also set, might as well read
+            // Note that on Linux multi select() can claim the fd is ready for reading, but still block
+            // so run select() again on just the UDP socket alone
             if retval == 2 {
-                return self.recv_from(buf)
+                fd_zero(&mut readfds);
+                fd_set(&mut readfds, &self);
+                let mut tv = libc::timeval {
+                    tv_sec: 0,
+                    tv_usec: 0,
+                };
+                let retval = unsafe { select::select(nfds, &mut readfds, null, null, &mut tv) };
+                if retval == 0 {
+                    return Err(Error::new(ErrorKind::TimedOut, "Time limit expired"));
+                } else {
+                    return self.recv_from(buf)
+                }
             } else {
                 return Err(Error::new(ErrorKind::TimedOut, "Time limit expired"));
             }
@@ -109,13 +122,17 @@ mod select {
         cmp::max(socket.as_raw_fd(), ctx.pipefd[0]) + 1
     }
 
+    pub fn break_set(set: &fd_set, ctx : &RecvTimeoutCtx) -> bool {
+        (set.fds_bits[(ctx.pipefd[0] / 32) as usize] & (1 << ((ctx.pipefd[0] % 32) as usize))) != 0
+    }
+
     pub fn fd_set(set: &mut fd_set, socket : &UdpSocket) {
         let fd = socket.as_raw_fd() as usize;
         set.fds_bits[(fd / 32) as usize] |= 1 << ((fd % 32) as usize);
     }
     
-    pub fn break_set(set: &fd_set, ctx : &RecvTimeoutCtx) -> bool {
-        (set.fds_bits[(ctx.pipefd[0] / 32) as usize] & (1 << ((ctx.pipefd[0] % 32) as usize))) != 0
+    pub fn fd_zero(set: &mut fd_set) {
+        set.fds_bits = [0; (FD_SETSIZE / 32)];
     }
 
     impl fd_set {
@@ -172,6 +189,10 @@ mod select {
     pub fn fd_set(set: &mut fd_set, socket : &UdpSocket) {
         let fd = socket.as_raw_fd() as usize;
         set.fds_bits[fd / ULONG_BITS] |= 1 << (fd % ULONG_BITS);
+    }
+
+    pub fn fd_zero(set: &mut fd_set) {
+        set.fds_bits = [0; (FD_SETSIZE / ULONG_BITS)];
     }
 
     impl fd_set {
