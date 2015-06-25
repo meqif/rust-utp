@@ -4,7 +4,7 @@ use std::net::{ToSocketAddrs, SocketAddr, UdpSocket};
 use std::io::{Result, Error, ErrorKind};
 use util::{now_microseconds, ewma};
 use packet::{Packet, PacketType, Encodable, Decodable, ExtensionType, HEADER_SIZE};
-use rand;
+use rand::{self, Rng};
 use with_read_timeout::WithReadTimeout;
 
 // For simplicity's sake, let us assume no packet will ever exceed the
@@ -172,12 +172,22 @@ impl UtpSocket {
     ///
     /// The connection identifier of the resulting socket is randomly generated.
     fn from_raw_parts(s: UdpSocket, src: SocketAddr) -> UtpSocket {
-        let connection_id = rand::random::<u16>();
+        // Safely generate the two sequential connection identifiers.
+        // This avoids a panic when the generated receiver id is the largest representable value in
+        // u16 and one increments it to yield the corresponding sender id.
+        let (receiver_id, sender_id) = || -> (u16, u16) {
+            let mut rng = rand::thread_rng();
+            loop {
+                let id = rng.gen::<u16>();
+                if id.checked_add(1).is_some() { return (id, id + 1) }
+            }
+        }();
+
         UtpSocket {
             socket: s,
             connected_to: src,
-            receiver_connection_id: connection_id,
-            sender_connection_id: connection_id + 1,
+            receiver_connection_id: receiver_id,
+            sender_connection_id: sender_id,
             seq_nr: 1,
             ack_nr: 0,
             state: SocketState::New,
