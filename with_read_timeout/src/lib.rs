@@ -1,3 +1,7 @@
+#![feature(libc)]
+
+#[cfg(unix)]
+extern crate nix;
 extern crate libc;
 
 use std::io::{Error, ErrorKind, Result};
@@ -54,6 +58,9 @@ impl WithReadTimeout for UdpSocket {
     }
     
     fn recv_timeout(&mut self, ctx : &RecvTimeoutCtx, buf: &mut [u8], timeout: i64) -> Result<(usize, SocketAddr)> {
+        use nix::sys::socket::{SockLevel, sockopt, setsockopt};
+        use nix::sys::time::TimeVal;
+        use std::os::unix::io::AsRawFd;
         use select::{fd_set, fd_zero, nfds};
         use libc;
 
@@ -77,30 +84,30 @@ impl WithReadTimeout for UdpSocket {
             return Err(Error::last_os_error());
         }
         
-        // Was it the breaking fd?
-        if select::break_set(&readfds, ctx) {
-            // If socket fd also set, might as well read
-            // Note that on Linux multi select() can claim the fd is ready for reading, but still block
-            // so run select() again on just the UDP socket alone
-            if retval == 2 {
-                fd_zero(&mut readfds);
-                fd_set(&mut readfds, &self);
-                let mut tv = libc::timeval {
-                    tv_sec: 0,
-                    tv_usec: 0,
-                };
-                let retval = unsafe { select::select(nfds, &mut readfds, null, null, &mut tv) };
-                if retval == 0 {
-                    return Err(Error::new(ErrorKind::TimedOut, "Time limit expired"));
-                } else {
-                    return self.recv_from(buf)
-                }
-            } else {
-                return Err(Error::new(ErrorKind::TimedOut, "Time limit expired"));
+        // select() is of course racy to blocking reads, so temporarily set this socket to non-blocking before we read
+        setsockopt(self.as_raw_fd(),
+                   SockLevel::Socket,
+                   sockopt::ReceiveTimeout,
+                   &TimeVal::microseconds(1)).unwrap();
+
+        fn map_os_error(e: Error) -> Error {
+            // TODO: Replace with constant from libc
+            const EAGAIN: i32 = 35;
+
+            match e.raw_os_error() {
+                Some(EAGAIN) => Error::new(ErrorKind::WouldBlock, ""),
+                _ => e
             }
         }
+            
+        let ret = self.recv_from(buf).map_err(map_os_error);
 
-        self.recv_from(buf)
+        setsockopt(self.as_raw_fd(),
+                   SockLevel::Socket,
+                   sockopt::ReceiveTimeout,
+                   &TimeVal::microseconds(0)).unwrap();
+                   
+        ret
     }
 }
 

@@ -3,5 +3,20 @@ name = "with_read_timeout"
 version = "0.1.0"
 authors = ["Ricardo Martins <ricardo@scarybox.net>"]
 
-[dependencies]
+[target.x86_64-unknown-linux-gnu.dependencies]
+nix = "*"
+
+[target.i686-unknown-linux-gnu.dependencies]
+nix = "*"
+
+[target.x86_64-apple-darwin.dependencies]
+nix = "*"
+
+[target.i686-apple-darwin.dependencies]
+nix = "*"
+
+[target.i686-pc-windows-gnu.dependencies]
+libc = "*"
+
+[target.x86_64-pc-windows-gnu.dependencies]
 libc = "*"
