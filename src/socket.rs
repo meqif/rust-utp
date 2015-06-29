@@ -184,7 +184,7 @@ impl UtpSocket {
         UdpSocket::bind(addr).map(|s|
             UtpSocket {
                 socket: s,
-                recv_timeout_ctx: Arc::new(UdpSocket::recv_timeout_init().unwrap()),
+                recv_timeout_ctx: Arc::new(UdpSocket::recv_timeout_init()),
                 connected_to: addr,
                 receiver_connection_id: connection_id,
                 sender_connection_id: connection_id + 1,
@@ -1111,7 +1111,7 @@ impl UtpListener {
 
                     let mut socket = UtpSocket {
                         socket: inner_socket.unwrap(),
-                        recv_timeout_ctx: Arc::new(UdpSocket::recv_timeout_init().unwrap()),
+                        recv_timeout_ctx: Arc::new(UdpSocket::recv_timeout_init()),
                         connected_to: src,
                         receiver_connection_id: 0,
                         sender_connection_id: 0,
