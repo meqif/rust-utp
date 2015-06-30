@@ -154,12 +154,12 @@ mod select {
             RecvTimeoutCtx { waiters: Mutex::<(bool, Vec<pthread_t>)>::new((false, Vec::<pthread_t>::new())) }
         }
         
-        pub fn add_waiter(&self) -> Result<()> {
+        pub fn add_waiter(&self) -> Result<bool> {
             use std::ptr;
             use nix::sys::signal;
             let mut data = self.waiters.lock().unwrap();
             if (*data).0 {
-                return Err(Error::new(ErrorKind::Interrupted, "Waiters are broken"));
+                return Ok(false);
             }
             // Disable SIGUSR1 on this thread and install a null signal handler for it
             let null = ptr::null_mut();
@@ -170,8 +170,8 @@ mod select {
             let _ = unsafe { signal::sigaction(SIGUSR1, &sig_action) };
             
             (*data).1.push(unsafe { pthread_self() });
-            println!("Thread {} enters wait", unsafe { pthread_self() });
-            Ok(())
+            //println!("Thread {} enters wait", unsafe { pthread_self() });
+            Ok(true)
         }
 
         pub fn remove_waiter(&self) {
@@ -179,10 +179,10 @@ mod select {
             // Is it really this hard to remove a value from a vector in Rust?
             let toremove = unsafe { pthread_self() };
             (*data).1.iter().position(|&x| x==toremove).map(|x| (*data).1.remove(x));
-            println!("Thread {} exits wait. Waiters remaining:", toremove);
-            for waiter in &(*data).1 {
-                println!("   thread {}", *waiter);
-            }
+            //println!("Thread {} exits wait. Waiters remaining:", toremove);
+            //for waiter in &(*data).1 {
+            //    println!("   thread {}", *waiter);
+            //}
         }
 
         pub fn break_reads(&self) -> Result<()> {
@@ -230,13 +230,14 @@ mod select {
         let mut sigset = sigset_t::new();
         sigset.sig[0]=1<<SIGUSR1;
 
-        try!(ctx.add_waiter());
-        let retval = unsafe { pselect(nfds, &mut readfds, null, null, &mut ts, &sigset) };
-        ctx.remove_waiter();
-        if retval == 0 {
-            return Err(Error::new(ErrorKind::TimedOut, "Time limit expired"));
-        } else if retval < 0 {
-            return Err(Error::last_os_error());
+        if try!(ctx.add_waiter()) {
+            let retval = unsafe { pselect(nfds, &mut readfds, null, null, &mut ts, &sigset) };
+            ctx.remove_waiter();
+            if retval == 0 {
+                return Err(Error::new(ErrorKind::TimedOut, "Time limit expired"));
+            } else if retval < 0 {
+                return Err(Error::last_os_error());
+            }
         }
         
         // select() is of course racy to blocking reads, so temporarily set this socket to non-blocking before we read
