@@ -284,44 +284,65 @@ mod select {
 // Most of the following was copied from 'rust/src/libstd/sys/windows/net.rs'
 #[cfg(windows)]
 mod select {
-    use std::net::UdpSocket;
+    use std::net::{UdpSocket, SocketAddr};
     use std::os::windows::io::AsRawSocket;
+    use std::ptr;
     use libc;
+    use std::io::{Error, ErrorKind, Result};
 
-    pub const FD_SETSIZE: usize = 64;
-
-    #[repr(C)]
-    pub struct fd_set {
-        fd_count: libc::c_uint,
-        fd_array: [libc::SOCKET; FD_SETSIZE],
+    pub struct RecvTimeoutCtx {
+        pub eventh : libc::HANDLE,
     }
-
-    pub fn nfds(socket : &UdpSocket) -> libc::c_int {
-        0
-    }
-
-    pub fn fd_set(set: &mut fd_set, socket : &UdpSocket) {
-        let s = socket.as_raw_handle();
-        set.fd_array[set.fd_count as usize] = s;
-        set.fd_count += 1;
-    }
-
-    impl fd_set {
-        pub fn new() -> fd_set {
-            fd_set {
-                fd_count: 0,
-                fd_array: [0; FD_SETSIZE],
+    
+    impl RecvTimeoutCtx {
+        pub fn new() -> RecvTimeoutCtx {
+            RecvTimeoutCtx { eventh: unsafe { CreateEventW(ptr::null_mut(), 1, 0, ptr::null_mut()) } }
+        }
+        
+        pub fn break_reads(&self) -> Result<()> {
+            if !unsafe { SetEvent(self.eventh) } {
+                Err(Error::last_os_error())
             }
+            Ok(())
         }
     }
 
-    #[link(name = "ws2_32")]
+    impl Drop for RecvTimeoutCtx {
+        fn drop(&mut self) {
+            let _ = self.break_reads();
+            let _ = unsafe { CloseHandle(self.eventh) };
+        }
+    }
+
+    pub fn recv_timeout(socket: &mut UdpSocket, ctx : &RecvTimeoutCtx, buf: &mut [u8], timeout: i64) -> Result<(usize, SocketAddr)> {
+
+        let mut handles : [libc::HANDLE; 2];
+        handles[0] = ctx.eventh;
+        handles[1] = socket.as_raw_socket();
+        let retval = unsafe { WaitForMultipleObjects(2, &handles, 0, timeout as libc::DWORD) };
+        if retval == 0xffffffff as libc::DWORD {
+            return Err(Error::last_os_error());
+        } else if retval == 0x102 /* WAIT_TIMEOUT */ {
+            return Err(Error::new(ErrorKind::TimedOut, "Time limit expired"));
+        } else if retval == 0 {
+            return Err(Error::new(ErrorKind::WouldBlock, ""));
+        }
+        
+        socket.recv_from(buf)
+    }
+
+    #[link(name = "kernel32")]
     extern "system" {
-        pub fn select(nfds: libc::c_int,
-                      readfds: *mut fd_set,
-                      writefds: *mut fd_set,
-                      exceptfds: *mut fd_set,
-                      timeout: *mut libc::timeval) -> libc::c_int;
+        pub fn CreateEventW(lpEventAttributes: libc::c_void,
+                            bManualReset: libc::BOOL,
+                            bInitialState: libc::BOOL,
+                            lpName: libc::c_void) -> libc::HANDLE;
+        pub fn CloseHandle(hEvent: libc::HANDLE) -> libc::BOOL;
+        pub fn SetEvent(hEvent: libc::HANDLE) -> libc::BOOL;
+        pub fn WaitForMultipleObjects(nCount: libc::DWORD,
+                                      lpHandles: *const libc::HANDLE,
+                                      bWaitAll: libc::BOOL,
+                                      dwMilliseconds: libc::DWORD) -> libc::DWORD;
     }
 }
 
