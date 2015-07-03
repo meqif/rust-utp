@@ -240,7 +240,7 @@ impl UtpSocket {
             SocketAddr::V4(_) => "0.0.0.0:0",
             SocketAddr::V6(_) => ":::0",
         };
-        let mut socket = UtpSocket::bind(my_addr).unwrap();
+        let mut socket = try!(UtpSocket::bind(my_addr));
         socket.connected_to = addr;
 
         let mut packet = Packet::new();
@@ -1049,7 +1049,6 @@ impl UtpListener {
     ///
     /// If more than one valid address is specified, only the first will be used.
     pub fn bind<A: ToSocketAddrs>(addr: A) -> Result<UtpListener> {
-        let addr = addr.to_socket_addrs().unwrap().next().unwrap();
         UdpSocket::bind(addr).and_then(|s| Ok(UtpListener { socket: s}))
     }
 
@@ -1073,10 +1072,10 @@ impl UtpListener {
                 }
 
                 // The address of the new socket will depend on the type of the listener.
-                let inner_socket = match self.socket.local_addr().unwrap() {
+                let inner_socket = self.socket.local_addr().and_then(|addr| match addr {
                     SocketAddr::V4(_) => UdpSocket::bind("0.0.0.0:0"),
                     SocketAddr::V6(_) => UdpSocket::bind(":::0"),
-                };
+                });
 
                 let mut socket = try!(inner_socket.map(|s| UtpSocket::from_raw_parts(s, src)));
 
