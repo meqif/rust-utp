@@ -25,6 +25,7 @@ const BASE_HISTORY: usize = 10; // base delays history size
 pub enum SocketError {
     ConnectionClosed,
     ConnectionReset,
+    InvalidAddress,
     InvalidPacket,
     InvalidReply,
     // PendingAcknowledgments,
@@ -38,6 +39,7 @@ impl From<SocketError> for Error {
                                            "The socket is closed"),
             ConnectionReset => Error::new(ErrorKind::ConnectionReset,
                                           "Connection reset by remote peer"),
+            InvalidAddress => Error::new(ErrorKind::InvalidInput, "Invalid address"),
             InvalidPacket => Error::new(ErrorKind::Other,
                                         "Error parsing packet"),
             InvalidReply => Error::new(ErrorKind::ConnectionRefused,
@@ -64,6 +66,12 @@ type TimestampReceived = i64;
 struct DelayDifferenceSample {
     received_at: TimestampReceived,
     difference: TimestampSender,
+}
+
+/// Returns the first valid address in a `ToSocketAddrs` iterator.
+fn take_address<A: ToSocketAddrs>(addr: A) -> Result<SocketAddr> {
+    addr.to_socket_addrs()
+        .and_then(|mut it| it.next().ok_or(From::from(SocketError::InvalidAddress)))
 }
 
 /// A structure that represents a uTP (Micro Transport Protocol) connection between a local socket
@@ -219,8 +227,7 @@ impl UtpSocket {
     ///
     /// If more than one valid address is specified, only the first will be used.
     pub fn bind<A: ToSocketAddrs>(addr: A) -> Result<UtpSocket> {
-        let addr = addr.to_socket_addrs().unwrap().next().unwrap();
-        UdpSocket::bind(addr).map(|s| UtpSocket::from_raw_parts(s, addr))
+        take_address(addr).and_then(|a| UdpSocket::bind(a).map(|s| UtpSocket::from_raw_parts(s, a)))
     }
 
     /// Returns the socket address that this socket was created from.
@@ -235,7 +242,7 @@ impl UtpSocket {
     ///
     /// If more than one valid address is specified, only the first will be used.
     pub fn connect<A: ToSocketAddrs>(other: A) -> Result<UtpSocket> {
-        let addr = other.to_socket_addrs().unwrap().next().unwrap();
+        let addr = try!(take_address(other));
         let my_addr = match addr {
             SocketAddr::V4(_) => "0.0.0.0:0",
             SocketAddr::V6(_) => ":::0",
@@ -1120,7 +1127,7 @@ mod test {
     use std::thread;
     use std::net::ToSocketAddrs;
     use std::io::ErrorKind;
-    use super::{UtpSocket, UtpListener, SocketState, BUF_SIZE};
+    use super::{UtpSocket, UtpListener, SocketState, BUF_SIZE, take_address};
     use packet::{Packet, PacketType, Encodable, Decodable};
     use util::now_microseconds;
     use rand;
@@ -2202,5 +2209,22 @@ mod test {
 
         assert!(listener.local_addr().is_ok());
         assert_eq!(listener.local_addr().unwrap(), addr);
+    }
+
+    #[test]
+    fn test_take_address() {
+        // Expected succcesses
+        assert!(take_address(("0.0.0.0:0")).is_ok());
+        assert!(take_address((":::0")).is_ok());
+        assert!(take_address(("0.0.0.0", 0)).is_ok());
+        assert!(take_address(("::", 0)).is_ok());
+        assert!(take_address(("1.2.3.4", 5)).is_ok());
+
+        // Expected failures
+        assert!(take_address("999.0.0.0:0").is_err());
+        assert!(take_address(("1.2.3.4:70000")).is_err());
+        assert!(take_address("").is_err());
+        assert!(take_address("this is not an address").is_err());
+        assert!(take_address("no.dns.resolution.com").is_err());
     }
 }
