@@ -1,5 +1,3 @@
-#![feature(libc)]
-
 #[cfg(unix)]
 extern crate nix;
 extern crate libc;
@@ -291,17 +289,21 @@ mod select {
     use std::io::{Error, ErrorKind, Result};
 
     pub struct RecvTimeoutCtx {
-        pub eventh : libc::HANDLE,
+        pub cancelh : u64,
+        pub newdatah : u64,
     }
     
     impl RecvTimeoutCtx {
         pub fn new() -> RecvTimeoutCtx {
-            RecvTimeoutCtx { eventh: unsafe { CreateEventW(ptr::null_mut(), 1, 0, ptr::null_mut()) } }
+            RecvTimeoutCtx {
+                cancelh: unsafe { CreateEventW(ptr::null_mut(), 1, 0, ptr::null_mut()) } as u64,
+                newdatah: unsafe { CreateEventW(ptr::null_mut(), 1, 0, ptr::null_mut()) } as u64,
+            }
         }
         
         pub fn break_reads(&self) -> Result<()> {
-            if !unsafe { SetEvent(self.eventh) } {
-                Err(Error::last_os_error())
+            if unsafe { SetEvent(self.cancelh as libc::HANDLE) } == 0 {
+                return Err(Error::last_os_error());
             }
             Ok(())
         }
@@ -310,39 +312,88 @@ mod select {
     impl Drop for RecvTimeoutCtx {
         fn drop(&mut self) {
             let _ = self.break_reads();
-            let _ = unsafe { CloseHandle(self.eventh) };
+            let _ = unsafe { CloseHandle(self.cancelh as libc::HANDLE) };
+            let _ = unsafe { CloseHandle(self.newdatah as libc::HANDLE) };
         }
     }
 
     pub fn recv_timeout(socket: &mut UdpSocket, ctx : &RecvTimeoutCtx, buf: &mut [u8], timeout: i64) -> Result<(usize, SocketAddr)> {
 
-        let mut handles : [libc::HANDLE; 2];
-        handles[0] = ctx.eventh;
-        handles[1] = socket.as_raw_socket();
-        let retval = unsafe { WaitForMultipleObjects(2, &handles, 0, timeout as libc::DWORD) };
+        // I tried the simple solution of having WSAWaitForMultipleEvents wait on the socket handle
+        // and the event handle, but it doesn't work. The socket handle isn't signalling for reads.
+        //
+        // This solution puts the socket into Windows' non-blocking socket emulation, does the read
+        // and puts it back into blocking.
+        let handles : [libc::HANDLE; 2] = [ ctx.cancelh as libc::HANDLE, ctx.newdatah as libc::HANDLE ];
+        let retval = unsafe { WSAEventSelect(socket.as_raw_socket() as libc::HANDLE,
+                                             ctx.newdatah as libc::HANDLE,
+                                             1 /* FD_READ */) };
+        if retval != 0 {
+            //println!("EventSelect start errors {}", retval);
+            return Err(Error::last_os_error());
+        }
+        let retval = unsafe { WSAWaitForMultipleEvents(2, handles.as_ptr(), 0, timeout as libc::DWORD, 0) };
+        //println!("Exited read wait with {}", retval);
         if retval == 0xffffffff as libc::DWORD {
             return Err(Error::last_os_error());
         } else if retval == 0x102 /* WAIT_TIMEOUT */ {
             return Err(Error::new(ErrorKind::TimedOut, "Time limit expired"));
-        } else if retval == 0 {
-            return Err(Error::new(ErrorKind::WouldBlock, ""));
         }
         
-        socket.recv_from(buf)
+        fn map_os_error(e: Error) -> Error {
+            const WSAEWOULDBLOCK: libc::c_int = 10035;
+            const WSAECONNRESET: libc::c_int = 10054;
+            
+            match e.raw_os_error() {
+                Some(WSAEWOULDBLOCK) => {
+                    //println!("recv_from WouldBlock");
+                    Error::new(ErrorKind::WouldBlock, "")
+                },
+                Some(WSAECONNRESET) => {
+                    //println!("recv_from ConnectionReset");
+                    Error::new(ErrorKind::ConnectionReset, "")
+                },
+                _ => {
+                    //println!("recv_from other error {}", e.raw_os_error().unwrap());
+                    e
+                }
+            }
+        }
+        // Socket remains in non-blocking emulation, so this won't block no matter what
+        let ret = socket.recv_from(buf).map_err(map_os_error);
+        
+        // Disable non-blocking emulation
+        let retval = unsafe { WSAEventSelect(socket.as_raw_socket() as libc::HANDLE,
+                                             ctx.newdatah as libc::HANDLE,
+                                             0) };
+        let _ = unsafe { ResetEvent(ctx.newdatah as libc::HANDLE) };
+        if retval != 0 {
+            //println!("EventSelect end errors {}", retval);
+            return Err(Error::last_os_error());
+        }
+        ret
     }
 
     #[link(name = "kernel32")]
     extern "system" {
-        pub fn CreateEventW(lpEventAttributes: libc::c_void,
+        pub fn CreateEventW(lpEventAttributes: *const libc::c_void,
                             bManualReset: libc::BOOL,
                             bInitialState: libc::BOOL,
-                            lpName: libc::c_void) -> libc::HANDLE;
+                            lpName: *const libc::c_void) -> libc::HANDLE;
         pub fn CloseHandle(hEvent: libc::HANDLE) -> libc::BOOL;
+        pub fn ResetEvent(hEvent: libc::HANDLE) -> libc::BOOL;
         pub fn SetEvent(hEvent: libc::HANDLE) -> libc::BOOL;
-        pub fn WaitForMultipleObjects(nCount: libc::DWORD,
+    }
+    #[link(name = "ws2_32")]
+    extern "system" {
+        pub fn WSAEventSelect(socket: libc::HANDLE,
+                              hEventObject : libc::HANDLE,
+                              lNetworkEvents : libc::c_long) -> libc::c_int;
+        pub fn WSAWaitForMultipleEvents(nCount: libc::DWORD,
                                       lpHandles: *const libc::HANDLE,
                                       bWaitAll: libc::BOOL,
-                                      dwMilliseconds: libc::DWORD) -> libc::DWORD;
+                                      dwMilliseconds: libc::DWORD,
+                                      bAltertable: libc::BOOL) -> libc::DWORD;
     }
 }
 
