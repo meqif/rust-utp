@@ -332,7 +332,7 @@ impl UtpSocket {
     /// On success, returns the number of bytes read and the sender's address.
     /// Returns 0 bytes read after receiving a FIN packet when the remaining
     /// inflight packets are consumed.
-    pub fn recv_from(&mut self, buf: &mut[u8]) -> Result<(usize,SocketAddr)> {
+    pub fn recv_from(&mut self, buf: &mut[u8]) -> Result<(usize, SocketAddr)> {
         let read = self.flush_incoming_buffer(buf);
 
         if read > 0 {
@@ -359,7 +359,7 @@ impl UtpSocket {
         }
     }
 
-    fn recv(&mut self, buf: &mut[u8]) -> Result<(usize,SocketAddr)> {
+    fn recv(&mut self, buf: &mut[u8]) -> Result<(usize, SocketAddr)> {
         let mut b = [0; BUF_SIZE + HEADER_SIZE];
         let timeout = if self.state != SocketState::New {
             debug!("setting read timeout of {} ms", self.congestion_timeout);
@@ -1526,7 +1526,7 @@ mod test {
         packet.set_connection_id(initial_connection_id);
         packet.set_seq_nr(old_packet.seq_nr() + 1);
         packet.set_ack_nr(old_response.seq_nr());
-        packet.payload = vec!(1,2,3);
+        packet.payload = vec!(1, 2, 3);
         window.push(packet);
 
         let mut packet = Packet::new();
@@ -1535,7 +1535,7 @@ mod test {
         packet.set_connection_id(initial_connection_id);
         packet.set_seq_nr(old_packet.seq_nr() + 2);
         packet.set_ack_nr(old_response.seq_nr());
-        packet.payload = vec!(4,5,6);
+        packet.payload = vec!(4, 5, 6);
         window.push(packet);
 
         // Send packets in reverse order
@@ -1802,7 +1802,7 @@ mod test {
             packet.set_connection_id(client.sender_connection_id);
             packet.set_seq_nr(client.seq_nr);
             packet.set_ack_nr(client.ack_nr);
-            packet.payload = vec!(1,2,3);
+            packet.payload = vec!(1, 2, 3);
 
             // Send two copies of the packet, with different timestamps
             for _ in (0u8..2) {
@@ -1827,7 +1827,7 @@ mod test {
 
         assert!(server.state == SocketState::Connected);
 
-        let expected: Vec<u8> = vec!(1,2,3);
+        let expected: Vec<u8> = vec!(1, 2, 3);
         let mut received: Vec<u8> = vec!();
         loop {
             match server.recv_from(&mut buf) {

@@ -46,10 +46,10 @@ impl<'a> ExactSizeIterator for BitIterator<'a> {}
 #[test]
 fn test_iterator() {
     let bytes = vec!(0xCA, 0xFE);
-    let expected_bits = vec!(0,1,0,1, 0,0,1,1, 0,1,1,1, 1,1,1,1);
+    let expected_bits = vec!(0, 1, 0, 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1);
 
     for (i, bit) in BitIterator::from_bytes(&bytes).enumerate() {
-        println!("{} == {}", bit, expected_bits[i] == 0x1);
-        assert_eq!(bit, expected_bits[i] == 0x1);
+        println!("{} == {}", bit, expected_bits[i] == 1);
+        assert_eq!(bit, expected_bits[i] == 1);
     }
 }

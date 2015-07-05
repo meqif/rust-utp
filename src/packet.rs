@@ -484,7 +484,7 @@ mod tests {
         assert!(packet.payload.is_empty());
         assert!(packet.extensions.len() == 1);
         assert!(packet.extensions[0].ty == ExtensionType::SelectiveAck);
-        assert!(packet.extensions[0].data == vec!(0,0,0,0));
+        assert!(packet.extensions[0].data == vec!(0, 0, 0, 0));
         assert!(packet.extensions[0].len() == 1 + packet.extensions[0].data.len());
         assert!(packet.extensions[0].len() == 5);
     }
@@ -527,7 +527,7 @@ mod tests {
         assert!(packet.payload.is_empty());
         assert!(packet.extensions.len() == 1);
         assert!(packet.extensions[0].ty == ExtensionType::SelectiveAck);
-        assert!(packet.extensions[0].data == vec!(0,0,0,0));
+        assert!(packet.extensions[0].data == vec!(0, 0, 0, 0));
         assert!(packet.extensions[0].len() == 1 + packet.extensions[0].data.len());
         assert!(packet.extensions[0].len() == 5);
     }
@@ -606,7 +606,7 @@ mod tests {
     #[test]
     fn test_packet_encode_with_multiple_extensions() {
         let mut packet = Packet::new();
-        let extension = super::Extension { ty: ExtensionType::SelectiveAck, data: vec!(1,2,3,4) };
+        let extension = Extension { ty: ExtensionType::SelectiveAck, data: vec!(1, 2, 3, 4) };
         packet.header.extension = extension.ty as u8;
         packet.extensions.push(extension.clone());
         packet.extensions.push(extension.clone());
