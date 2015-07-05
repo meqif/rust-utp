@@ -4,16 +4,16 @@ version = "0.1.0"
 authors = ["Ricardo Martins <ricardo@scarybox.net>"]
 
 [target.x86_64-unknown-linux-gnu.dependencies]
-nix = "*"
+nix = "^0.3.8"
 
 [target.i686-unknown-linux-gnu.dependencies]
-nix = "*"
+nix = "^0.3.8"
 
 [target.x86_64-apple-darwin.dependencies]
-nix = "*"
+nix = "^0.3.8"
 
 [target.i686-apple-darwin.dependencies]
-nix = "*"
+nix = "^0.3.8"
 
 [target.i686-pc-windows-gnu.dependencies]
 libc = "*"
