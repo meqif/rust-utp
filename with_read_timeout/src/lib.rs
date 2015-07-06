@@ -1,3 +1,4 @@
+#![feature(libc)]
 #[cfg(unix)]
 extern crate nix;
 extern crate libc;
