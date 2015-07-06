@@ -1006,16 +1006,12 @@ impl UtpSocket {
             }
         }
 
-        // Three duplicate ACKs, must resend packets since `ack_nr + 1`
-        // TODO: checking if the send buffer isn't empty isn't a
-        // foolproof way to differentiate between triple-ACK and three
-        // keep alives spread in time
-        if !self.send_window.is_empty() && self.duplicate_ack_count == 3 {
-            for i in (0..self.send_window.len()) {
-                let seq_nr = self.send_window[i].seq_nr();
-                if seq_nr <= packet.ack_nr() { continue; }
-                self.resend_lost_packet(seq_nr);
-            }
+        // Three duplicate ACKs mean a fast resend request. Resend the first unacknowledged packet
+        // if the incoming packet doesn't have a SACK extension. If it does, the lost packets were
+        // already resent.
+        if !self.send_window.is_empty() && self.duplicate_ack_count == 3 &&
+            !packet.extensions.iter().any(|ext| ext.get_type() == ExtensionType::SelectiveAck) {
+            self.resend_lost_packet(packet.ack_nr() + 1);
         }
 
         // Packet lost, halve the congestion window
