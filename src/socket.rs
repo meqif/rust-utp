@@ -585,13 +585,19 @@ impl UtpSocket {
         debug!("current window: {}", self.send_window.len());
         let max_inflight = min(self.cwnd, self.remote_wnd_size);
         let max_inflight = max(MIN_CWND * MSS, max_inflight);
-        while self.curr_window >= max_inflight && self.duplicate_ack_count < 3 {
+        let now = now_microseconds();
+
+        // Wait until enough inflight packets are acknowledged for rate control purposes, but don't
+        // wait more than 500 ms before sending the packet.
+        while self.curr_window >= max_inflight && now_microseconds() - now < 500_000 {
             debug!("self.curr_window: {}", self.curr_window);
             debug!("max_inflight: {}", max_inflight);
             debug!("self.duplicate_ack_count: {}", self.duplicate_ack_count);
+            debug!("now_microseconds() - now = {}", now_microseconds() - now);
             let mut buf = [0; BUF_SIZE];
             try!(self.recv(&mut buf));
         }
+        debug!("out: now_microseconds() - now = {}", now_microseconds() - now);
 
         // Check if it still makes sense to send packet, as we might be trying to resend a lost
         // packet acknowledged in the receive loop above.
