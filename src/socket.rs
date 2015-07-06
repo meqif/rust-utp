@@ -316,6 +316,7 @@ impl UtpSocket {
 
         // Send FIN
         try!(self.socket.send_to(&packet.to_bytes()[..], self.connected_to));
+        debug!("sent {:?}", packet);
         self.state = SocketState::FinSent;
 
         // Receive JAKE
