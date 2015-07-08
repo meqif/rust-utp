@@ -1135,7 +1135,7 @@ impl UtpListener {
                 // Establish connection with remote peer
                 match socket.handle_packet(&packet, src) {
                     Ok(Some(reply)) => { try!(socket.socket.send_to(&reply.to_bytes()[..], src)) },
-                    Ok(None) => return Err(Error::new(ErrorKind::Other, "Unexpected error handling packet")),
+                    Ok(None) => return Err(Error::from(SocketError::InvalidPacket)),
                     Err(e) => return Err(e)
                 };
 
