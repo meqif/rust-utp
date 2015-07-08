@@ -404,8 +404,9 @@ impl UtpSocket {
                 } else {
                     // The socket is sending data packets but there is no reply from the remote
                     // peer: resend the first unacknowledged packet.
-                    try!(self.socket.send_to(&self.send_window[0].to_bytes()[..], self.connected_to));
-                    debug!("resent {:?}", self.send_window[0]);
+                    let packet = &self.send_window[0];
+                    try!(self.socket.send_to(&packet.to_bytes()[..], self.connected_to));
+                    debug!("resent {:?}", packet);
                 }
 
                 return Ok((0, self.connected_to));
@@ -430,7 +431,8 @@ impl UtpSocket {
                 debug!("sent {:?}", pkt);
         }
 
-        if packet.get_type() == PacketType::Data && packet.seq_nr().wrapping_sub(self.last_dropped) > 0 {
+        if packet.get_type() == PacketType::Data &&
+            packet.seq_nr().wrapping_sub(self.last_dropped) > 0 {
             self.insert_into_buffer(packet);
         }
 
@@ -660,7 +662,8 @@ impl UtpSocket {
         let delta = self.rtt - current_delay;
         self.rtt_variance += (delta.abs() - self.rtt_variance) / 4;
         self.rtt += (current_delay - self.rtt) / 8;
-        self.congestion_timeout = max((self.rtt + self.rtt_variance * 4) as u64, MIN_CONGESTION_TIMEOUT);
+        self.congestion_timeout = max((self.rtt + self.rtt_variance * 4) as u64,
+                                      MIN_CONGESTION_TIMEOUT);
         self.congestion_timeout = min(self.congestion_timeout, MAX_CONGESTION_TIMEOUT);
 
         debug!("current_delay: {}", current_delay);
@@ -1119,7 +1122,8 @@ impl UtpListener {
 
         match self.socket.recv_from(&mut buf) {
             Ok((nread, src)) => {
-                let packet = try!(Packet::from_bytes(&buf[..nread]).or(Err(SocketError::InvalidPacket)));
+                let packet = try!(Packet::from_bytes(&buf[..nread])
+                                  .or(Err(SocketError::InvalidPacket)));
 
                 // Ignore non-SYN packets
                 if packet.get_type() != PacketType::Syn {
@@ -1350,8 +1354,9 @@ mod test {
         //fn test_connection_setup() {
         let initial_connection_id: u16 = rand::random();
         let sender_connection_id = initial_connection_id + 1;
-        let (server_addr, client_addr) = (next_test_ip4().to_socket_addrs().unwrap().next().unwrap(),
-                                          next_test_ip4().to_socket_addrs().unwrap().next().unwrap());
+        let (server_addr, client_addr) =
+            (next_test_ip4().to_socket_addrs().unwrap().next().unwrap(),
+             next_test_ip4().to_socket_addrs().unwrap().next().unwrap());
         let mut socket = iotry!(UtpSocket::bind(server_addr));
 
         let mut packet = Packet::new();
@@ -1449,8 +1454,9 @@ mod test {
     fn test_response_to_keepalive_ack() {
         // Boilerplate test setup
         let initial_connection_id: u16 = rand::random();
-        let (server_addr, client_addr) = (next_test_ip4().to_socket_addrs().unwrap().next().unwrap(),
-                                          next_test_ip4().to_socket_addrs().unwrap().next().unwrap());
+        let (server_addr, client_addr) =
+            (next_test_ip4().to_socket_addrs().unwrap().next().unwrap(),
+             next_test_ip4().to_socket_addrs().unwrap().next().unwrap());
         let mut socket = iotry!(UtpSocket::bind(server_addr));
 
         // Establish connection
@@ -1496,8 +1502,9 @@ mod test {
     fn test_response_to_wrong_connection_id() {
         // Boilerplate test setup
         let initial_connection_id: u16 = rand::random();
-        let (server_addr, client_addr) = (next_test_ip4().to_socket_addrs().unwrap().next().unwrap(),
-                                          next_test_ip4().to_socket_addrs().unwrap().next().unwrap());
+        let (server_addr, client_addr) =
+            (next_test_ip4().to_socket_addrs().unwrap().next().unwrap(),
+             next_test_ip4().to_socket_addrs().unwrap().next().unwrap());
         let mut socket = iotry!(UtpSocket::bind(server_addr));
 
         // Establish connection
@@ -1537,8 +1544,9 @@ mod test {
     fn test_unordered_packets() {
         // Boilerplate test setup
         let initial_connection_id: u16 = rand::random();
-        let (server_addr, client_addr) = (next_test_ip4().to_socket_addrs().unwrap().next().unwrap(),
-                                        next_test_ip4().to_socket_addrs().unwrap().next().unwrap());
+        let (server_addr, client_addr) =
+            (next_test_ip4().to_socket_addrs().unwrap().next().unwrap(),
+             next_test_ip4().to_socket_addrs().unwrap().next().unwrap());
         let mut socket = iotry!(UtpSocket::bind(server_addr));
 
         // Establish connection
@@ -1730,8 +1738,9 @@ mod test {
 
     #[test]
     fn test_socket_timeout_request() {
-        let (server_addr, client_addr) = (next_test_ip4().to_socket_addrs().unwrap().next().unwrap(),
-                                          next_test_ip4().to_socket_addrs().unwrap().next().unwrap());
+        let (server_addr, client_addr) =
+            (next_test_ip4().to_socket_addrs().unwrap().next().unwrap(),
+             next_test_ip4().to_socket_addrs().unwrap().next().unwrap());
 
         let client = iotry!(UtpSocket::bind(client_addr));
         let mut server = iotry!(UtpSocket::bind(server_addr));

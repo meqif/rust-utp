@@ -343,7 +343,9 @@ impl Encodable for Packet {
         // Copy payload
         unsafe {
             let buf_len = buf.len();
-            ptr::copy(self.payload.as_ptr(), buf.as_mut_ptr().offset(buf.len() as isize), self.payload.len());
+            ptr::copy(self.payload.as_ptr(),
+                      buf.as_mut_ptr().offset(buf.len() as isize),
+                      self.payload.len());
             buf.set_len(buf_len + self.payload.len());
         }
 
