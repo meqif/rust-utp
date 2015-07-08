@@ -95,7 +95,7 @@ pub struct Extension {
 
 impl Extension {
     pub fn len(&self) -> usize {
-        1 + self.data.len()
+        self.data.len()
     }
 
     pub fn get_type(&self) -> ExtensionType {
@@ -104,15 +104,6 @@ impl Extension {
 
     pub fn iter(&self) -> BitIterator {
         BitIterator::from_bytes(&self.data)
-    }
-}
-
-impl Encodable for Extension {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut data = Vec::with_capacity(self.data.len() + 1);
-        data.push(self.data.len() as u8);
-        data.extend(self.data.iter().map(|&x| x));
-        return data;
     }
 }
 
@@ -313,7 +304,7 @@ impl Packet {
     }
 
     pub fn len(&self) -> usize {
-        let ext_len = self.extensions.iter().fold(0, |acc, ext| acc + ext.len() + 1);
+        let ext_len = self.extensions.iter().fold(0, |acc, ext| acc + ext.len() + 2);
         self.header.len() + self.payload.len() + ext_len
     }
 }
@@ -332,12 +323,13 @@ impl Encodable for Packet {
         // Copy extensions
         let mut extensions = self.extensions.iter().peekable();
         while let Some(extension) = extensions.next() {
-            // next extension id
-            match extensions.peek() {
-                None => buf.push(0u8),
-                Some(next) => buf.push(next.ty as u8),
-            }
-            buf.extend(extension.to_bytes());
+            // Extensions are a linked list in which each entry contains:
+            // - a byte with the type of the next extension or 0 to end the list,
+            // - a byte with the length in bytes of this extension,
+            // - the content of this extension.
+            buf.push(extensions.peek().map_or(0, |next| next.ty as u8));
+            buf.push(extension.len() as u8);
+            buf.extend(extension.data.clone());
         }
 
         // Copy payload
@@ -387,13 +379,11 @@ impl Decodable for Packet {
                 return Err(ParseError::InvalidExtensionLength);
             }
 
-            if kind == ExtensionType::SelectiveAck as u8 { // or more generally, a known kind
-                let extension = Extension {
-                    ty: ExtensionType::SelectiveAck,
-                    data: buf[extension_start..payload_start].to_vec(),
-                };
-                extensions.push(extension);
-            }
+            let extension = Extension {
+                ty: unsafe { transmute(kind) },
+                data: buf[extension_start..payload_start].to_vec(),
+            };
+            extensions.push(extension);
 
             kind = buf[idx];
             idx += len + 2;
@@ -487,8 +477,10 @@ mod tests {
         assert!(packet.extensions.len() == 1);
         assert!(packet.extensions[0].ty == ExtensionType::SelectiveAck);
         assert!(packet.extensions[0].data == vec!(0, 0, 0, 0));
-        assert!(packet.extensions[0].len() == 1 + packet.extensions[0].data.len());
-        assert!(packet.extensions[0].len() == 5);
+        assert!(packet.extensions[0].len() == packet.extensions[0].data.len());
+        assert!(packet.extensions[0].len() == 4);
+        // Reversible
+        assert_eq!(packet.to_bytes(), &buf);
     }
 
     #[test]
@@ -527,11 +519,13 @@ mod tests {
         assert_eq!(packet.seq_nr(), 43859);
         assert_eq!(packet.ack_nr(), 15093);
         assert!(packet.payload.is_empty());
-        assert!(packet.extensions.len() == 1);
+        assert!(packet.extensions.len() == 2);
         assert!(packet.extensions[0].ty == ExtensionType::SelectiveAck);
         assert!(packet.extensions[0].data == vec!(0, 0, 0, 0));
-        assert!(packet.extensions[0].len() == 1 + packet.extensions[0].data.len());
-        assert!(packet.extensions[0].len() == 5);
+        assert!(packet.extensions[0].len() == packet.extensions[0].data.len());
+        assert!(packet.extensions[0].len() == 4);
+        // Reversible
+        assert_eq!(packet.to_bytes(), &buf);
     }
 
     #[test]
@@ -613,12 +607,20 @@ mod tests {
         packet.extensions.push(extension.clone());
         packet.extensions.push(extension.clone());
         let bytes = packet.to_bytes();
-        assert_eq!(bytes.len(), HEADER_SIZE + (extension.len() + 1) * 2);
+        assert_eq!(bytes.len(), HEADER_SIZE + (extension.len() + 2) * 2);
+
+        // Type of the first extension
         assert_eq!(bytes[1], extension.ty as u8);
+
+        // Type of the next (second) extension
         assert_eq!(bytes[HEADER_SIZE], extension.ty as u8);
+        // Length of the first extension
         assert_eq!(bytes[HEADER_SIZE + 1], extension.data.len() as u8);
-        assert_eq!(bytes[HEADER_SIZE + extension.len() + 1], 0);
-        assert_eq!(bytes[HEADER_SIZE + extension.len() + 2], extension.data.len() as u8);
+
+        // Type of the next (third, non-existant) extension
+        assert_eq!(bytes[HEADER_SIZE + 2 + extension.len()], 0);
+        // Length of the second extension
+        assert_eq!(bytes[HEADER_SIZE + 2 + extension.len() + 1], extension.data.len() as u8);
     }
 
     #[test]
