@@ -28,7 +28,6 @@ pub enum SocketError {
     InvalidAddress,
     InvalidPacket,
     InvalidReply,
-    // PendingAcknowledgments,
 }
 
 impl From<SocketError> for Error {
@@ -44,8 +43,6 @@ impl From<SocketError> for Error {
                                         "Error parsing packet"),
             InvalidReply => Error::new(ErrorKind::ConnectionRefused,
                                        "The remote peer sent an invalid reply"),
-            // PendingAcknowledgments => Error::new(ErrorKind::Other,
-            //                                      "Received FIN with pending unacknowledged packets")
         }
     }
 }
