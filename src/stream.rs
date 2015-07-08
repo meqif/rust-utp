@@ -6,8 +6,8 @@ use socket::UtpSocket;
 /// A structure that represents a uTP (Micro Transport Protocol) stream between a local socket and a
 /// remote socket.
 ///
-/// The connection will be closed when the value is dropped (either explicitly or when it goes out of
-/// scope).
+/// The connection will be closed when the value is dropped (either explicitly or when it goes out
+/// of scope).
 ///
 /// # Examples
 ///

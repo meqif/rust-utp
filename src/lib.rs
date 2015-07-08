@@ -1,6 +1,7 @@
 //! Implementation of the [Micro Transport Protocol][spec].
 //!
-//! This library provides both a socket interface (`UtpSocket`) and a stream interface (`UtpStream`).
+//! This library provides both a socket interface (`UtpSocket`) and a stream interface
+//! (`UtpStream`).
 //! I recommend that you use `UtpStream`, as it implements the `Read` and `Write`
 //! traits we all know (and love) from `std::io`, which makes it generally easier to work with than
 //! `UtpSocket`.

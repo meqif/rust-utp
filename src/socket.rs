@@ -514,7 +514,8 @@ impl UtpSocket {
         return 0;
     }
 
-    /// Sends data on the socket to the remote peer. On success, returns the number of bytes written.
+    /// Sends data on the socket to the remote peer. On success, returns the number of bytes
+    /// written.
     //
     // # Implementation details
     //
@@ -925,8 +926,9 @@ impl UtpSocket {
     /// `bytes_newly_acked` is the number of bytes acknowledged by an inbound `State` packet. It may
     /// be the size of the packet explicitly acknowledged by the inbound packet (i.e., with sequence
     /// number equal to the inbound packet's acknowledgement number), or every packet implicitly
-    /// acknowledged (every packet with sequence number between the previous inbound `State` packet's
-    /// acknowledgement number and the current inbound `State` packet's acknowledgement number).
+    /// acknowledged (every packet with sequence number between the previous inbound `State`
+    /// packet's acknowledgement number and the current inbound `State` packet's acknowledgement
+    /// number).
     ///
     ///[ledbat_rfc]: https://tools.ietf.org/html/rfc6817
     fn update_congestion_window(&mut self, off_target: f64, bytes_newly_acked: u32) {
