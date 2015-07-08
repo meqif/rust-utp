@@ -424,8 +424,7 @@ impl UtpSocket {
         };
         debug!("received {:?}", packet);
 
-        if let Some(pkt) = try!(self.handle_packet(&packet, src)) {
-                let mut pkt = pkt;
+        if let Some(mut pkt) = try!(self.handle_packet(&packet, src)) {
                 pkt.set_wnd_size(BUF_SIZE as u32);
                 try!(self.socket.send_to(&pkt.to_bytes()[..], src));
                 debug!("sent {:?}", pkt);
@@ -569,8 +568,7 @@ impl UtpSocket {
 
     /// Sends every packet in the unsent packet queue.
     fn send(&mut self) -> Result<()> {
-        while let Some(packet) = self.unsent_queue.pop_front() {
-            let mut packet = packet;
+        while let Some(mut packet) = self.unsent_queue.pop_front() {
             try!(self.send_packet(&mut packet));
             self.curr_window += packet.len() as u32;
             self.send_window.push(packet);
@@ -1295,9 +1293,8 @@ mod test {
         assert!(server.state == SocketState::New);
 
         thread::spawn(move || {
-            let client = iotry!(UtpSocket::connect(server_addr));
+            let mut client = iotry!(UtpSocket::connect(server_addr));
             assert!(client.state == SocketState::Connected);
-            let mut client = client;
             iotry!(client.close());
         });
 
@@ -1319,11 +1316,10 @@ mod test {
         let server_addr = next_test_ip4();
         let (tx, rx) = channel();
 
-        let server = iotry!(UtpSocket::bind(server_addr));
+        let mut server = iotry!(UtpSocket::bind(server_addr));
 
         thread::spawn(move || {
             // Make the server listen for incoming connections
-            let mut server = server;
             let mut buf = [0u8; BUF_SIZE];
             let _resp = server.recv(&mut buf);
             tx.send(server.seq_nr).unwrap();
