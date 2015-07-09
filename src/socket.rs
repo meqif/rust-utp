@@ -295,14 +295,15 @@ impl UtpSocket {
     /// This method allows both peers to receive all packets still in
     /// flight.
     pub fn close(&mut self) -> Result<()> {
-        try!(self.flush());
-
         // Nothing to do if the socket's already closed or not connected
         if self.state == SocketState::Closed ||
             self.state == SocketState::New ||
             self.state == SocketState::SynSent {
             return Ok(());
         }
+
+        // Flush unsent and unacknowledged packets
+        try!(self.flush());
 
         let mut packet = Packet::new();
         packet.set_connection_id(self.sender_connection_id);
