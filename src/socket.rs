@@ -404,8 +404,9 @@ impl UtpSocket {
                     }
                 } else {
                     // The socket is sending data packets but there is no reply from the remote
-                    // peer: resend the first unacknowledged packet.
-                    let packet = &self.send_window[0];
+                    // peer: resend the first unacknowledged packet with the current timestamp.
+                    let mut packet = &mut self.send_window[0];
+                    packet.set_timestamp_microseconds(now_microseconds());
                     try!(self.socket.send_to(&packet.to_bytes()[..], self.connected_to));
                     debug!("resent {:?}", packet);
                 }
