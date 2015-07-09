@@ -21,11 +21,13 @@ const MIN_CONGESTION_TIMEOUT: u64 = 500; // 500 ms
 const MAX_CONGESTION_TIMEOUT: u64 = 60_000; // one minute
 const BASE_HISTORY: usize = 10; // base delays history size
 const MAX_SYN_RETRIES: usize = 5; // maximum connection retries
+const MAX_RETRANSMISSION_RETRIES: usize = 5; // maximum retransmission retries
 
 #[derive(Debug)]
 pub enum SocketError {
     ConnectionClosed,
     ConnectionReset,
+    ConnectionTimedOut,
     InvalidAddress,
     InvalidPacket,
     InvalidReply,
@@ -39,6 +41,8 @@ impl From<SocketError> for Error {
                                            "The socket is closed"),
             ConnectionReset => Error::new(ErrorKind::ConnectionReset,
                                           "Connection reset by remote peer"),
+            ConnectionTimedOut => Error::new(ErrorKind::TimedOut,
+                                             "Connection timed out"),
             InvalidAddress => Error::new(ErrorKind::InvalidInput, "Invalid address"),
             InvalidPacket => Error::new(ErrorKind::Other,
                                         "Error parsing packet"),
@@ -359,20 +363,35 @@ impl UtpSocket {
 
     fn recv(&mut self, buf: &mut[u8]) -> Result<(usize, SocketAddr)> {
         let mut b = [0; BUF_SIZE + HEADER_SIZE];
-        let timeout = if self.state != SocketState::New {
-            debug!("setting read timeout of {} ms", self.congestion_timeout);
-            self.congestion_timeout as i64
-        } else { 0 };
-        let (read, src) = match self.socket.recv_timeout(&mut b, timeout) {
-            Err(ref e) if (e.kind() == ErrorKind::WouldBlock ||
-                           e.kind() == ErrorKind::TimedOut) => {
-                debug!("recv_from timed out");
-                try!(self.handle_receive_timeout());
-                return Ok((0, self.connected_to));
-            },
-            Ok(x) => x,
-            Err(e) => return Err(e),
-        };
+        let now = now_microseconds();
+        let (mut read, mut src);
+        let mut retries = 0;
+        loop {
+            // Abort loop if the current try exceeds the maximum number of retransmission retries.
+            if retries >= MAX_RETRANSMISSION_RETRIES {
+                self.state = SocketState::Closed;
+                return Err(Error::from(SocketError::ConnectionTimedOut));
+            }
+
+            let timeout = if self.state != SocketState::New {
+                debug!("setting read timeout of {} ms", self.congestion_timeout);
+                self.congestion_timeout as i64
+            } else { 0 };
+
+            match self.socket.recv_timeout(&mut b, timeout) {
+                Ok((r, s)) => { read = r; src = s; break },
+                Err(ref e) if (e.kind() == ErrorKind::WouldBlock ||
+                               e.kind() == ErrorKind::TimedOut) => {
+                    debug!("recv_from timed out");
+                    try!(self.handle_receive_timeout());
+                },
+                Err(e) => return Err(e),
+            };
+
+            let elapsed = now_microseconds() - now;
+            debug!("now_microseconds() - now = {} ms", elapsed/1000);
+            retries += 1;
+        }
         let packet = match Packet::from_bytes(&b[..read]) {
             Ok(packet) => packet,
             Err(e) => {
@@ -2286,5 +2305,103 @@ mod test {
         assert!(take_address("").is_err());
         assert!(take_address("this is not an address").is_err());
         assert!(take_address("no.dns.resolution.com").is_err());
+    }
+
+    // Test reaction to connection loss when sending data packets
+    #[test]
+    fn test_connection_loss_data() {
+        let server_addr = next_test_ip4();
+        let mut server = iotry!(UtpSocket::bind(server_addr));
+        // Decrease timeouts for faster tests
+        server.congestion_timeout = 1;
+
+        thread::spawn(move || {
+            let mut client = iotry!(UtpSocket::connect(server_addr));
+            iotry!(client.send_to(&[0]));
+            // Simulate connection loss by killing the socket.
+            client.state = SocketState::Closed;
+            let socket = client.socket.try_clone().unwrap();
+            let mut buf = [0; BUF_SIZE];
+            iotry!(socket.recv_from(&mut buf));
+            match socket.recv_from(&mut buf) {
+                Ok((len, _src)) => assert_eq!(Packet::from_bytes(&buf[..len]).unwrap().get_type(),
+                                              PacketType::Data),
+                Err(e) => panic!("{}", e),
+            }
+        });
+
+        // Drain incoming packets
+        let mut buf = [0; BUF_SIZE];
+        iotry!(server.recv_from(&mut buf));
+
+        iotry!(server.send_to(&[0]));
+
+        // Try to receive ACKs, time out too many times on flush, and fail with `TimedOut`
+        let mut buf = [0; BUF_SIZE];
+        match server.recv(&mut buf) {
+            Err(ref e) if e.kind() == ErrorKind::TimedOut => (),
+            x => panic!("Expected Err(TimedOut), got {:?}", x),
+        }
+    }
+
+    // Test reaction to connection loss when sending FIN
+    #[test]
+    fn test_connection_loss_fin() {
+        let server_addr = next_test_ip4();
+        let mut server = iotry!(UtpSocket::bind(server_addr));
+        // Decrease timeouts for faster tests
+        server.congestion_timeout = 1;
+
+        thread::spawn(move || {
+            let mut client = iotry!(UtpSocket::connect(server_addr));
+            iotry!(client.send_to(&[0]));
+            // Simulate connection loss by killing the socket.
+            client.state = SocketState::Closed;
+            let socket = client.socket.try_clone().unwrap();
+            let mut buf = [0; BUF_SIZE];
+            iotry!(socket.recv_from(&mut buf));
+            match socket.recv_from(&mut buf) {
+                Ok((len, _src)) => assert_eq!(Packet::from_bytes(&buf[..len]).unwrap().get_type(),
+                                              PacketType::Fin),
+                Err(e) => panic!("{}", e),
+            }
+        });
+
+        // Drain incoming packets
+        let mut buf = [0; BUF_SIZE];
+        iotry!(server.recv_from(&mut buf));
+
+        // Send FIN, time out too many times, and fail with `TimedOut`
+        match server.close() {
+            Err(ref e) if e.kind() == ErrorKind::TimedOut => (),
+            x => panic!("Expected Err(TimedOut), got {:?}", x),
+        }
+    }
+
+    // Test reaction to connection loss when waiting for data packets
+    #[test]
+    fn test_connection_loss_waiting() {
+        let server_addr = next_test_ip4();
+        let mut server = iotry!(UtpSocket::bind(server_addr));
+        // Decrease timeouts for faster tests
+        server.congestion_timeout = 1;
+
+        thread::spawn(move || {
+            let mut client = iotry!(UtpSocket::connect(server_addr));
+            iotry!(client.send_to(&[0]));
+            // Simulate connection loss by killing the socket.
+            client.state = SocketState::Closed;
+        });
+
+        // Drain incoming packets
+        let mut buf = [0; BUF_SIZE];
+        iotry!(server.recv_from(&mut buf));
+
+        // Try to receive data, time out too many times, and fail with `TimedOut`
+        let mut buf = [0; BUF_SIZE];
+        match server.recv_from(&mut buf) {
+            Err(ref e) if e.kind() == ErrorKind::TimedOut => (),
+            x => panic!("Expected Err(TimedOut), got {:?}", x),
+        }
     }
 }
