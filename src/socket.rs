@@ -379,7 +379,8 @@ impl UtpSocket {
                 //   for incoming packets: send a fast resend request;
                 //
                 // - If the socket sent a FIN previously, resend it.
-                debug!("self.send_window: {:?}", self.send_window);
+                debug!("self.send_window: {:?}", self.send_window.iter()
+                       .map(Packet::seq_nr).collect::<Vec<u16>>());
 
                 if self.send_window.is_empty() {
                     // The socket is trying to close, all sent packets were acknowledged, and it has
