@@ -367,50 +367,7 @@ impl UtpSocket {
             Err(ref e) if (e.kind() == ErrorKind::WouldBlock ||
                            e.kind() == ErrorKind::TimedOut) => {
                 debug!("recv_from timed out");
-                self.congestion_timeout = self.congestion_timeout * 2;
-                self.cwnd = MSS;
-
-                // There are three possible cases here:
-                //
-                // - If the socket is sending and waiting for acknowledgements (the send window is
-                //   not empty), resend the first unacknowledged packet;
-                //
-                // - If the socket is not sending and it hasn't sent a FIN yet, then it's waiting
-                //   for incoming packets: send a fast resend request;
-                //
-                // - If the socket sent a FIN previously, resend it.
-                debug!("self.send_window: {:?}", self.send_window.iter()
-                       .map(Packet::seq_nr).collect::<Vec<u16>>());
-
-                if self.send_window.is_empty() {
-                    // The socket is trying to close, all sent packets were acknowledged, and it has
-                    // already sent a FIN: resend it.
-                    if self.state == SocketState::FinSent {
-                        let mut packet = Packet::new();
-                        packet.set_connection_id(self.sender_connection_id);
-                        packet.set_seq_nr(self.seq_nr);
-                        packet.set_ack_nr(self.ack_nr);
-                        packet.set_timestamp_microseconds(now_microseconds());
-                        packet.set_type(PacketType::Fin);
-
-                        // Send FIN
-                        try!(self.socket.send_to(&packet.to_bytes()[..], self.connected_to));
-                        debug!("resent FIN: {:?}", packet);
-                    } else {
-                        // The socket is waiting for incoming packets but the remote peer is silent:
-                        // send a fast resend request.
-                        debug!("sending fast resend request");
-                        self.send_fast_resend_request();
-                    }
-                } else {
-                    // The socket is sending data packets but there is no reply from the remote
-                    // peer: resend the first unacknowledged packet with the current timestamp.
-                    let mut packet = &mut self.send_window[0];
-                    packet.set_timestamp_microseconds(now_microseconds());
-                    try!(self.socket.send_to(&packet.to_bytes()[..], self.connected_to));
-                    debug!("resent {:?}", packet);
-                }
-
+                try!(self.handle_receive_timeout());
                 return Ok((0, self.connected_to));
             },
             Ok(x) => x,
@@ -441,6 +398,54 @@ impl UtpSocket {
         let read = self.flush_incoming_buffer(buf);
 
         Ok((read, src))
+    }
+
+    fn handle_receive_timeout(&mut self) -> Result<()> {
+        self.congestion_timeout = self.congestion_timeout * 2;
+        self.cwnd = MSS;
+
+        // There are three possible cases here:
+        //
+        // - If the socket is sending and waiting for acknowledgements (the send window is
+        //   not empty), resend the first unacknowledged packet;
+        //
+        // - If the socket is not sending and it hasn't sent a FIN yet, then it's waiting
+        //   for incoming packets: send a fast resend request;
+        //
+        // - If the socket sent a FIN previously, resend it.
+        debug!("self.send_window: {:?}", self.send_window.iter()
+               .map(Packet::seq_nr).collect::<Vec<u16>>());
+
+        if self.send_window.is_empty() {
+            // The socket is trying to close, all sent packets were acknowledged, and it has
+            // already sent a FIN: resend it.
+            if self.state == SocketState::FinSent {
+                let mut packet = Packet::new();
+                packet.set_connection_id(self.sender_connection_id);
+                packet.set_seq_nr(self.seq_nr);
+                packet.set_ack_nr(self.ack_nr);
+                packet.set_timestamp_microseconds(now_microseconds());
+                packet.set_type(PacketType::Fin);
+
+                // Send FIN
+                try!(self.socket.send_to(&packet.to_bytes()[..], self.connected_to));
+                debug!("resent FIN: {:?}", packet);
+            } else {
+                // The socket is waiting for incoming packets but the remote peer is silent:
+                // send a fast resend request.
+                debug!("sending fast resend request");
+                self.send_fast_resend_request();
+            }
+        } else {
+            // The socket is sending data packets but there is no reply from the remote
+            // peer: resend the first unacknowledged packet with the current timestamp.
+            let mut packet = &mut self.send_window[0];
+            packet.set_timestamp_microseconds(now_microseconds());
+            try!(self.socket.send_to(&packet.to_bytes()[..], self.connected_to));
+            debug!("resent {:?}", packet);
+        }
+
+        Ok(())
     }
 
     fn prepare_reply(&self, original: &Packet, t: PacketType) -> Packet {
