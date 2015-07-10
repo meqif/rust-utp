@@ -1,5 +1,5 @@
 language: rust
-sudo: true
+sudo: false
 rust:
     - nightly
     - beta
