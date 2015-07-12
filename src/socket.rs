@@ -267,9 +267,7 @@ impl UtpSocket {
             debug!("sent {:?}", packet);
 
             // Validate response
-            // socket.socket.set_read_timeout(Some(syn_timeout));
             match socket.socket.recv_timeout(&mut buf, syn_timeout) {
-                // Ok((_read, src)) if src != socket.connected_to => continue,
                 Ok((read, src)) => { socket.connected_to = src; len = read; break; },
                 Err(ref e) if (e.kind() == ErrorKind::WouldBlock ||
                                e.kind() == ErrorKind::TimedOut) => {
