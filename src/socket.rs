@@ -2330,6 +2330,7 @@ mod test {
         let mut server = iotry!(UtpSocket::bind(server_addr));
         // Decrease timeouts for faster tests
         server.congestion_timeout = 1;
+        let attempts = server.max_retransmission_retries;
 
         thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
@@ -2339,10 +2340,12 @@ mod test {
             let socket = client.socket.try_clone().unwrap();
             let mut buf = [0; BUF_SIZE];
             iotry!(socket.recv_from(&mut buf));
-            match socket.recv_from(&mut buf) {
-                Ok((len, _src)) => assert_eq!(Packet::from_bytes(&buf[..len]).unwrap().get_type(),
-                                              PacketType::Data),
-                Err(e) => panic!("{}", e),
+            for _ in 0..attempts {
+                match socket.recv_from(&mut buf) {
+                    Ok((len, _src)) => assert_eq!(Packet::from_bytes(&buf[..len]).unwrap().get_type(),
+                        PacketType::Data),
+                    Err(e) => panic!("{}", e),
+                }
             }
         });
 
@@ -2367,6 +2370,7 @@ mod test {
         let mut server = iotry!(UtpSocket::bind(server_addr));
         // Decrease timeouts for faster tests
         server.congestion_timeout = 1;
+        let attempts = server.max_retransmission_retries;
 
         thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
@@ -2376,10 +2380,12 @@ mod test {
             let socket = client.socket.try_clone().unwrap();
             let mut buf = [0; BUF_SIZE];
             iotry!(socket.recv_from(&mut buf));
-            match socket.recv_from(&mut buf) {
-                Ok((len, _src)) => assert_eq!(Packet::from_bytes(&buf[..len]).unwrap().get_type(),
-                                              PacketType::Fin),
-                Err(e) => panic!("{}", e),
+            for _ in 0..attempts {
+                match socket.recv_from(&mut buf) {
+                    Ok((len, _src)) => assert_eq!(Packet::from_bytes(&buf[..len]).unwrap().get_type(),
+                                                  PacketType::Fin),
+                    Err(e) => panic!("{}", e),
+                }
             }
         });
 
@@ -2401,12 +2407,26 @@ mod test {
         let mut server = iotry!(UtpSocket::bind(server_addr));
         // Decrease timeouts for faster tests
         server.congestion_timeout = 1;
+        let attempts = server.max_retransmission_retries;
 
         thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
             iotry!(client.send_to(&[0]));
             // Simulate connection loss by killing the socket.
             client.state = SocketState::Closed;
+            let socket = client.socket.try_clone().unwrap();
+            let seq_nr = client.seq_nr;
+            let mut buf = [0; BUF_SIZE];
+            for _ in 0..(3 * attempts) {
+                match socket.recv_from(&mut buf) {
+                    Ok((len, _src)) => {
+                        let packet = iotry!(Packet::from_bytes(&buf[..len]));
+                        assert_eq!(packet.get_type(), PacketType::State);
+                        assert_eq!(packet.ack_nr(), seq_nr - 1);
+                    },
+                    Err(e) => panic!("{}", e),
+                }
+            }
         });
 
         // Drain incoming packets
