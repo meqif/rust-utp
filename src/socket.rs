@@ -727,14 +727,12 @@ impl UtpSocket {
     /// Builds the selective acknowledgment extension data for usage in packets.
     fn build_selective_ack(&self) -> Vec<u8> {
         let stashed = self.incoming_buffer.iter()
-            .filter(|&pkt| pkt.seq_nr() > self.ack_nr + 1);
+            .filter(|ref pkt| pkt.seq_nr() > self.ack_nr + 1)
+            .map(|ref pkt| (pkt.seq_nr() - self.ack_nr - 2) as usize)
+            .map(|diff| (diff / 8, diff % 8));
 
         let mut sack = Vec::new();
-        for packet in stashed {
-            let diff = packet.seq_nr() - self.ack_nr - 2;
-            let byte = (diff / 8) as usize;
-            let bit = (diff % 8) as usize;
-
+        for (byte, bit) in stashed {
             // Make sure the amount of elements in the SACK vector is a
             // multiple of 4 and enough to represent the lost packets
             while byte >= sack.len() || sack.len() % 4 != 0 {
