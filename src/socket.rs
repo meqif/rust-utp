@@ -1084,12 +1084,12 @@ impl UtpSocket {
             // Find index following the most recent packet before the one we wish to insert
             let i = self.incoming_buffer.iter().filter(|p| p.seq_nr() < packet.seq_nr()).count();
 
-            // Remove packet if it's a duplicate
+            // Replace packet if it's a duplicate
             if self.incoming_buffer.get(i).map(|p| p.seq_nr() == packet.seq_nr()).unwrap_or(false) {
-                self.incoming_buffer.remove(i);
+                self.incoming_buffer[i] = packet;
+            } else {
+                self.incoming_buffer.insert(i, packet);
             }
-
-            self.incoming_buffer.insert(i, packet);
         }
     }
 }
