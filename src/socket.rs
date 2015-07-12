@@ -369,7 +369,7 @@ impl UtpSocket {
     fn recv(&mut self, buf: &mut[u8]) -> Result<(usize, SocketAddr)> {
         let mut b = [0; BUF_SIZE + HEADER_SIZE];
         let now = now_microseconds();
-        let (mut read, mut src);
+        let (read, src);
         let mut retries = 0;
 
         // Try to receive a packet and handle timeouts
