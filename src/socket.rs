@@ -20,6 +20,7 @@ const INITIAL_CONGESTION_TIMEOUT: u64 = 1000; // one second
 const MIN_CONGESTION_TIMEOUT: u64 = 500; // 500 ms
 const MAX_CONGESTION_TIMEOUT: u64 = 60_000; // one minute
 const BASE_HISTORY: usize = 10; // base delays history size
+const MAX_SYN_RETRIES: usize = 5; // maximum connection retries
 
 #[derive(Debug)]
 pub enum SocketError {
@@ -256,7 +257,7 @@ impl UtpSocket {
         let mut buf = [0; BUF_SIZE];
 
         let mut syn_timeout = socket.congestion_timeout as i64;
-        for _ in (0u8..5) {
+        for _ in 0..MAX_SYN_RETRIES {
             packet.set_timestamp_microseconds(now_microseconds());
 
             // Send packet
