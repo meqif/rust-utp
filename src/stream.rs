@@ -9,6 +9,10 @@ use socket::UtpSocket;
 /// The connection will be closed when the value is dropped (either explicitly or when it goes out
 /// of scope).
 ///
+/// The default maximum retransmission retries is 5, which translates to about 16 seconds. It can be
+/// changed by calling `set_max_retransmission_retries`. Notice that the initial congestion timeout
+/// is 500 ms and doubles with each timeout.
+///
 /// # Examples
 ///
 /// ```no_run
@@ -56,6 +60,11 @@ impl UtpStream {
     /// Returns the socket address of the local half of this uTP connection.
     pub fn local_addr(&self) -> Result<SocketAddr> {
         self.socket.local_addr()
+    }
+
+    /// Changes the maximum number of retransmission retries on the underlying socket.
+    pub fn set_max_retransmission_retries(&mut self, n: u32) {
+        self.socket.max_retransmission_retries = n;
     }
 }
 
