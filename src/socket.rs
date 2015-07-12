@@ -36,19 +36,15 @@ pub enum SocketError {
 impl From<SocketError> for Error {
     fn from(error: SocketError) -> Error {
         use self::SocketError::*;
-        match error {
-            ConnectionClosed => Error::new(ErrorKind::NotConnected,
-                                           "The socket is closed"),
-            ConnectionReset => Error::new(ErrorKind::ConnectionReset,
-                                          "Connection reset by remote peer"),
-            ConnectionTimedOut => Error::new(ErrorKind::TimedOut,
-                                             "Connection timed out"),
-            InvalidAddress => Error::new(ErrorKind::InvalidInput, "Invalid address"),
-            InvalidPacket => Error::new(ErrorKind::Other,
-                                        "Error parsing packet"),
-            InvalidReply => Error::new(ErrorKind::ConnectionRefused,
-                                       "The remote peer sent an invalid reply"),
-        }
+        let (kind, message) = match error {
+            ConnectionClosed => (ErrorKind::NotConnected, "The socket is closed"),
+            ConnectionReset => (ErrorKind::ConnectionReset, "Connection reset by remote peer"),
+            ConnectionTimedOut => (ErrorKind::TimedOut, "Connection timed out"),
+            InvalidAddress => (ErrorKind::InvalidInput, "Invalid address"),
+            InvalidPacket => (ErrorKind::Other, "Error parsing packet"),
+            InvalidReply => (ErrorKind::ConnectionRefused, "The remote peer sent an invalid reply"),
+        };
+        Error::new(kind, message)
     }
 }
 
