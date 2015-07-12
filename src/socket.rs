@@ -370,6 +370,8 @@ impl UtpSocket {
         let now = now_microseconds();
         let (mut read, mut src);
         let mut retries = 0;
+
+        // Try to receive a packet and handle timeouts
         loop {
             // Abort loop if the current try exceeds the maximum number of retransmission retries.
             if retries >= self.max_retransmission_retries {
@@ -396,6 +398,8 @@ impl UtpSocket {
             debug!("now_microseconds() - now = {} ms", elapsed/1000);
             retries += 1;
         }
+
+        // Decode received data into a packet
         let packet = match Packet::from_bytes(&b[..read]) {
             Ok(packet) => packet,
             Err(e) => {
@@ -406,12 +410,15 @@ impl UtpSocket {
         };
         debug!("received {:?}", packet);
 
+        // Process packet, including sending a reply if necessary
         if let Some(mut pkt) = try!(self.handle_packet(&packet, src)) {
                 pkt.set_wnd_size(BUF_SIZE as u32);
                 try!(self.socket.send_to(&pkt.to_bytes()[..], src));
                 debug!("sent {:?}", pkt);
         }
 
+        // Insert data packet into the incoming buffer if it isn't a duplicate of a previously
+        // discarded packet
         if packet.get_type() == PacketType::Data &&
             packet.seq_nr().wrapping_sub(self.last_dropped) > 0 {
             self.insert_into_buffer(packet);
