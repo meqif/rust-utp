@@ -9,6 +9,10 @@ use socket::UtpSocket;
 /// The connection will be closed when the value is dropped (either explicitly or when it goes out
 /// of scope).
 ///
+/// The default maximum retransmission retries is 5, which translates to about 16 seconds. It can be
+/// changed by calling `set_max_retransmission_retries`. Notice that the initial congestion timeout
+/// is 500 ms and doubles with each timeout.
+///
 /// # Examples
 ///
 /// ```no_run

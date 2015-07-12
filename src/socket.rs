@@ -82,6 +82,11 @@ fn take_address<A: ToSocketAddrs>(addr: A) -> Result<SocketAddr> {
 /// The socket will be closed when the value is dropped (either explicitly or when it goes out of
 /// scope).
 ///
+/// The default maximum retransmission retries is 5, which translates to about 16 seconds. It can be
+/// changed by assigning the desired maximum retransmission retries to a socket's
+/// `max_retransmission_retries` field. Notice that the initial congestion timeout is 500 ms and
+/// doubles with each timeout.
+///
 /// # Examples
 ///
 /// ```no_run
@@ -96,8 +101,8 @@ fn take_address<A: ToSocketAddrs>(addr: A) -> Result<SocketAddr> {
 /// buf.reverse();
 /// let _ = socket.send_to(buf).unwrap();
 ///
-/// // Explicitly close the socket. You can either call `close` on the socket,
-/// //explicitly drop it or just let it go out of scope.
+/// // Close the socket. You can either call `close` on the socket,
+/// // explicitly drop it or just let it go out of scope.
 /// socket.close();
 /// ```
 pub struct UtpSocket {
