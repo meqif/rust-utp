@@ -20,7 +20,7 @@ const INITIAL_CONGESTION_TIMEOUT: u64 = 1000; // one second
 const MIN_CONGESTION_TIMEOUT: u64 = 500; // 500 ms
 const MAX_CONGESTION_TIMEOUT: u64 = 60_000; // one minute
 const BASE_HISTORY: usize = 10; // base delays history size
-const MAX_SYN_RETRIES: usize = 5; // maximum connection retries
+const MAX_SYN_RETRIES: u32 = 5; // maximum connection retries
 const MAX_RETRANSMISSION_RETRIES: u32 = 5; // maximum retransmission retries
 
 #[derive(Debug)]
