@@ -21,7 +21,7 @@ const MIN_CONGESTION_TIMEOUT: u64 = 500; // 500 ms
 const MAX_CONGESTION_TIMEOUT: u64 = 60_000; // one minute
 const BASE_HISTORY: usize = 10; // base delays history size
 const MAX_SYN_RETRIES: usize = 5; // maximum connection retries
-const MAX_RETRANSMISSION_RETRIES: usize = 5; // maximum retransmission retries
+const MAX_RETRANSMISSION_RETRIES: u32 = 5; // maximum retransmission retries
 
 #[derive(Debug)]
 pub enum SocketError {
@@ -175,6 +175,9 @@ pub struct UtpSocket {
 
     /// Congestion window in bytes
     cwnd: u32,
+
+    /// Maximum retransmission retries
+    pub max_retransmission_retries: u32,
 }
 
 impl UtpSocket {
@@ -219,6 +222,7 @@ impl UtpSocket {
             last_rollover: 0,
             congestion_timeout: INITIAL_CONGESTION_TIMEOUT,
             cwnd: INIT_CWND * MSS,
+            max_retransmission_retries: MAX_RETRANSMISSION_RETRIES,
         }
     }
 
@@ -368,7 +372,7 @@ impl UtpSocket {
         let mut retries = 0;
         loop {
             // Abort loop if the current try exceeds the maximum number of retransmission retries.
-            if retries >= MAX_RETRANSMISSION_RETRIES {
+            if retries >= self.max_retransmission_retries {
                 self.state = SocketState::Closed;
                 return Err(Error::from(SocketError::ConnectionTimedOut));
             }

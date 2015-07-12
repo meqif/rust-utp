@@ -57,6 +57,11 @@ impl UtpStream {
     pub fn local_addr(&self) -> Result<SocketAddr> {
         self.socket.local_addr()
     }
+
+    /// Changes the maximum number of retransmission retries on the underlying socket.
+    pub fn set_max_retransmission_retries(&mut self, n: u32) {
+        self.socket.max_retransmission_retries = n;
+    }
 }
 
 impl Read for UtpStream {
