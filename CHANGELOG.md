@@ -1,5 +1,22 @@
 # Change Log
 
+## [0.6.1]
+
+### Added
+
+- Packets are resent if no acknowledgment is received before timeout.
+- Sockets time out after too many retransmissions (configurable), returning an error.
+
+### Fixed
+
+- Socket creation no longer fails with arithmetic overflow when generating a
+  random connection identifier.
+- SACK extension generation no longer fails with arithmetic overflow.
+- Resending lost packets no longer floods the connection.
+- Fixed packet extension encoding.
+- Many protocol bug fixes.
+- Fixed warning about Sized in trait on rustc 1.4.0-nightly (10d69db0a 2015-08-23) (RFC 1214 fallout)
+
 ## [0.6.0]
 
 ### Added
