@@ -182,13 +182,14 @@ pub struct UtpSocket {
 }
 
 impl UtpSocket {
-    /// Creates a new UTP from the given UDP socket and remote peer's address.
+    /// Creates a new UTP socket from the given UDP socket and the remote peer's address.
     ///
     /// The connection identifier of the resulting socket is randomly generated.
     fn from_raw_parts(s: UdpSocket, src: SocketAddr) -> UtpSocket {
         // Safely generate the two sequential connection identifiers.
-        // This avoids a panic when the generated receiver id is the largest representable value in
-        // u16 and one increments it to yield the corresponding sender id.
+        // This avoids an overflow when the generated receiver identifier is the largest
+        // representable value in u16 and it is incremented to yield the corresponding sender
+        // identifier.
         let (receiver_id, sender_id) = || -> (u16, u16) {
             let mut rng = rand::thread_rng();
             loop {
@@ -229,7 +230,7 @@ impl UtpSocket {
 
     /// Creates a new UTP socket from the given address.
     ///
-    /// The address type can be any implementor of the `ToSocketAddr` trait. See its documentation
+    /// The address type can be any implementer of the `ToSocketAddr` trait. See its documentation
     /// for concrete examples.
     ///
     /// If more than one valid address is specified, only the first will be used.
@@ -244,7 +245,7 @@ impl UtpSocket {
 
     /// Opens a connection to a remote host by hostname or IP address.
     ///
-    /// The address type can be any implementor of the `ToSocketAddr` trait. See its documentation
+    /// The address type can be any implementer of the `ToSocketAddr` trait. See its documentation
     /// for concrete examples.
     ///
     /// If more than one valid address is specified, only the first will be used.
@@ -338,7 +339,7 @@ impl UtpSocket {
     ///
     /// On success, returns the number of bytes read and the sender's address.
     /// Returns 0 bytes read after receiving a FIN packet when the remaining
-    /// inflight packets are consumed.
+    /// in-flight packets are consumed.
     pub fn recv_from(&mut self, buf: &mut[u8]) -> Result<(usize, SocketAddr)> {
         let read = self.flush_incoming_buffer(buf);
 
@@ -623,7 +624,7 @@ impl UtpSocket {
         let max_inflight = max(MIN_CWND * MSS, max_inflight);
         let now = now_microseconds();
 
-        // Wait until enough inflight packets are acknowledged for rate control purposes, but don't
+        // Wait until enough in-flight packets are acknowledged for rate control purposes, but don't
         // wait more than 500 ms before sending the packet.
         while self.curr_window >= max_inflight && now_microseconds() - now < 500_000 {
             debug!("self.curr_window: {}", self.curr_window);
@@ -724,7 +725,7 @@ impl UtpSocket {
         self.base_delays.iter().map(|x| *x).min().unwrap_or(0)
     }
 
-    /// Builds the selective acknowledgment extension data for usage in packets.
+    /// Builds the selective acknowledgement extension data for usage in packets.
     fn build_selective_ack(&self) -> Vec<u8> {
         let stashed = self.incoming_buffer.iter()
             .filter(|ref pkt| pkt.seq_nr() > self.ack_nr + 1)
@@ -874,7 +875,7 @@ impl UtpSocket {
             (SocketState::Connected, PacketType::Fin) |
             (SocketState::FinSent,   PacketType::Fin) => {
                 if packet.ack_nr() < self.seq_nr {
-                    debug!("FIN received but there are missing acknowledgments for sent packets");
+                    debug!("FIN received but there are missing acknowledgements for sent packets");
                 }
                 let mut reply = self.prepare_reply(packet, PacketType::State);
                 if packet.seq_nr().wrapping_sub(self.ack_nr) > 1 {
@@ -995,7 +996,7 @@ impl UtpSocket {
 
         // Update congestion window size
         if let Some(index) = self.send_window.iter().position(|p| packet.ack_nr() == p.seq_nr()) {
-            // Calculate the sum of the size of every packet implicitly and explictly acknowledged
+            // Calculate the sum of the size of every packet implicitly and explicitly acknowledged
             // by the inbound packet (i.e., every packet whose sequence number precedes the inbound
             // packet's acknowledgement number, plus the packet whose sequence number matches)
             let bytes_newly_acked = self.send_window.iter()
@@ -1069,9 +1070,9 @@ impl UtpSocket {
 
     /// Inserts a packet into the socket's buffer.
     ///
-    /// The packet is inserted in such a way that the buffer is
-    /// ordered ascendingly by their sequence number. This allows
-    /// storing packets that were received out of order.
+    /// The packet is inserted in such a way that the packets in the buffer are sorted according to
+    /// their sequence number in ascending order. This allows storing packets that were received out
+    /// of order.
     ///
     /// Inserting a duplicate of a packet will replace the one in the buffer if
     /// it's more recent (larger timestamp).
@@ -1136,7 +1137,7 @@ impl UtpListener {
     ///
     /// The resulting listener is ready for accepting connections.
     ///
-    /// The address type can be any implementor of the `ToSocketAddr` trait. See its documentation
+    /// The address type can be any implementer of the `ToSocketAddr` trait. See its documentation
     /// for concrete examples.
     ///
     /// If more than one valid address is specified, only the first will be used.
@@ -1313,7 +1314,7 @@ mod test {
         let _resp = server.recv_from(&mut buf);
         assert!(server.state == SocketState::Closed);
 
-        // Trying to receive again returns Ok(0) [EndOfFile]
+        // Trying to receive again returns `Ok(0)` (equivalent to the old `EndOfFile`)
         match server.recv_from(&mut buf) {
             Ok((0, _src)) => {},
             e => panic!("Expected Ok(0), got {:?}", e),
@@ -1436,10 +1437,9 @@ mod test {
         let response = response.unwrap();
         assert!(response.get_type() == PacketType::State);
 
-        // Sender (i.e., who initated connection and sent SYN) has connection id
-        // equal to initial connection id + 1
-        // Receiver (i.e., who accepted connection) has connection id equal to
-        // initial connection id
+        // Sender (i.e., who the initiated connection and sent a SYN) has connection id equal to
+        // initial connection id + 1
+        // Receiver (i.e., who accepted connection) has connection id equal to initial connection id
         assert!(response.connection_id() == initial_connection_id);
         assert!(response.connection_id() == packet.connection_id() - 1);
 
@@ -2302,7 +2302,7 @@ mod test {
 
     #[test]
     fn test_take_address() {
-        // Expected succcesses
+        // Expected successes
         assert!(take_address(("0.0.0.0:0")).is_ok());
         assert!(take_address((":::0")).is_ok());
         assert!(take_address(("0.0.0.0", 0)).is_ok());

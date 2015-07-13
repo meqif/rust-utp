@@ -30,7 +30,7 @@ pub struct UtpStream {
 impl UtpStream {
     /// Creates a uTP stream listening on the given address.
     ///
-    /// The address type can be any implementor of the `ToSocketAddr` trait. See its documentation
+    /// The address type can be any implementer of the `ToSocketAddr` trait. See its documentation
     /// for concrete examples.
     ///
     /// If more than one valid address is specified, only the first will be used.
@@ -40,7 +40,7 @@ impl UtpStream {
 
     /// Opens a uTP connection to a remote host by hostname or IP address.
     ///
-    /// The address type can be any implementor of the `ToSocketAddr` trait. See its documentation
+    /// The address type can be any implementer of the `ToSocketAddr` trait. See its documentation
     /// for concrete examples.
     ///
     /// If more than one valid address is specified, only the first will be used.

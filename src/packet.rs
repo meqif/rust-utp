@@ -350,7 +350,7 @@ impl Decodable for Packet {
     ///
     /// Note that this method makes no attempt to guess the payload size, saving
     /// all except the initial 20 bytes corresponding to the header as payload.
-    /// It's the caller's responsability to use an appropriately sized buffer.
+    /// It's the caller's responsibility to use an appropriately sized buffer.
     fn from_bytes(buf: &[u8]) -> Result<Packet, ParseError> {
         let header = try!(PacketHeader::from_bytes(buf));
 
@@ -617,7 +617,7 @@ mod tests {
         // Length of the first extension
         assert_eq!(bytes[HEADER_SIZE + 1], extension.data.len() as u8);
 
-        // Type of the next (third, non-existant) extension
+        // Type of the next (third, non-existent) extension
         assert_eq!(bytes[HEADER_SIZE + 2 + extension.len()], 0);
         // Length of the second extension
         assert_eq!(bytes[HEADER_SIZE + 2 + extension.len() + 1], extension.data.len() as u8);
