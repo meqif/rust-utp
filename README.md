@@ -70,7 +70,7 @@ fn main() {
 }
 ```
 
-## To implement
+## Roadmap
 
 - [x] congestion control
 - [x] proper connection closing
@@ -80,16 +80,17 @@ fn main() {
 - [x] sending RST on mismatch
 - [x] setters and getters that hide header field endianness conversion
 - [x] SACK extension
-- [ ] handle packet loss
+- [x] handle packet loss
     - [x] send triple-ACK to re-request lost packet (fast resend request)
     - [x] rewind send window and resend in reply to triple-ACK (fast resend)
-    - [ ] resend packet on ACK timeout
+    - [x] resend packet on ACK timeout
 - [x] stream interface
 - [x] handle unordered packets
-- [ ] path MTU discovery
 - [x] duplicate packet handling
 - [x] listener abstraction
 - [x] incoming connections iterator
+- [x] time out connection after too many retransmissions
+- [ ] path MTU discovery
 
 ## License
 
