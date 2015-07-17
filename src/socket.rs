@@ -618,7 +618,6 @@ impl UtpSocket {
     /// Send one packet.
     #[inline(always)]
     fn send_packet(&mut self, packet: &mut Packet) -> Result<()> {
-        let dst = self.connected_to;
         debug!("current window: {}", self.send_window.len());
         let max_inflight = min(self.cwnd, self.remote_wnd_size);
         let max_inflight = max(MIN_CWND * MSS, max_inflight);
@@ -649,7 +648,7 @@ impl UtpSocket {
 
         packet.set_timestamp_microseconds(now_microseconds());
         packet.set_timestamp_difference_microseconds(self.their_delay);
-        try!(self.socket.send_to(&packet.to_bytes()[..], dst));
+        try!(self.socket.send_to(&packet.to_bytes()[..], self.connected_to));
         debug!("sent {:?}", packet);
 
         Ok(())
