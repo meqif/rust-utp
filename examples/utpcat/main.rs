@@ -35,14 +35,14 @@ fn main() {
 
     // Parse the mode argument
     let mode: Mode = match args.next() {
-        Some(ref s) if &s[..] == "-s" => Mode::Server,
-        Some(ref s) if &s[..] == "-c" => Mode::Client,
+        Some(ref s) if s == "-s" => Mode::Server,
+        Some(ref s) if s == "-c" => Mode::Client,
         _ => usage(),
     };
 
     // Parse the address argument or use a default if none is provided
     let addr = match (args.next(), args.next()) {
-        (None, None) => "127.0.0.1:8080".to_string(),
+        (None, None) => "127.0.0.1:8080".to_owned(),
         (Some(ip), Some(port)) => format!("{}:{}", ip, port),
         _ => usage(),
     };
