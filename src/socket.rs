@@ -747,16 +747,15 @@ impl UtpSocket {
 
     /// Sends a fast resend request to the remote peer.
     ///
-    /// A fast resend request consists of sending three STATE packets (acknowledging the last
+    /// A fast resend request consists of sending three State packets (acknowledging the last
     /// received packet) in quick succession.
     fn send_fast_resend_request(&self) {
         for _ in 0..3 {
             let mut packet = Packet::new();
             packet.set_type(PacketType::State);
             let self_t_micro: u32 = now_microseconds();
-            let other_t_micro: u32 = 0;
             packet.set_timestamp_microseconds(self_t_micro);
-            packet.set_timestamp_difference_microseconds((self_t_micro - other_t_micro));
+            packet.set_timestamp_difference_microseconds(self.their_delay);
             packet.set_connection_id(self.sender_connection_id);
             packet.set_seq_nr(self.seq_nr);
             packet.set_ack_nr(self.ack_nr);
