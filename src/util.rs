@@ -10,7 +10,7 @@ pub fn now_microseconds() -> u32 {
 /// Calculate the exponential weighted moving average for a vector of numbers, with a smoothing
 /// factor `alpha` between 0 and 1. A higher `alpha` discounts older observations faster.
 pub fn ewma<T: ToPrimitive>(samples: Vec<T>, alpha: f64) -> f64 {
-    let (prev_sample, prev_avg) = samples.iter().fold((0.0, 0.0), |acc, ref sample| match acc {
+    let (prev_sample, prev_avg) = samples.iter().fold((0.0, 0.0), |acc, sample| match acc {
         (0.0, 0.0) => (sample.to_f64().unwrap(), sample.to_f64().unwrap()),
         (prev_sample, prev_avg) => (sample.to_f64().unwrap(),
                                     alpha * prev_sample + (1.0 - alpha) * prev_avg)

@@ -727,8 +727,8 @@ impl UtpSocket {
     /// Builds the selective acknowledgement extension data for usage in packets.
     fn build_selective_ack(&self) -> Vec<u8> {
         let stashed = self.incoming_buffer.iter()
-            .filter(|ref pkt| pkt.seq_nr() > self.ack_nr + 1)
-            .map(|ref pkt| (pkt.seq_nr() - self.ack_nr - 2) as usize)
+            .filter(|pkt| pkt.seq_nr() > self.ack_nr + 1)
+            .map(|pkt| (pkt.seq_nr() - self.ack_nr - 2) as usize)
             .map(|diff| (diff / 8, diff % 8));
 
         let mut sack = Vec::new();
