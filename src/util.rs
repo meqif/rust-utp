@@ -18,11 +18,12 @@ pub fn ewma<T: ToPrimitive>(samples: Vec<T>, alpha: f64) -> f64 {
     alpha * prev_sample + (1.0 - alpha) * prev_avg
 }
 
+#[cfg(test)]
 mod test {
+    use super::ewma;
+
     #[test]
     fn test_ewma_empty_vector() {
-        use super::ewma;
-
         let empty: Vec<u32> = vec!();
         let alpha = 1.0/3.0;
         assert_eq!(ewma(empty, alpha), 0.0);
@@ -30,8 +31,6 @@ mod test {
 
     #[test]
     fn test_ewma_one_element() {
-        use super::ewma;
-
         let input = vec!(1u32);
         let alpha = 1.0/3.0;
         assert_eq!(ewma(input, alpha), 1.0);
@@ -39,8 +38,6 @@ mod test {
 
     #[test]
     fn test_exponential_smoothed_moving_average() {
-        use super::ewma;
-
         let input = (1u32..11).collect();
         let alpha = 1.0/3.0;
         let expected = [1.0, 4.0/3.0, 17.0/9.0,
