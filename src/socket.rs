@@ -616,7 +616,7 @@ impl UtpSocket {
     }
 
     /// Send one packet.
-    #[inline(always)]
+    #[inline]
     fn send_packet(&mut self, packet: &mut Packet) -> Result<()> {
         debug!("current window: {}", self.send_window.len());
         let max_inflight = min(self.cwnd, self.remote_wnd_size);
