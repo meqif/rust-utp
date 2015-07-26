@@ -23,6 +23,12 @@ const BASE_HISTORY: usize = 10; // base delays history size
 const MAX_SYN_RETRIES: u32 = 5; // maximum connection retries
 const MAX_RETRANSMISSION_RETRIES: u32 = 5; // maximum retransmission retries
 
+// Maximum time (in microseconds) to wait for incoming packets when the send window is full
+const PRE_SEND_TIMEOUT: u32 = 500_000;
+
+// Maximum age of base delay sample (60 seconds)
+const MAX_BASE_DELAY_AGE: i64 = 60_000_000;
+
 #[derive(Debug)]
 pub enum SocketError {
     ConnectionClosed,
@@ -624,8 +630,8 @@ impl UtpSocket {
         let now = now_microseconds();
 
         // Wait until enough in-flight packets are acknowledged for rate control purposes, but don't
-        // wait more than 500 ms before sending the packet.
-        while self.curr_window >= max_inflight && now_microseconds() - now < 500_000 {
+        // wait more than 500 ms (PRE_SEND_TIMEOUT) before sending the packet.
+        while self.curr_window >= max_inflight && now_microseconds() - now < PRE_SEND_TIMEOUT {
             debug!("self.curr_window: {}", self.curr_window);
             debug!("max_inflight: {}", max_inflight);
             debug!("self.duplicate_ack_count: {}", self.duplicate_ack_count);
@@ -657,11 +663,9 @@ impl UtpSocket {
     // Insert a new sample in the base delay list.
     //
     // The base delay list contains at most `BASE_HISTORY` samples, each sample is the minimum
-    // measured over a period of a minute.
+    // measured over a period of a minute (MAX_BASE_DELAY_AGE).
     fn update_base_delay(&mut self, base_delay: i64, now: i64) {
-        let minute_in_microseconds = 60 * 10i64.pow(6);
-
-        if self.base_delays.is_empty() || now - self.last_rollover > minute_in_microseconds {
+        if self.base_delays.is_empty() || now - self.last_rollover > MAX_BASE_DELAY_AGE {
             // Update last rollover
             self.last_rollover = now;
 
