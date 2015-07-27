@@ -1074,7 +1074,7 @@ impl UtpSocket {
     /// their sequence number in ascending order. This allows storing packets that were received out
     /// of order.
     ///
-    /// Inserting a duplicate of a packet will replace the one in the buffer if
+    /// Trying to insert a duplicate of a packet will silently fail.
     /// it's more recent (larger timestamp).
     fn insert_into_buffer(&mut self, packet: Packet) {
         // Immediately push to the end if the packet's sequence number comes after the last
@@ -1085,10 +1085,7 @@ impl UtpSocket {
             // Find index following the most recent packet before the one we wish to insert
             let i = self.incoming_buffer.iter().filter(|p| p.seq_nr() < packet.seq_nr()).count();
 
-            // Replace packet if it's a duplicate
-            if self.incoming_buffer.get(i).map(|p| p.seq_nr() == packet.seq_nr()).unwrap_or(false) {
-                self.incoming_buffer[i] = packet;
-            } else {
+            if self.incoming_buffer.get(i).map(|p| p.seq_nr() != packet.seq_nr()).unwrap_or(true) {
                 self.incoming_buffer.insert(i, packet);
             }
         }
@@ -1850,14 +1847,14 @@ mod test {
         assert_eq!(socket.incoming_buffer[2].seq_nr(), 3);
         assert_eq!(socket.incoming_buffer[2].timestamp_microseconds(), 256);
 
-        // Replace a packet with a more recent version
+        // Replacing a packet with a more recent version doesn't work
         packet.set_seq_nr(2);
         packet.set_timestamp_microseconds(456);
 
         socket.insert_into_buffer(packet.clone());
         assert_eq!(socket.incoming_buffer.len(), 3);
         assert_eq!(socket.incoming_buffer[1].seq_nr(), 2);
-        assert_eq!(socket.incoming_buffer[1].timestamp_microseconds(), 456);
+        assert_eq!(socket.incoming_buffer[1].timestamp_microseconds(), 128);
     }
 
     #[test]
