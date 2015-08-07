@@ -28,15 +28,3 @@ quickcheck = "*"
 
 [lib]
 name = "utp"
-
-[[bin]]
-name = "utpcat"
-path = "examples/utpcat/main.rs"
-test = false
-bench = false
-
-[[bin]]
-name = "echo-server"
-path = "examples/echo-server/main.rs"
-test = false
-bench = false

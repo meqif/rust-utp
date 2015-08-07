@@ -40,7 +40,7 @@ extern crate utp;
 
 ## Examples
 
-Check the `examples` directory. The simplest example would be:
+The simplest example program would be:
 
 ```rust
 extern crate utp;
@@ -69,6 +69,8 @@ fn main() {
     }
 }
 ```
+
+Check out the files under the "examples" directory for more example programs, or run them with `cargo run --example <example_name>`.
 
 ## Roadmap
 
