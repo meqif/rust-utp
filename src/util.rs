@@ -4,7 +4,7 @@ use num::ToPrimitive;
 /// Return current time in microseconds since the UNIX epoch.
 pub fn now_microseconds() -> u32 {
     let t = time::get_time();
-    (t.sec * 1_000_000) as u32 + (t.nsec/1000) as u32
+    (t.sec * 1_000_000 + t.nsec as i64 / 1000) as u32
 }
 
 /// Calculate the exponential weighted moving average for a vector of numbers, with a smoothing
