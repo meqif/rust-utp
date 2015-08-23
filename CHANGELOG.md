@@ -1,5 +1,11 @@
 # Change Log
 
+## [0.6.1]
+
+### Fixed
+
+- Decodable must be inherit from Sized. See Rust [RFC #1214](https://github.com/nikomatsakis/rfcs/blob/projection-and-lifetimes/text/0000-projections-lifetimes-and-wf.md#impact-on-cratesio).
+
 ## [0.6.0]
 
 ### Added
