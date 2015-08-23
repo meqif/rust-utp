@@ -38,7 +38,7 @@ pub trait Encodable {
 }
 
 /// A trait for objects that can be decoded from slices of bytes.
-pub trait Decodable {
+pub trait Decodable: Sized {
     /// Decodes a slice of bytes and returns an equivalent object.
     ///
     /// If the slice of bytes represents a valid instance of the type, it returns `Ok`, containing
