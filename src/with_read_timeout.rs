@@ -1,8 +1,3 @@
-#[cfg(unix)]
-extern crate nix;
-#[cfg(windows)]
-extern crate libc;
-
 use std::io::{Error, ErrorKind, Result};
 use std::net::{UdpSocket, SocketAddr};
 
