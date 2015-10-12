@@ -244,6 +244,11 @@ impl UtpSocket {
         take_address(addr).and_then(|a| UdpSocket::bind(a).map(|s| UtpSocket::from_raw_parts(s, a)))
     }
 
+    /// Creates a new UTP socket from the given UDP socket.
+    pub fn bind_with_udp_socket(socket: UdpSocket) -> Result<UtpSocket> {
+        socket.local_addr().map(|a| UtpSocket::from_raw_parts(socket, a))
+    }
+
     /// Returns the socket address that this socket was created from.
     pub fn local_addr(&self) -> Result<SocketAddr> {
         self.socket.local_addr()
@@ -262,48 +267,23 @@ impl UtpSocket {
             SocketAddr::V6(_) => ":::0",
         };
         let mut socket = try!(UtpSocket::bind(my_addr));
-        socket.connected_to = addr;
 
-        let mut packet = Packet::new();
-        packet.set_type(PacketType::Syn);
-        packet.set_connection_id(socket.receiver_connection_id);
-        packet.set_seq_nr(socket.seq_nr);
-
-        let mut len = 0;
-        let mut buf = [0; BUF_SIZE];
-
-        let mut syn_timeout = socket.congestion_timeout as i64;
-        for _ in 0..MAX_SYN_RETRIES {
-            packet.set_timestamp_microseconds(now_microseconds());
-
-            // Send packet
-            debug!("Connecting to {}", socket.connected_to);
-            try!(socket.socket.send_to(&packet.to_bytes()[..], socket.connected_to));
-            socket.state = SocketState::SynSent;
-            debug!("sent {:?}", packet);
-
-            // Validate response
-            match socket.socket.recv_timeout(&mut buf, syn_timeout) {
-                Ok((read, src)) => { socket.connected_to = src; len = read; break; },
-                Err(ref e) if (e.kind() == ErrorKind::WouldBlock ||
-                               e.kind() == ErrorKind::TimedOut) => {
-                    debug!("Timed out, retrying");
-                    syn_timeout *= 2;
-                    continue;
-                },
-                Err(e) => return Err(e),
-            };
-        }
-
-        let addr = socket.connected_to;
-        let packet = try!(Packet::from_bytes(&buf[..len]).or(Err(SocketError::InvalidPacket)));
-        debug!("received {:?}", packet);
-        try!(socket.handle_packet(&packet, addr));
-
-        debug!("connected to: {}", socket.connected_to);
-
-        return Ok(socket);
+        socket.connect_to(addr).map(|_| socket)
     }
+
+    /// Opens a connection to a remote host, reusing the given UDP socket.
+    ////
+    /// The address type can be any implementer of the `ToSocketAddr` trait. See its documentation
+    /// for concrete examples.
+    ///
+    /// If more than one valid address is specified, only the first will be used.
+    pub fn connect_with_udp_socket<A: ToSocketAddrs>(udp_socket: UdpSocket, other: A) -> Result<UtpSocket> {
+        let addr = try!(take_address(other));
+        let mut socket = try!(UtpSocket::bind_with_udp_socket(udp_socket));
+
+        socket.connect_to(addr).map(|_| socket)
+    }
+
 
     /// Gracefully closes connection to peer.
     ///
@@ -371,6 +351,50 @@ impl UtpSocket {
                 }
             }
         }
+    }
+
+    fn connect_to(&mut self, addr: SocketAddr) -> Result<()> {
+        self.connected_to = addr;
+
+        let mut packet = Packet::new();
+        packet.set_type(PacketType::Syn);
+        packet.set_connection_id(self.receiver_connection_id);
+        packet.set_seq_nr(self.seq_nr);
+
+        let mut len = 0;
+        let mut buf = [0; BUF_SIZE];
+
+        let mut syn_timeout = self.congestion_timeout as i64;
+        for _ in 0..MAX_SYN_RETRIES {
+            packet.set_timestamp_microseconds(now_microseconds());
+
+            // Send packet
+            debug!("Connecting to {}", self.connected_to);
+            try!(self.socket.send_to(&packet.to_bytes()[..], self.connected_to));
+            self.state = SocketState::SynSent;
+            debug!("sent {:?}", packet);
+
+            // Validate response
+            match self.socket.recv_timeout(&mut buf, syn_timeout) {
+                Ok((read, src)) => { self.connected_to = src; len = read; break; },
+                Err(ref e) if (e.kind() == ErrorKind::WouldBlock ||
+                               e.kind() == ErrorKind::TimedOut) => {
+                    debug!("Timed out, retrying");
+                    syn_timeout *= 2;
+                    continue;
+                },
+                Err(e) => return Err(e),
+            };
+        }
+
+        let addr = self.connected_to;
+        let packet = try!(Packet::from_bytes(&buf[..len]).or(Err(SocketError::InvalidPacket)));
+        debug!("received {:?}", packet);
+        try!(self.handle_packet(&packet, addr));
+
+        debug!("connected to: {}", self.connected_to);
+
+        Ok(())
     }
 
     fn recv(&mut self, buf: &mut[u8]) -> Result<(usize, SocketAddr)> {
@@ -1273,6 +1297,41 @@ mod test {
 
         thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
+            assert!(client.state == SocketState::Connected);
+            // Check proper difference in client's send connection id and receive connection id
+            assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
+            assert_eq!(client.connected_to,
+                       server_addr.to_socket_addrs().unwrap().next().unwrap());
+            iotry!(client.close());
+            drop(client);
+        });
+
+        let mut buf = [0u8; BUF_SIZE];
+        match server.recv_from(&mut buf) {
+            e => println!("{:?}", e),
+        }
+        // After establishing a new connection, the server's ids are a mirror of the client's.
+        assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
+
+        assert!(server.state == SocketState::Closed);
+        drop(server);
+    }
+
+    #[test]
+    fn test_bind_and_connect_with_udp_socket() {
+        use std::net::{UdpSocket, Ipv4Addr, SocketAddrV4};
+
+        let server_udp_socket = iotry!(UdpSocket::bind("0.0.0.0:0"));
+        let client_udp_socket = iotry!(UdpSocket::bind("0.0.0.0:0"));
+
+        let server_port = iotry!(server_udp_socket.local_addr()).port();
+        let server_addr = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), server_port);
+
+        let mut server = iotry!(UtpSocket::bind_with_udp_socket(server_udp_socket));
+        assert!(server.state == SocketState::New);
+
+        thread::spawn(move || {
+            let mut client = iotry!(UtpSocket::connect_with_udp_socket(client_udp_socket, server_addr));
             assert!(client.state == SocketState::Connected);
             // Check proper difference in client's send connection id and receive connection id
             assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
