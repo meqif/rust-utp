@@ -37,14 +37,16 @@ impl WithReadTimeout for UdpSocket {
 
     #[cfg(windows)]
     fn recv_timeout(&mut self, buf: &mut [u8], timeout: i64) -> Result<(usize, SocketAddr)> {
+        use select;
         use select::fd_set;
         use std::os::windows::io::AsRawSocket;
+        use std::ptr;
         use libc;
 
         if timeout > 0 {
             // Initialize relevant data structures
             let mut readfds = fd_set::new();
-            let null = std::ptr::null_mut();
+            let null = ptr::null_mut();
 
             fd_set(&mut readfds, self.as_raw_socket());
 
@@ -64,43 +66,6 @@ impl WithReadTimeout for UdpSocket {
         }
 
         self.recv_from(buf)
-    }
-}
-
-// Most of the following was copied from 'rust/src/libstd/sys/windows/net.rs'
-#[cfg(windows)]
-mod select {
-    use libc;
-
-    pub const FD_SETSIZE: usize = 64;
-
-    #[repr(C)]
-    pub struct fd_set {
-        fd_count: libc::c_uint,
-        fd_array: [libc::SOCKET; FD_SETSIZE],
-    }
-
-    pub fn fd_set(set: &mut fd_set, s: libc::SOCKET) {
-        set.fd_array[set.fd_count as usize] = s;
-        set.fd_count += 1;
-    }
-
-    impl fd_set {
-        pub fn new() -> fd_set {
-            fd_set {
-                fd_count: 0,
-                fd_array: [0; FD_SETSIZE],
-            }
-        }
-    }
-
-    #[link(name = "ws2_32")]
-    extern "system" {
-        pub fn select(nfds: libc::c_int,
-                      readfds: *mut fd_set,
-                      writefds: *mut fd_set,
-                      exceptfds: *mut fd_set,
-                      timeout: *mut libc::timeval) -> libc::c_int;
     }
 }
 
