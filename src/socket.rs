@@ -1342,9 +1342,8 @@ mod test {
         });
 
         let mut buf = [0u8; BUF_SIZE];
-        match server.recv_from(&mut buf) {
-            e => println!("{:?}", e),
-        }
+        server.recv_from(&mut buf).unwrap();
+
         // After establishing a new connection, the server's ids are a mirror of the client's.
         assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
 
