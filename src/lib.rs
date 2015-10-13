@@ -78,4 +78,6 @@ mod bit_iterator;
 mod packet;
 mod socket;
 mod stream;
+#[cfg(windows)]
+mod select;
 mod with_read_timeout;
