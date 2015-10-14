@@ -37,16 +37,17 @@ impl WithReadTimeout for UdpSocket {
 
     #[cfg(windows)]
     fn recv_timeout(&mut self, buf: &mut [u8], timeout: i64) -> Result<(usize, SocketAddr)> {
-        use select::fd_set;
+        use self::select;
+        use std::ptr;
         use std::os::windows::io::AsRawSocket;
         use libc;
 
         if timeout > 0 {
             // Initialize relevant data structures
-            let mut readfds = fd_set::new();
-            let null = std::ptr::null_mut();
+            let mut readfds = select::fd_set::new();
+            let null = ptr::null_mut();
 
-            fd_set(&mut readfds, self.as_raw_socket());
+            select::fd_set(&mut readfds, self.as_raw_socket());
 
             // Set timeout
             let mut tv = libc::timeval {
