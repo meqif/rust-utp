@@ -1,5 +1,11 @@
 # Change Log
 
+## [0.6.2]
+
+### Fixed
+
+- Fixed Windows build.
+
 ## [0.6.1]
 
 ### Added
