@@ -249,6 +249,11 @@ impl UtpSocket {
         self.socket.local_addr()
     }
 
+    /// Returns the socket address of the remote peer of this Utp connection.
+    pub fn peer_addr(&self) -> SocketAddr {
+        self.connected_to
+    }
+
     /// Opens a connection to a remote host by hostname or IP address.
     ///
     /// The address type can be any implementer of the `ToSocketAddr` trait. See its documentation
