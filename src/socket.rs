@@ -37,6 +37,7 @@ pub enum SocketError {
     InvalidAddress,
     InvalidPacket,
     InvalidReply,
+    NotConnected,
 }
 
 impl From<SocketError> for Error {
@@ -49,6 +50,7 @@ impl From<SocketError> for Error {
             InvalidAddress => (ErrorKind::InvalidInput, "Invalid address"),
             InvalidPacket => (ErrorKind::Other, "Error parsing packet"),
             InvalidReply => (ErrorKind::ConnectionRefused, "The remote peer sent an invalid reply"),
+            NotConnected => (ErrorKind::NotConnected, "The socket is not connected"),
         };
         Error::new(kind, message)
     }
@@ -247,6 +249,15 @@ impl UtpSocket {
     /// Returns the socket address that this socket was created from.
     pub fn local_addr(&self) -> Result<SocketAddr> {
         self.socket.local_addr()
+    }
+
+    /// Returns the socket address of the remote peer of this UTP connection.
+    pub fn peer_addr(&self) -> Result<SocketAddr> {
+        if self.state == SocketState::Connected || self.state == SocketState::FinSent {
+            Ok(self.connected_to)
+        } else {
+            Err(Error::from(SocketError::NotConnected))
+        }
     }
 
     /// Opens a connection to a remote host by hostname or IP address.
@@ -2295,6 +2306,42 @@ mod test {
 
         assert!(listener.local_addr().is_ok());
         assert_eq!(listener.local_addr().unwrap(), addr);
+    }
+
+    #[test]
+    fn test_peer_addr() {
+        use std::sync::mpsc::channel;
+        let addr = next_test_ip4();
+        let server_addr = addr.to_socket_addrs().unwrap().next().unwrap();
+        let mut server = UtpSocket::bind(server_addr).unwrap();
+        let (tx, rx) = channel();
+
+        // `peer_addr` should return an error because the socket isn't connected yet
+        assert!(server.peer_addr().is_err());
+
+        thread::spawn(move || {
+            let mut client = iotry!(UtpSocket::connect(server_addr));
+            let mut buf = [0; 1024];
+            iotry!(tx.send(client.local_addr()));
+            iotry!(client.recv_from(&mut buf));
+        });
+
+        // Wait for a connection to be established
+        let mut buf = [0; 1024];
+        iotry!(server.recv(&mut buf));
+
+        // `peer_addr` should succeed and be equal to the client's address
+        assert!(server.peer_addr().is_ok());
+        // The client is expected to be bound to "0.0.0.0", so we can only check if the port is
+        // correct
+        let client_addr = rx.recv().unwrap().unwrap();
+        assert_eq!(server.peer_addr().unwrap().port(), client_addr.port());
+
+        // Close the connection
+        iotry!(server.close());
+
+        // `peer_addr` should now return an error because the socket is closed
+        assert!(server.peer_addr().is_err());
     }
 
     #[test]
