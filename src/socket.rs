@@ -810,7 +810,7 @@ impl UtpSocket {
         if let Some(position) = self.send_window.iter()
             .position(|pkt| pkt.seq_nr() == self.last_acked)
         {
-            for _ in (0..position + 1) {
+            for _ in 0..position + 1 {
                 let packet = self.send_window.remove(0);
                 self.curr_window -= packet.len() as u32;
             }
@@ -1687,7 +1687,7 @@ mod test {
             iotry!(s.send_to(&window[0].to_bytes()[..], server_addr));
             iotry!(s.send_to(&window[4].to_bytes()[..], server_addr));
 
-            for _ in (0u8..2) {
+            for _ in 0u8..2 {
                 let mut buf = [0; BUF_SIZE];
                 iotry!(s.recv_from(&mut buf));
             }
@@ -1749,7 +1749,7 @@ mod test {
         packet.set_ack_nr(data_packet.seq_nr() - 1);
         packet.set_connection_id(server.sender_connection_id);
 
-        for _ in (0u8..3) {
+        for _ in 0u8..3 {
             iotry!(server.socket.send_to(&packet.to_bytes()[..], server.connected_to));
         }
 
@@ -1894,14 +1894,14 @@ mod test {
             packet.payload = vec!(1, 2, 3);
 
             // Send two copies of the packet, with different timestamps
-            for _ in (0u8..2) {
+            for _ in 0u8..2 {
                 packet.set_timestamp_microseconds(now_microseconds());
                 iotry!(client.socket.send_to(&packet.to_bytes()[..], server_addr));
             }
             client.seq_nr += 1;
 
             // Receive one ACK
-            for _ in (0u8..1) {
+            for _ in 0u8..1 {
                 let mut buf = [0; BUF_SIZE];
                 iotry!(client.socket.recv_from(&mut buf));
             }
