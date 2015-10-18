@@ -479,7 +479,7 @@ impl UtpSocket {
                 // Send FIN
                 try!(self.socket.send_to(&packet.to_bytes()[..], self.connected_to));
                 debug!("resent FIN: {:?}", packet);
-            } else {
+            } else if self.state != SocketState::New {
                 // The socket is waiting for incoming packets but the remote peer is silent:
                 // send a fast resend request.
                 debug!("sending fast resend request");
