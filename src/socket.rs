@@ -2,7 +2,7 @@ use std::cmp::{min, max};
 use std::collections::VecDeque;
 use std::net::{ToSocketAddrs, SocketAddr, UdpSocket};
 use std::io::{Result, Error, ErrorKind};
-use util::{now_microseconds, ewma};
+use util::{now_microseconds, ewma, abs_diff};
 use packet::{Packet, PacketType, Encodable, Decodable, ExtensionType, HEADER_SIZE};
 use rand::{self, Rng};
 use with_read_timeout::WithReadTimeout;
@@ -503,7 +503,7 @@ impl UtpSocket {
         let self_t_micro: u32 = now_microseconds();
         let other_t_micro: u32 = original.timestamp_microseconds();
         resp.set_timestamp_microseconds(self_t_micro);
-        resp.set_timestamp_difference_microseconds((self_t_micro - other_t_micro));
+        resp.set_timestamp_difference_microseconds(abs_diff(self_t_micro, other_t_micro));
         resp.set_connection_id(self.sender_connection_id);
         resp.set_seq_nr(self.seq_nr);
         resp.set_ack_nr(self.ack_nr);
@@ -843,11 +843,7 @@ impl UtpSocket {
 
         // Update remote peer's delay between them sending the packet and us receiving it
         let now = now_microseconds();
-        self.their_delay = if now > packet.timestamp_microseconds() {
-            now - packet.timestamp_microseconds()
-        } else {
-            packet.timestamp_microseconds() - now
-        };
+        self.their_delay = abs_diff(now, packet.timestamp_microseconds());
         debug!("self.their_delay: {}", self.their_delay);
 
         match (self.state, packet.get_type()) {

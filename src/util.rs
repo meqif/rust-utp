@@ -14,6 +14,16 @@ pub fn ewma<T: ToPrimitive>(samples: Vec<T>, alpha: f64) -> f64 {
                         |avg, sample| alpha * sample.to_f64().unwrap() + (1.0 - alpha) * avg)
 }
 
+/// Returns the absolute difference between two integers.
+#[inline]
+pub fn abs_diff(a: u32, b: u32) -> u32 {
+    if a > b {
+        a - b
+    } else {
+        b - a
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::ewma;
