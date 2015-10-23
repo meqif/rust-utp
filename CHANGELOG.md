@@ -1,5 +1,16 @@
 # Change Log
 
+## [0.6.3]
+
+### Added
+
+- Added `peer_fn` method to UtpSocket.
+
+### Fixed
+
+- Fixed arithmetic operation overflow when calculating the delay between peers.
+- Unconnected sockets and streams no longer send fast resend requests before failing.
+
 ## [0.6.2]
 
 ### Fixed
