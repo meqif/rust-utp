@@ -66,12 +66,9 @@ enum SocketState {
     Closed,
 }
 
-type TimestampSender = i64;
-type TimestampReceived = i64;
-
 struct DelayDifferenceSample {
-    received_at: TimestampReceived,
-    difference: TimestampSender,
+    received_at: i64,
+    difference: i64,
 }
 
 /// Returns the first valid address in a `ToSocketAddrs` iterator.
