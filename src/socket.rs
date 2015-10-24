@@ -1124,9 +1124,8 @@ impl Drop for UtpSocket {
 ///
 ///     for connection in listener.incoming() {
 ///         // Spawn a new handler for each new connection
-///         match connection {
-///             Ok((socket, _src)) => { thread::spawn(move || { handle_client(socket) }); },
-///             _ => ()
+///         if let Ok((socket, _src)) = connection {
+///             thread::spawn(move || handle_client(socket));
 ///         }
 ///     }
 /// }
