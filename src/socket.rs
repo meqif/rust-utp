@@ -96,14 +96,14 @@ fn take_address<A: ToSocketAddrs>(addr: A) -> Result<SocketAddr> {
 /// ```no_run
 /// use utp::UtpSocket;
 ///
-/// let mut socket = UtpSocket::bind("127.0.0.1:1234").unwrap();
+/// let mut socket = UtpSocket::bind("127.0.0.1:1234").expect("Error binding socket");
 ///
 /// let mut buf = [0; 1000];
-/// let (amt, _src) = socket.recv_from(&mut buf).ok().unwrap();
+/// let (amt, _src) = socket.recv_from(&mut buf).expect("Error receiving");
 ///
 /// let mut buf = &mut buf[..amt];
 /// buf.reverse();
-/// let _ = socket.send_to(buf).unwrap();
+/// let _ = socket.send_to(buf).expect("Error sending");
 ///
 /// // Close the socket. You can either call `close` on the socket,
 /// // explicitly drop it or just let it go out of scope.
@@ -1120,7 +1120,7 @@ impl Drop for UtpSocket {
 /// fn main() {
 ///     // Create a listener
 ///     let addr = "127.0.0.1:8080";
-///     let listener = UtpListener::bind(addr).unwrap();
+///     let listener = UtpListener::bind(addr).expect("Error binding socket");
 ///
 ///     for connection in listener.incoming() {
 ///         // Spawn a new handler for each new connection
