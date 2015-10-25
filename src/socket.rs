@@ -733,7 +733,7 @@ impl UtpSocket {
 
     /// Calculates the lowest base delay in the current window.
     fn min_base_delay(&self) -> i64 {
-        self.base_delays.iter().map(|x| *x).min().unwrap_or(0)
+        self.base_delays.iter().min().cloned().unwrap_or(0)
     }
 
     /// Builds the selective acknowledgement extension data for usage in packets.
