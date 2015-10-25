@@ -1039,14 +1039,15 @@ impl UtpSocket {
                     packet_loss_detected = true;
                 }
 
-                let last_seq_nr = self.send_window.last().map(Packet::seq_nr);
-                for seq_nr in extension.iter().enumerate()
-                    .filter(|&(_idx, received)| !received)
-                    .map(|(idx, _received)| packet.ack_nr() + 2 + idx as u16)
-                    .take_while(|&seq_nr| last_seq_nr.is_some() && seq_nr < last_seq_nr.unwrap()) {
-                        debug!("SACK: packet {} lost", seq_nr);
-                        self.resend_lost_packet(seq_nr);
-                        packet_loss_detected = true;
+                if let Some(last_seq_nr) = self.send_window.last().map(Packet::seq_nr) {
+                    for seq_nr in extension.iter().enumerate()
+                        .filter(|&(_idx, received)| !received)
+                        .map(|(idx, _received)| packet.ack_nr() + 2 + idx as u16)
+                        .take_while(|&seq_nr| seq_nr < last_seq_nr) {
+                            debug!("SACK: packet {} lost", seq_nr);
+                            self.resend_lost_packet(seq_nr);
+                            packet_loss_detected = true;
+                    }
                 }
             } else {
                 debug!("Unknown extension {:?}, ignoring", extension.get_type());
