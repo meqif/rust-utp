@@ -412,7 +412,7 @@ impl UtpSocket {
             };
 
             let elapsed = (time::now_utc() - now).num_milliseconds();
-            debug!("now_microseconds() - now = {} ms", elapsed);
+            debug!("{} ms elapsed", elapsed);
             retries += 1;
         }
 
