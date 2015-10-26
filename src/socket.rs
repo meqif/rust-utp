@@ -6,7 +6,7 @@ use util::{now_microseconds, ewma, abs_diff};
 use packet::{Packet, PacketType, Encodable, Decodable, ExtensionType, HEADER_SIZE};
 use rand::{self, Rng};
 use with_read_timeout::WithReadTimeout;
-use time;
+use time::SteadyTime;
 
 // For simplicity's sake, let us assume no packet will ever exceed the
 // Ethernet maximum transfer unit of 1500 bytes.
@@ -384,7 +384,7 @@ impl UtpSocket {
 
     fn recv(&mut self, buf: &mut[u8]) -> Result<(usize, SocketAddr)> {
         let mut b = [0; BUF_SIZE + HEADER_SIZE];
-        let now = time::now_utc();
+        let now = SteadyTime::now();
         let (read, src);
         let mut retries = 0;
 
@@ -411,7 +411,7 @@ impl UtpSocket {
                 Err(e) => return Err(e),
             };
 
-            let elapsed = (time::now_utc() - now).num_milliseconds();
+            let elapsed = (SteadyTime::now() - now).num_milliseconds();
             debug!("{} ms elapsed", elapsed);
             retries += 1;
         }
