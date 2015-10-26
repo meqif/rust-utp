@@ -5,8 +5,8 @@ use std::io::{Result, Error, ErrorKind};
 use util::{now_microseconds, ewma, abs_diff};
 use packet::{Packet, PacketType, Encodable, Decodable, ExtensionType, HEADER_SIZE};
 use rand::{self, Rng};
-use with_read_timeout::WithReadTimeout;
 use time::SteadyTime;
+use std::time::Duration;
 
 // For simplicity's sake, let us assume no packet will ever exceed the
 // Ethernet maximum transfer unit of 1500 bytes.
@@ -281,7 +281,7 @@ impl UtpSocket {
         let mut len = 0;
         let mut buf = [0; BUF_SIZE];
 
-        let mut syn_timeout = socket.congestion_timeout as i64;
+        let mut syn_timeout = socket.congestion_timeout;
         for _ in 0..MAX_SYN_RETRIES {
             packet.set_timestamp_microseconds(now_microseconds());
 
@@ -292,7 +292,9 @@ impl UtpSocket {
             debug!("sent {:?}", packet);
 
             // Validate response
-            match socket.socket.recv_timeout(&mut buf, syn_timeout) {
+            socket.socket.set_read_timeout(Some(Duration::from_millis(syn_timeout)))
+                .expect("Error setting read timeout");
+            match socket.socket.recv_from(&mut buf) {
                 Ok((read, src)) => { socket.connected_to = src; len = read; break; },
                 Err(ref e) if (e.kind() == ErrorKind::WouldBlock ||
                                e.kind() == ErrorKind::TimedOut) => {
@@ -398,10 +400,11 @@ impl UtpSocket {
 
             let timeout = if self.state != SocketState::New {
                 debug!("setting read timeout of {} ms", self.congestion_timeout);
-                self.congestion_timeout as i64
-            } else { 0 };
+                Some(Duration::from_millis(self.congestion_timeout))
+            } else { None };
 
-            match self.socket.recv_timeout(&mut b, timeout) {
+            self.socket.set_read_timeout(timeout).expect("Error setting read timeout");
+            match self.socket.recv_from(&mut b) {
                 Ok((r, s)) => { read = r; src = s; break },
                 Err(ref e) if (e.kind() == ErrorKind::WouldBlock ||
                                e.kind() == ErrorKind::TimedOut) => {
