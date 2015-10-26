@@ -2197,7 +2197,7 @@ mod test {
             }
         });
 
-        let client = iotry!(UtpSocket::connect(server_addr));
+        let mut client = iotry!(UtpSocket::connect(server_addr));
         let mut packet = Packet::new();
         packet.set_wnd_size(BUF_SIZE as u32);
         packet.set_type(PacketType::Syn);
@@ -2213,6 +2213,7 @@ mod test {
             }
             Err(e) => panic!("{:?}", e)
         }
+        iotry!(client.close());
 
         assert!(child.join().is_ok());
     }
