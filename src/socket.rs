@@ -1248,7 +1248,7 @@ mod test {
         let mut server = iotry!(UtpSocket::bind(server_addr));
         assert!(server.state == SocketState::New);
 
-        thread::spawn(move || {
+        let child = thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
             assert!(client.state == SocketState::Connected);
             // Check proper difference in client's send connection id and receive connection id
@@ -1268,6 +1268,8 @@ mod test {
 
         assert!(server.state == SocketState::Closed);
         drop(server);
+
+        assert!(child.join().is_ok());
     }
 
     #[test]
@@ -1277,7 +1279,7 @@ mod test {
         let mut server = iotry!(UtpSocket::bind(server_addr));
         assert!(server.state == SocketState::New);
 
-        thread::spawn(move || {
+        let child = thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
             assert!(client.state == SocketState::Connected);
             // Check proper difference in client's send connection id and receive connection id
@@ -1297,6 +1299,8 @@ mod test {
 
         assert!(server.state == SocketState::Closed);
         drop(server);
+
+        assert!(child.join().is_ok());
     }
 
     #[test]
@@ -1306,7 +1310,7 @@ mod test {
         let mut server = iotry!(UtpSocket::bind(server_addr));
         assert!(server.state == SocketState::New);
 
-        thread::spawn(move || {
+        let child = thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
             assert!(client.state == SocketState::Connected);
             assert!(client.close().is_ok());
@@ -1323,6 +1327,8 @@ mod test {
             e => panic!("Expected Ok(0), got {:?}", e),
         }
         assert_eq!(server.state, SocketState::Closed);
+
+        assert!(child.join().is_ok());
     }
 
     #[test]
@@ -1332,7 +1338,7 @@ mod test {
         let mut server = iotry!(UtpSocket::bind(server_addr));
         assert!(server.state == SocketState::New);
 
-        thread::spawn(move || {
+        let child = thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
             assert!(client.state == SocketState::Connected);
             iotry!(client.close());
@@ -1348,6 +1354,8 @@ mod test {
             Err(ref e) if e.kind() == ErrorKind::NotConnected => (),
             v => panic!("expected {:?}, got {:?}", ErrorKind::NotConnected, v),
         }
+
+        assert!(child.join().is_ok());
     }
 
     #[test]
@@ -1358,7 +1366,7 @@ mod test {
 
         let mut server = iotry!(UtpSocket::bind(server_addr));
 
-        thread::spawn(move || {
+        let child = thread::spawn(move || {
             // Make the server listen for incoming connections
             let mut buf = [0u8; BUF_SIZE];
             let _resp = server.recv(&mut buf);
@@ -1383,6 +1391,8 @@ mod test {
         // and, hence, the receiver's acknowledgement number.
         assert!(client.ack_nr == ack_nr);
         drop(client);
+
+        assert!(child.join().is_ok());
     }
 
     #[test]
@@ -1645,7 +1655,7 @@ mod test {
         let mut server = iotry!(UtpSocket::bind(server_addr));
         assert!(server.state == SocketState::New);
 
-        thread::spawn(move || {
+        let child = thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
             assert!(client.state == SocketState::Connected);
             // Check proper difference in client's send connection id and receive connection id
@@ -1704,6 +1714,8 @@ mod test {
         assert_eq!(server.state, SocketState::Closed);
         assert_eq!(received.len(), expected.len());
         assert_eq!(received, expected);
+
+        assert!(child.join().is_ok());
     }
 
     #[test]
@@ -1717,7 +1729,7 @@ mod test {
         let d = data.clone();
         assert_eq!(LEN, data.len());
 
-        thread::spawn(move || {
+        let child = thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
             iotry!(client.send_to(&d[..]));
             iotry!(client.close());
@@ -1769,6 +1781,8 @@ mod test {
 
         // Receive close
         iotry!(server.recv_from(&mut buf));
+
+        assert!(child.join().is_ok());
     }
 
     #[test]
@@ -1789,7 +1803,7 @@ mod test {
         // Check proper difference in client's send connection id and receive connection id
         assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
 
-        thread::spawn(move || {
+        let child = thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
             assert!(client.state == SocketState::Connected);
             assert_eq!(client.connected_to, server_addr);
@@ -1822,6 +1836,8 @@ mod test {
         }
 
         drop(server);
+
+        assert!(child.join().is_ok());
     }
 
     #[test]
@@ -1876,7 +1892,7 @@ mod test {
         // Check proper difference in client's send connection id and receive connection id
         assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
 
-        thread::spawn(move || {
+        let child = thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
             assert!(client.state == SocketState::Connected);
 
@@ -1922,6 +1938,8 @@ mod test {
         }
         assert_eq!(received.len(), expected.len());
         assert_eq!(received, expected);
+
+        assert!(child.join().is_ok());
     }
 
     // #[test]
@@ -1990,7 +2008,7 @@ mod test {
         let data = (0..LEN).map(|idx| idx as u8).collect::<Vec<u8>>();
         let to_send = data.clone();
 
-        thread::spawn(move || {
+        let child = thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
 
             // Send everything except the odd chunks
@@ -2028,6 +2046,8 @@ mod test {
         }
         assert_eq!(received.len(), data.len());
         assert_eq!(received, data);
+
+        assert!(child.join().is_ok());
     }
 
     #[test]
@@ -2038,7 +2058,7 @@ mod test {
         let data = (0..LEN).map(|idx| idx as u8).collect::<Vec<u8>>();
         let to_send = data.clone();
 
-        thread::spawn(move || {
+        let child = thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
             iotry!(client.send_to(&to_send[..]));
             iotry!(client.close());
@@ -2056,6 +2076,8 @@ mod test {
 
         assert_eq!(read.len(), data.len());
         assert_eq!(read, data);
+
+        assert!(child.join().is_ok());
     }
 
     #[test]
@@ -2068,7 +2090,7 @@ mod test {
         let data = (0..LEN).map(|idx| idx as u8).collect::<Vec<u8>>();
         let to_send = data.clone();
 
-        thread::spawn(move || {
+        let child = thread::spawn(move || {
             let mut client = iotry!(UtpSocket::bind(client_addr));
 
             // Advance socket's sequence number
@@ -2094,6 +2116,8 @@ mod test {
         }
         assert_eq!(received.len(), data.len());
         assert_eq!(received, data);
+
+        assert!(child.join().is_ok());
     }
 
     #[test]
@@ -2111,7 +2135,7 @@ mod test {
         let server_addr = next_test_ip4();
         let server = iotry!(UdpSocket::bind(server_addr));
 
-        thread::spawn(move || {
+        let child = thread::spawn(move || {
             let mut buf = [0; BUF_SIZE];
             match server.recv_from(&mut buf) {
                 Ok((_len, client_addr)) => { iotry!(server.send_to(&[], client_addr)); },
@@ -2124,6 +2148,8 @@ mod test {
             Err(e) => panic!("Expected ErrorKind::Other, got {:?}", e),
             Ok(_) => panic!("Expected Err, got Ok")
         }
+
+        assert!(child.join().is_ok());
     }
 
     #[test]
@@ -2132,7 +2158,7 @@ mod test {
         let server_addr = next_test_ip4();
         let server = iotry!(UdpSocket::bind(server_addr));
 
-        thread::spawn(move || {
+        let child = thread::spawn(move || {
             let mut buf = [0; BUF_SIZE];
             let mut packet = Packet::new();
             packet.set_type(PacketType::Data);
@@ -2150,6 +2176,8 @@ mod test {
             Err(e) => panic!("Expected ErrorKind::ConnectionRefused, got {:?}", e),
             Ok(_) => panic!("Expected Err, got Ok")
         }
+
+        assert!(child.join().is_ok());
     }
 
     #[test]
@@ -2158,7 +2186,7 @@ mod test {
         let server_addr = next_test_ip4();
         let mut server = iotry!(UtpSocket::bind(server_addr));
 
-        thread::spawn(move || {
+        let child = thread::spawn(move || {
             let mut buf = [0; BUF_SIZE];
             loop {
                 match server.recv_from(&mut buf) {
@@ -2185,6 +2213,8 @@ mod test {
             }
             Err(e) => panic!("{:?}", e)
         }
+
+        assert!(child.join().is_ok());
     }
 
     #[test]
@@ -2193,7 +2223,7 @@ mod test {
         let server_addr = next_test_ip4();
         let mut server = iotry!(UtpSocket::bind(server_addr));
 
-        thread::spawn(move || {
+        let child = thread::spawn(move || {
             let client = iotry!(UtpSocket::connect(server_addr));
             let mut packet = Packet::new();
             packet.set_wnd_size(BUF_SIZE as u32);
@@ -2218,6 +2248,7 @@ mod test {
                 Err(e) => panic!("{:?}", e)
             }
         }
+        assert!(child.join().is_ok());
         panic!("Should have received Reset");
     }
 
@@ -2230,7 +2261,7 @@ mod test {
         let data = (0..LEN).map(|idx| idx as u8).collect::<Vec<u8>>();
         let to_send = data.clone();
 
-        thread::spawn(move || {
+        let child = thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
             iotry!(client.send_to(&to_send[..]));
             iotry!(client.close());
@@ -2261,6 +2292,8 @@ mod test {
         }
         assert_eq!(received.len(), data.len());
         assert_eq!(received, data);
+
+        assert!(child.join().is_ok());
     }
 
     #[test]
@@ -2314,7 +2347,7 @@ mod test {
         // `peer_addr` should return an error because the socket isn't connected yet
         assert!(server.peer_addr().is_err());
 
-        thread::spawn(move || {
+        let child = thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
             let mut buf = [0; 1024];
             iotry!(tx.send(client.local_addr()));
@@ -2337,6 +2370,8 @@ mod test {
 
         // `peer_addr` should now return an error because the socket is closed
         assert!(server.peer_addr().is_err());
+
+        assert!(child.join().is_ok());
     }
 
     #[test]
@@ -2365,7 +2400,7 @@ mod test {
         server.congestion_timeout = 1;
         let attempts = server.max_retransmission_retries;
 
-        thread::spawn(move || {
+        let child = thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
             iotry!(client.send_to(&[0]));
             // Simulate connection loss by killing the socket.
@@ -2394,6 +2429,8 @@ mod test {
             Err(ref e) if e.kind() == ErrorKind::TimedOut => (),
             x => panic!("Expected Err(TimedOut), got {:?}", x),
         }
+
+        assert!(child.join().is_ok());
     }
 
     // Test reaction to connection loss when sending FIN
@@ -2405,7 +2442,7 @@ mod test {
         server.congestion_timeout = 1;
         let attempts = server.max_retransmission_retries;
 
-        thread::spawn(move || {
+        let child = thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
             iotry!(client.send_to(&[0]));
             // Simulate connection loss by killing the socket.
@@ -2431,6 +2468,7 @@ mod test {
             Err(ref e) if e.kind() == ErrorKind::TimedOut => (),
             x => panic!("Expected Err(TimedOut), got {:?}", x),
         }
+        assert!(child.join().is_ok());
     }
 
     // Test reaction to connection loss when waiting for data packets
@@ -2442,7 +2480,7 @@ mod test {
         server.congestion_timeout = 1;
         let attempts = server.max_retransmission_retries;
 
-        thread::spawn(move || {
+        let child = thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
             iotry!(client.send_to(&[0]));
             // Simulate connection loss by killing the socket.
@@ -2472,5 +2510,6 @@ mod test {
             Err(ref e) if e.kind() == ErrorKind::TimedOut => (),
             x => panic!("Expected Err(TimedOut), got {:?}", x),
         }
+        assert!(child.join().is_ok());
     }
 }
