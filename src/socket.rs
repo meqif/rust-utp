@@ -1518,13 +1518,19 @@ mod test {
         let peer2_addr = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1),
                                            peer2_port);
 
+        let tx_buffer = [0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9];
+        let cmp_buffer = tx_buffer.clone();
+
         let t = thread::spawn(move || {
             println!("t connecting...");
             let mut peer1 = iotry!(UtpSocket::rendezvous_connect(peer1_udp_socket,
                                                                  peer2_addr));
             println!("t connected");
-            let buf = [0u8; 4];
-            peer1.send_to(&buf).unwrap();
+            let mut sent_total = 0;
+            while sent_total < tx_buffer.len() {
+                let sent = peer1.send_to(&tx_buffer[sent_total..]).unwrap();
+                sent_total += sent;
+            }
             peer1.flush().unwrap();
             println!("t disconnecting...");
             let _ = peer1.close();
@@ -1535,8 +1541,13 @@ mod test {
         let mut peer2 = iotry!(UtpSocket::rendezvous_connect(peer2_udp_socket,
                                                              peer1_addr));
         println!("main connected");
-        let mut buf = [0u8; 4];
-        peer2.recv_from(&mut buf).unwrap();
+        let mut rx_buffer = (0..cmp_buffer.len()).map(|_|0).collect::<Vec<_>>();
+        let mut received_total = 0;
+        while received_total < cmp_buffer.len() {
+            let (received, _) = peer2.recv_from(&mut rx_buffer[received_total..]).unwrap();
+            received_total += received;
+        }
+        assert_eq!(cmp_buffer, &rx_buffer[..]);
         println!("main disconnecting...");
         let _ = peer2.close();
         println!("main disconnected");
