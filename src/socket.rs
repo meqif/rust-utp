@@ -496,7 +496,9 @@ impl UtpSocket {
         let mut buf = [0; BUF_SIZE];
 
         let mut syn_timeout = self.congestion_timeout as i64;
-        for _ in 0..MAX_SYN_RETRIES {
+        let mut i = 0;
+        while i < MAX_SYN_RETRIES {
+            i += 1;
             packet.set_timestamp_microseconds(now_microseconds());
 
             // Send packet
@@ -519,6 +521,7 @@ impl UtpSocket {
                             /* Syn packet, ignored in rendezvous connection
                             setups. */
                             if packet.get_type() == PacketType::Syn {
+                                i -= 1;
                                 let _ = tx.send((packet, src));
                                 continue;
                             }
