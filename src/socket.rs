@@ -1538,6 +1538,48 @@ mod test {
     }
 
     #[test]
+    fn test_rendezvous_connect2() {
+        use std::net::{UdpSocket, Ipv4Addr, SocketAddrV4};
+        use std::thread::sleep_ms;
+
+        let peer1_udp_socket = iotry!(UdpSocket::bind("0.0.0.0:0"));
+        let peer2_udp_socket = iotry!(UdpSocket::bind("0.0.0.0:0"));
+
+        let peer1_port = iotry!(peer1_udp_socket.local_addr()).port();
+        let peer1_addr = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1),
+                                           peer1_port);
+
+        let peer2_port = iotry!(peer2_udp_socket.local_addr()).port();
+        let peer2_addr = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1),
+                                           peer2_port);
+
+        let t = thread::spawn(move || {
+            thread::sleep_ms(2000);
+            println!("t connecting...");
+            let mut peer1 = iotry!(UtpSocket::rendezvous_connect(peer1_udp_socket,
+                                                                 peer2_addr));
+            println!("t connected");
+            let buf = [0u8; 4];
+            peer1.send_to(&buf).unwrap();
+            peer1.flush().unwrap();
+            println!("t disconnecting...");
+            let _ = peer1.close();
+            println!("t disconnected");
+        });
+
+        println!("main connecting...");
+        let mut peer2 = iotry!(UtpSocket::rendezvous_connect(peer2_udp_socket,
+                                                             peer1_addr));
+        println!("main connected");
+        let mut buf = [0u8; 4];
+        peer2.recv_from(&mut buf).unwrap();
+        println!("main disconnecting...");
+        let _ = peer2.close();
+        println!("main disconnected");
+        t.join().unwrap();
+    }
+
+    #[test]
     fn test_recvfrom_on_closed_socket() {
         let server_addr = next_test_ip4();
 
