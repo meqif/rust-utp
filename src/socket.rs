@@ -382,7 +382,10 @@ impl UtpSocket {
 
         initiator_socket = match socket_rx.recv() {
             Ok(v) => v,
-            Err(_) => return Err(Error::from(SocketError::InvalidPacket)),
+            Err(_) => {
+                acceptor_socket.state  = SocketState::Closed;
+                return Err(Error::from(SocketError::InvalidPacket));
+            }
         };
 
         /* In initiator_socket, send_conn_id = recv_conn_id + 1.
