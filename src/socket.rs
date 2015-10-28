@@ -2,8 +2,6 @@ use std::cmp::{min, max};
 use std::collections::VecDeque;
 use std::net::{ToSocketAddrs, SocketAddr, UdpSocket};
 use std::io::{Result, Error, ErrorKind};
-use std::sync::mpsc::{channel, Sender};
-use std::thread;
 use util::{now_microseconds, ewma, abs_diff};
 use packet::{Packet, PacketType, Encodable, Decodable, ExtensionType, HEADER_SIZE};
 use rand::{self, Rng};
@@ -280,7 +278,7 @@ impl UtpSocket {
         };
         let mut socket = try!(UtpSocket::bind(my_addr));
 
-        socket.connect_to(addr, None).map(|_| socket)
+        socket.connect_to(addr).map(|_| socket)
     }
 
     /// Opens a connection to a remote host, reusing the given UDP socket.
@@ -293,38 +291,7 @@ impl UtpSocket {
         let addr = try!(take_address(other));
         let mut socket = try!(UtpSocket::bind_with_udp_socket(udp_socket));
 
-        socket.connect_to(addr, None).map(|_| socket)
-    }
-
-    fn private_clone(&self) -> Result<UtpSocket> {
-        Ok(UtpSocket {
-            socket: try!(self.socket.try_clone()),
-            connected_to: self.connected_to,
-            sender_connection_id: self.sender_connection_id,
-            receiver_connection_id: self.receiver_connection_id,
-            seq_nr: self.seq_nr,
-            ack_nr: self.ack_nr,
-            state: self.state,
-            incoming_buffer: self.incoming_buffer.clone(),
-            send_window: self.send_window.clone(),
-            unsent_queue: self.unsent_queue.clone(),
-            duplicate_ack_count: self.duplicate_ack_count,
-            last_acked: self.last_acked,
-            last_acked_timestamp: self.last_acked_timestamp,
-            last_dropped: self.last_dropped,
-            rtt: self.rtt,
-            rtt_variance: self.rtt_variance,
-            pending_data: self.pending_data.clone(),
-            curr_window: self.curr_window,
-            remote_wnd_size: self.remote_wnd_size,
-            base_delays: self.base_delays.clone(),
-            current_delays: self.current_delays.clone(),
-            their_delay: self.their_delay,
-            last_rollover: self.last_rollover,
-            congestion_timeout: self.congestion_timeout,
-            cwnd: self.cwnd,
-            max_retransmission_retries: self.max_retransmission_retries,
-        })
+        socket.connect_to(addr).map(|_| socket)
     }
 
     /// If you have already prepared UDP sockets at each end (e.g. you're doing
@@ -339,78 +306,9 @@ impl UtpSocket {
     /// or acceptor).
     pub fn rendezvous_connect<A: ToSocketAddrs>(udp_socket: UdpSocket, other: A)
                                                 -> Result<UtpSocket> {
-        use std::str::FromStr;
-
         let addr = try!(take_address(other));
-        let mut initiator_socket = try!(UtpSocket::bind_with_udp_socket(udp_socket));
-        let mut acceptor_socket = try!(initiator_socket.private_clone());
-        let reset_socket = try!(UdpSocket::bind("0.0.0.0:0"));
-        let reset_addr = SocketAddr::from_str("0.0.0.0:0").unwrap();
-
-        let (tx, packet_rx) = channel();
-        let (socket_tx, socket_rx) = channel();
-
-        let t = thread::spawn(move || {
-            if initiator_socket.connect_to(addr, Some(tx)).is_err() {
-                return;
-            }
-
-            let _ = socket_tx.send(initiator_socket);
-        });
-
-        let (packet, src) = match packet_rx.recv() {
-            Ok(v) => v,
-            Err(_) => return Err(Error::from(SocketError::InvalidPacket)),
-        };
-
-        // Ignore non-SYN packets
-        if packet.get_type() != PacketType::Syn {
-            return Err(Error::from(SocketError::InvalidPacket));
-        }
-
-        match acceptor_socket.handle_packet(&packet, src) {
-            Ok(Some(reply)) => {
-                try!(acceptor_socket.socket.send_to(&reply.to_bytes()[..], src))
-            },
-            Ok(None) => return Err(Error::from(SocketError::InvalidPacket)),
-            Err(e) => return Err(e)
-        };
-
-        if let Err(_) = t.join() {
-            return Err(Error::from(SocketError::InvalidPacket));
-        }
-
-        initiator_socket = match socket_rx.recv() {
-            Ok(v) => v,
-            Err(_) => {
-                acceptor_socket.state  = SocketState::Closed;
-                return Err(Error::from(SocketError::InvalidPacket));
-            }
-        };
-
-        /* In initiator_socket, send_conn_id = recv_conn_id + 1.
-
-        In acceptor_socket, recv_conn_id = send_conn_id + 1.
-
-        Therefore, we compare the different variables from each socket. */
-        if initiator_socket.receiver_connection_id
-            < acceptor_socket.sender_connection_id {
-            debug!("rendezvous connect: initiator = {}",
-                   initiator_socket.receiver_connection_id);
-            acceptor_socket.socket = reset_socket;
-            acceptor_socket.connected_to = reset_addr;
-            acceptor_socket.state = SocketState::Closed;
-            drop(acceptor_socket);
-            Ok(initiator_socket)
-        } else {
-            debug!("rendezvous connect: acceptor.conn_id = {}",
-                   acceptor_socket.sender_connection_id);
-            initiator_socket.socket = reset_socket;
-            initiator_socket.connected_to = reset_addr;
-            initiator_socket.state = SocketState::Closed;
-            drop(initiator_socket);
-            Ok(acceptor_socket)
-        }
+        let mut socket = try!(UtpSocket::bind_with_udp_socket(udp_socket));
+        socket.rendezvous_connect_to(addr).map(|_|socket)
     }
 
     /// Gracefully closes connection to peer.
@@ -483,9 +381,7 @@ impl UtpSocket {
 
     /// if `ignored_packets` Some, then this is a _weak connect_ (i.e. used in
     /// rendezvous connection setup).
-    fn connect_to(&mut self, addr: SocketAddr,
-                  ignored_packets: Option<Sender<(Packet, SocketAddr)>>)
-                  -> Result<()> {
+    fn connect_to(&mut self, addr: SocketAddr) -> Result<()> {
         self.connected_to = addr;
 
         let mut packet = Packet::new();
@@ -516,18 +412,6 @@ impl UtpSocket {
                     let packet = try!(Packet::from_bytes(&buf[..read])
                                       .or(Err(SocketError::InvalidPacket)));
                     debug!("received {:?}", packet);
-                    match ignored_packets {
-                        Some(ref tx) => {
-                            /* Syn packet, ignored in rendezvous connection
-                            setups. */
-                            if packet.get_type() == PacketType::Syn {
-                                i -= 1;
-                                let _ = tx.send((packet, src));
-                                continue;
-                            }
-                        },
-                        None => (),
-                    }
                     try!(self.handle_packet(&packet, addr));
 
                     debug!("connected to: {}", self.connected_to);
@@ -544,6 +428,91 @@ impl UtpSocket {
             };
         }
         Err(Error::from(SocketError::InvalidPacket))
+    }
+
+    fn rendezvous_connect_to(&mut self, addr: SocketAddr) -> Result<()> {
+        self.connected_to = addr;
+
+        let mut packet = Packet::new();
+        packet.set_type(PacketType::Syn);
+        packet.set_connection_id(self.receiver_connection_id);
+        packet.set_seq_nr(self.seq_nr);
+
+        let mut buf = [0; BUF_SIZE];
+
+        let mut syn_timeout = self.congestion_timeout as i64;
+        let mut retry_count = 0;
+
+        let mut rx_syn   : Option<Packet> = None;
+        let mut rx_state : Option<Packet> = None;
+
+        while retry_count < MAX_SYN_RETRIES {
+            packet.set_timestamp_microseconds(now_microseconds());
+
+            // Send packet
+            debug!("Connecting to {}", self.connected_to);
+            try!(self.socket.send_to(&packet.to_bytes()[..], self.connected_to));
+            self.state = SocketState::SynSent;
+            debug!("sent {:?}", packet);
+
+            // Validate response
+            match self.socket.recv_timeout(&mut buf, syn_timeout) {
+                Ok((read, src)) => {
+                    let mut packet = match Packet::from_bytes(&buf[..read]) {
+                        Ok(packet) => packet,
+                        Err(_) => {
+                            continue;
+                        }
+                    };
+
+                    let cid = min(self.receiver_connection_id,
+                                  packet.connection_id());
+
+                    packet.set_connection_id(cid);
+
+                    // Would be nicer to handle this in the handle_packet
+                    // function, but we'd need to add new socket state
+                    // not to interfere with SocketState::New and
+                    // SocketState::SynSent states.
+                    match packet.get_type() {
+                        PacketType::Syn => {
+                            self.receiver_connection_id = cid;
+                            self.sender_connection_id   = cid + 1;
+
+                            let reply = self.prepare_reply(&packet, PacketType::State);
+                            try!(self.socket.send_to(&reply.to_bytes()[..], self.connected_to));
+
+                            rx_syn = Some(packet);
+                        }
+                        PacketType::State => {
+                            self.receiver_connection_id = cid;
+                            self.sender_connection_id   = cid + 1;
+
+                            rx_state = Some(packet);
+                        }
+                        _ => { continue }
+                    }
+
+                    match (&rx_syn, &rx_state) {
+                        (&Some(ref _syn), &Some(ref state)) => {
+                            try!(self.handle_packet(state, src));
+                            return Ok(());
+                        },
+                        _ => { continue }
+                    }
+                },
+                Err(ref e) if (e.kind() == ErrorKind::WouldBlock ||
+                               e.kind() == ErrorKind::TimedOut) => {
+                    debug!("Timed out, retrying");
+                    syn_timeout *= 2;
+                    retry_count += 1;
+                    continue;
+                },
+                Err(e) => return Err(e),
+            };
+        }
+
+        Err(Error::from(SocketError::ConnectionTimedOut))
     }
 
     fn recv(&mut self, buf: &mut[u8]) -> Result<(usize, SocketAddr)> {
@@ -1262,6 +1231,15 @@ impl UtpSocket {
             }
         }
     }
+
+    #[allow(dead_code)]
+    /// For debugging/printing output.
+    fn id(&self) -> String {
+        match self.socket.local_addr() {
+            Ok(addr) => format!("{}", addr.port()),
+            Err(_) => "?".to_string(),
+        }
+    }
 }
 
 impl Drop for UtpSocket {
@@ -1522,25 +1500,19 @@ mod test {
         let cmp_buffer = tx_buffer.clone();
 
         let t = thread::spawn(move || {
-            println!("t connecting...");
             let mut peer1 = iotry!(UtpSocket::rendezvous_connect(peer1_udp_socket,
                                                                  peer2_addr));
-            println!("t connected");
             let mut sent_total = 0;
             while sent_total < tx_buffer.len() {
                 let sent = peer1.send_to(&tx_buffer[sent_total..]).unwrap();
                 sent_total += sent;
             }
             peer1.flush().unwrap();
-            println!("t disconnecting...");
             let _ = peer1.close();
-            println!("t disconnected");
         });
 
-        println!("main connecting...");
         let mut peer2 = iotry!(UtpSocket::rendezvous_connect(peer2_udp_socket,
                                                              peer1_addr));
-        println!("main connected");
         let mut rx_buffer = (0..cmp_buffer.len()).map(|_|0).collect::<Vec<_>>();
         let mut received_total = 0;
         while received_total < cmp_buffer.len() {
@@ -1548,51 +1520,7 @@ mod test {
             received_total += received;
         }
         assert_eq!(cmp_buffer, &rx_buffer[..]);
-        println!("main disconnecting...");
         let _ = peer2.close();
-        println!("main disconnected");
-        t.join().unwrap();
-    }
-
-    #[test]
-    fn test_rendezvous_connect2() {
-        use std::net::{UdpSocket, Ipv4Addr, SocketAddrV4};
-        use std::thread::sleep_ms;
-
-        let peer1_udp_socket = iotry!(UdpSocket::bind("0.0.0.0:0"));
-        let peer2_udp_socket = iotry!(UdpSocket::bind("0.0.0.0:0"));
-
-        let peer1_port = iotry!(peer1_udp_socket.local_addr()).port();
-        let peer1_addr = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1),
-                                           peer1_port);
-
-        let peer2_port = iotry!(peer2_udp_socket.local_addr()).port();
-        let peer2_addr = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1),
-                                           peer2_port);
-
-        let t = thread::spawn(move || {
-            thread::sleep_ms(2000);
-            println!("t connecting...");
-            let mut peer1 = iotry!(UtpSocket::rendezvous_connect(peer1_udp_socket,
-                                                                 peer2_addr));
-            println!("t connected");
-            let buf = [0u8; 4];
-            peer1.send_to(&buf).unwrap();
-            peer1.flush().unwrap();
-            println!("t disconnecting...");
-            let _ = peer1.close();
-            println!("t disconnected");
-        });
-
-        println!("main connecting...");
-        let mut peer2 = iotry!(UtpSocket::rendezvous_connect(peer2_udp_socket,
-                                                             peer1_addr));
-        println!("main connected");
-        let mut buf = [0u8; 4];
-        peer2.recv_from(&mut buf).unwrap();
-        println!("main disconnecting...");
-        let _ = peer2.close();
-        println!("main disconnected");
         t.join().unwrap();
     }
 
