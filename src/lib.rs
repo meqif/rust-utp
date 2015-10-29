@@ -63,11 +63,6 @@ extern crate num;
 #[macro_use] extern crate log;
 #[cfg(test)] extern crate quickcheck;
 
-#[cfg(unix)]
-extern crate nix;
-#[cfg(windows)]
-extern crate libc;
-
 // Public API
 pub use socket::UtpSocket;
 pub use socket::UtpListener;
@@ -78,4 +73,3 @@ mod bit_iterator;
 mod packet;
 mod socket;
 mod stream;
-mod with_read_timeout;
