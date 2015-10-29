@@ -1,5 +1,5 @@
 use std::io::{Read, Write, Result};
-use std::net::{ToSocketAddrs, SocketAddr};
+use std::net::{ToSocketAddrs, SocketAddr, UdpSocket};
 use std::ops::Deref;
 use socket::UtpSocket;
 
@@ -38,6 +38,11 @@ impl UtpStream {
         UtpSocket::bind(addr).map(|s| UtpStream { socket: s })
     }
 
+    /// Creates a uTP stream reusing the given UDP socket.
+    pub fn bind_with_udp_socket(udp_socket: UdpSocket) -> Result<UtpStream> {
+        UtpSocket::bind_with_udp_socket(udp_socket).map(|s| UtpStream { socket : s})
+    }
+
     /// Opens a uTP connection to a remote host by hostname or IP address.
     ///
     /// The address type can be any implementer of the `ToSocketAddr` trait. See its documentation
@@ -47,6 +52,18 @@ impl UtpStream {
     pub fn connect<A: ToSocketAddrs>(dst: A) -> Result<UtpStream> {
         // Port 0 means the operating system gets to choose it
         UtpSocket::connect(dst).map(|s| UtpStream { socket: s })
+    }
+
+    /// Opens a uTP connection to a remote host, reusing the given UDP socket.
+    ///
+    /// The address type can be any implementer of the `ToSocketAddr` trait. See its documentation
+    /// for concrete examples.
+    ///
+    /// If more than one valid address is specified, only the first will be used.
+    pub fn connect_with_udp_socket<A: ToSocketAddrs>(udp_socket: UdpSocket, dst: A)
+        -> Result<UtpStream>
+    {
+        UtpSocket::connect_with_udp_socket(udp_socket, dst).map(|s| UtpStream { socket: s})
     }
 
     /// Gracefully closes connection to peer.

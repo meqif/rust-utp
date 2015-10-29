@@ -140,6 +140,10 @@ impl PacketHeader {
     pub fn len(&self) -> usize {
         return HEADER_SIZE;
     }
+
+    pub fn connection_id(&self) -> u16 {
+        self.connection_id
+    }
 }
 
 impl Deref for PacketHeader {

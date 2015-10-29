@@ -58,6 +58,30 @@ fn test_stream_open_and_close_ipv6() {
 }
 
 #[test]
+fn test_stream_open_and_close_with_udp_socket() {
+    use std::net::{UdpSocket, Ipv4Addr, SocketAddrV4};
+
+    let server_udp_socket = iotry!(UdpSocket::bind("0.0.0.0:0"));
+    let client_udp_socket = iotry!(UdpSocket::bind("0.0.0.0:0"));
+
+    let server_port = iotry!(server_udp_socket.local_addr()).port();
+    let server_addr = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), server_port);
+
+    let mut server = iotry!(UtpStream::bind_with_udp_socket(server_udp_socket));
+
+    thread::spawn(move || {
+        let mut client = iotry!(UtpStream::connect_with_udp_socket(client_udp_socket,
+                                                                   server_addr));
+        iotry!(client.close());
+        drop(client);
+    });
+
+    let mut received = vec!();
+    iotry!(server.read_to_end(&mut received));
+    iotry!(server.close());
+}
+
+#[test]
 fn test_stream_small_data() {
     // Fits in a packet
     const LEN: usize = 1024;
