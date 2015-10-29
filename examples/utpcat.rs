@@ -6,11 +6,6 @@ extern crate utp;
 
 use std::process;
 
-// A little macro to make it easier to unwrap return values or halt the program
-macro_rules! iotry {
-    ($e:expr) => (match $e { Ok(v) => v, Err(e) => panic!("{}", e), })
-}
-
 fn usage() -> ! {
     println!("Usage: utp [-s|-c] <address> <port>");
     process::exit(1);
@@ -25,7 +20,7 @@ fn main() {
     enum Mode {Server, Client}
 
     // Start logging
-    env_logger::init().unwrap();
+    env_logger::init().expect("Error starting logger");
 
     // Fetch arguments
     let mut args = std::env::args();
@@ -51,7 +46,7 @@ fn main() {
     match mode {
         Mode::Server => {
             // Create a listening stream
-            let mut stream = iotry!(UtpStream::bind(addr));
+            let mut stream = UtpStream::bind(addr).expect("Error binding stream");
             let mut writer = stdout();
             let _ = writeln!(&mut stderr(), "Serving on {}", addr);
 
@@ -64,14 +59,14 @@ fn main() {
             loop {
                 match stream.read(&mut payload) {
                     Ok(0) => break,
-                    Ok(read) => iotry!(writer.write(&payload[..read])),
+                    Ok(read) => writer.write(&payload[..read]).expect("Error writing to stdout"),
                     Err(e) => panic!("{}", e)
                 };
             }
         }
         Mode::Client => {
             // Create a stream and try to connect to the remote address
-            let mut stream = iotry!(UtpStream::connect(addr));
+            let mut stream = UtpStream::connect(addr).expect("Error connecting to remote peer");
             let mut reader = stdin();
 
             // Create a reasonably sized buffer
@@ -84,16 +79,16 @@ fn main() {
             loop {
                 match reader.read(&mut payload) {
                     Ok(0) => break,
-                    Ok(read) => iotry!(stream.write(&payload[..read])),
+                    Ok(read) => stream.write(&payload[..read]).expect("Error writing to stream"),
                     Err(e) => {
-                        iotry!(stream.close());
+                        stream.close().expect("Error closing stream");
                         panic!("{:?}", e);
                     }
                 };
             }
 
             // Explicitly close the stream.
-            iotry!(stream.close());
+            stream.close().expect("Error closing stream");
         }
     }
 }

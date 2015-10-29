@@ -23,27 +23,18 @@
 //! extern crate utp;
 //!
 //! use utp::UtpStream;
-//! use std::io::{Read, Write};
+//! use std::io::Write;
 //!
 //! fn main() {
 //!     // Connect to an hypothetical local server running on port 8080
 //!     let addr = "127.0.0.1:8080";
-//!     let mut stream = match UtpStream::connect(addr) {
-//!         Ok(stream) => stream,
-//!         Err(e) => panic!("{}", e),
-//!     };
+//!     let mut stream = UtpStream::connect(addr).expect("Error connecting to remote peer");
 //!
 //!     // Send a string
-//!     match stream.write("Hi there!".as_bytes()) {
-//!         Ok(_) => (),
-//!         Err(e) => println!("Write failed with {}", e)
-//!     }
+//!     stream.write("Hi there!".as_bytes()).expect("Write failed");
 //!
 //!     // Close the stream
-//!     match stream.close() {
-//!         Ok(()) => println!("Connection closed"),
-//!         Err(e) => println!("{}", e)
-//!     }
+//!     stream.close().expect("Error closing connection");
 //! }
 //! ```
 //!
@@ -51,7 +42,7 @@
 //!
 //! ```no_run
 //! # use utp::{UtpStream, UtpSocket};
-//! let socket = UtpSocket::bind("0.0.0.0:0").unwrap();
+//! let socket = UtpSocket::bind("0.0.0.0:0").expect("Error binding socket");
 //! let stream: UtpStream = socket.into();
 //! ```
 

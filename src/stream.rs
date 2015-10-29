@@ -19,7 +19,7 @@ use socket::UtpSocket;
 /// use utp::UtpStream;
 /// use std::io::{Read, Write};
 ///
-/// let mut stream = UtpStream::bind("127.0.0.1:1234").unwrap();
+/// let mut stream = UtpStream::bind("127.0.0.1:1234").expect("Error binding stream");
 /// let _ = stream.write(&[1]);
 /// let _ = stream.read(&mut [0; 1000]);
 /// ```

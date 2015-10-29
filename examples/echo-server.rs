@@ -19,11 +19,11 @@ fn handle_client(mut s: UtpSocket) {
 
 fn main() {
     // Start logger
-    env_logger::init().unwrap();
+    env_logger::init().expect("Error starting logger");
 
     // Create a listener
     let addr = "127.0.0.1:8080";
-    let listener = UtpListener::bind(addr).unwrap();
+    let listener = UtpListener::bind(addr).expect("Error binding listener");
 
     for connection in listener.incoming() {
         // Spawn a new handler for each new connection
