@@ -598,12 +598,8 @@ impl UtpSocket {
 
             self.unsent_queue.push_back(packet);
 
-            // `OverflowingOps` is marked unstable, so we can't use `overflowing_add` here
-            if self.seq_nr == ::std::u16::MAX {
-                self.seq_nr = 0;
-            } else {
-                self.seq_nr += 1;
-            }
+            // Intentionally wrap around sequence number
+            self.seq_nr = self.seq_nr.wrapping_add(1);
         }
 
         // Send every packet in the queue
