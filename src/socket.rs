@@ -852,6 +852,7 @@ impl UtpSocket {
                 self.connected_to = src;
                 self.ack_nr = packet.seq_nr();
                 self.seq_nr = rand::random();
+                self.last_acked = self.seq_nr.wrapping_sub(1);
                 self.receiver_connection_id = packet.connection_id() + 1;
                 self.sender_connection_id = packet.connection_id();
                 self.state = SocketState::Connected;
