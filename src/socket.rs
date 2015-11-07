@@ -196,13 +196,15 @@ impl UtpSocket {
         // This avoids an overflow when the generated receiver identifier is the largest
         // representable value in u16 and it is incremented to yield the corresponding sender
         // identifier.
-        let (receiver_id, sender_id) = || -> (u16, u16) {
+        let (receiver_id, sender_id) = {
             let mut rng = rand::thread_rng();
-            loop {
-                let id = rng.gen::<u16>();
-                if id.checked_add(1).is_some() { return (id, id + 1) }
+            let id = rng.gen::<u16>();
+            if id.checked_add(1).is_some() {
+                (id, id + 1)
+            } else {
+                (id - 1, id)
             }
-        }();
+        };
 
         UtpSocket {
             socket: s,
