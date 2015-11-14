@@ -1024,7 +1024,7 @@ impl UtpSocket {
             self.update_congestion_window(off_target, bytes_newly_acked as u32);
 
             // Update congestion timeout
-            let rtt = (TARGET - off_target as i64) / 1000; // in milliseconds
+            let rtt = (our_delay - self.queuing_delay()) / 1000; // in milliseconds
             self.update_congestion_timeout(rtt as i32);
         }
 
