@@ -386,6 +386,22 @@ impl UtpSocket {
         }
     }
 
+    #[cfg(windows)]
+    fn ignore_udp_error(e: &Error) -> bool {
+        match e.raw_os_error() {
+            Some(e) => match e {
+                10054 | 10040 => true,
+                _ => false,
+            },
+            None => false,
+        }
+    }
+
+    #[cfg(not(windows))]
+    fn ignore_udp_error(_: &Error) -> bool {
+        false
+    }
+
     fn recv(&mut self, buf: &mut[u8]) -> Result<(usize, SocketAddr)> {
         let mut b = [0; BUF_SIZE + HEADER_SIZE];
         let now = SteadyTime::now();
@@ -412,6 +428,10 @@ impl UtpSocket {
                                e.kind() == ErrorKind::TimedOut) => {
                     debug!("recv_from timed out");
                     try!(self.handle_receive_timeout());
+                },
+                Err(ref e) if Self::ignore_udp_error(e) => {
+                    debug!("ignoring recv_from error: {:?}", e.raw_os_error());
+                    continue
                 },
                 Err(e) => return Err(e),
             };
