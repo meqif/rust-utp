@@ -15,7 +15,6 @@ env_logger = "0.3"
 log = "0.3"
 num = "0.1.27"
 rand = "0.3"
-time = "0.1.32"
 
 [dev-dependencies]
 quickcheck = "*"

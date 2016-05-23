@@ -1,10 +1,13 @@
-use time;
+use std::time;
 use num::ToPrimitive;
 
 /// Return current time in microseconds since the UNIX epoch.
 pub fn now_microseconds() -> u32 {
-    let t = time::get_time();
-    (t.sec * 1_000_000 + t.nsec as i64 / 1000) as u32
+    let t = match time::SystemTime::now().duration_since(time::UNIX_EPOCH) {
+        Ok(dur) => dur,
+        Err(err) => err.duration(),
+    };
+    (t.as_secs().wrapping_mul(1_000_000) as u32).wrapping_add(t.subsec_nanos() / 1000)
 }
 
 /// Calculate the exponential weighted moving average for a vector of numbers, with a smoothing
