@@ -74,7 +74,7 @@ struct DelayDifferenceSample {
 /// Returns the first valid address in a `ToSocketAddrs` iterator.
 fn take_address<A: ToSocketAddrs>(addr: A) -> Result<SocketAddr> {
     addr.to_socket_addrs()
-        .and_then(|mut it| it.next().ok_or(From::from(SocketError::InvalidAddress)))
+        .and_then(|mut it| it.next().ok_or_else(|| From::from(SocketError::InvalidAddress)))
 }
 
 /// A structure that represents a uTP (Micro Transport Protocol) connection between a local socket
