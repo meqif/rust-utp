@@ -1032,7 +1032,7 @@ impl UtpSocket {
                                              self.duplicate_ack_count == 3;
 
         // Process extensions, if any
-        for extension in packet.extensions.iter() {
+        for extension in &packet.extensions {
             if extension.get_type() == ExtensionType::SelectiveAck {
                 // If three or more packets are acknowledged past the implicit missing one,
                 // assume it was lost.
