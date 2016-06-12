@@ -893,7 +893,7 @@ impl UtpSocket {
                     // Set SACK extension payload if the packet is not in order
                     let sack = self.build_selective_ack();
 
-                    if sack.len() > 0 {
+                    if !sack.is_empty() {
                         reply.set_sack(sack);
                     }
                 }
@@ -938,7 +938,7 @@ impl UtpSocket {
             // Set SACK extension payload if the packet is not in order
             let sack = self.build_selective_ack();
 
-            if sack.len() > 0 {
+            if !sack.is_empty() {
                 reply.set_sack(sack);
             }
         }
