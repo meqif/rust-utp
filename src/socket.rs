@@ -74,7 +74,7 @@ struct DelayDifferenceSample {
 /// Returns the first valid address in a `ToSocketAddrs` iterator.
 fn take_address<A: ToSocketAddrs>(addr: A) -> Result<SocketAddr> {
     addr.to_socket_addrs()
-        .and_then(|mut it| it.next().ok_or(From::from(SocketError::InvalidAddress)))
+        .and_then(|mut it| it.next().ok_or_else(|| From::from(SocketError::InvalidAddress)))
 }
 
 /// A structure that represents a uTP (Micro Transport Protocol) connection between a local socket
@@ -453,7 +453,7 @@ impl UtpSocket {
     }
 
     fn handle_receive_timeout(&mut self) -> Result<()> {
-        self.congestion_timeout = self.congestion_timeout * 2;
+        self.congestion_timeout *= 2;
         self.cwnd = MSS;
 
         // There are three possible cases here:
@@ -893,7 +893,7 @@ impl UtpSocket {
                     // Set SACK extension payload if the packet is not in order
                     let sack = self.build_selective_ack();
 
-                    if sack.len() > 0 {
+                    if !sack.is_empty() {
                         reply.set_sack(sack);
                     }
                 }
@@ -938,7 +938,7 @@ impl UtpSocket {
             // Set SACK extension payload if the packet is not in order
             let sack = self.build_selective_ack();
 
-            if sack.len() > 0 {
+            if !sack.is_empty() {
                 reply.set_sack(sack);
             }
         }
@@ -1032,7 +1032,7 @@ impl UtpSocket {
                                              self.duplicate_ack_count == 3;
 
         // Process extensions, if any
-        for extension in packet.extensions.iter() {
+        for extension in &packet.extensions {
             if extension.get_type() == ExtensionType::SelectiveAck {
                 // If three or more packets are acknowledged past the implicit missing one,
                 // assume it was lost.
@@ -1086,13 +1086,13 @@ impl UtpSocket {
     fn insert_into_buffer(&mut self, packet: Packet) {
         // Immediately push to the end if the packet's sequence number comes after the last
         // packet's.
-        if self.incoming_buffer.last().map(|p| packet.seq_nr() > p.seq_nr()).unwrap_or(false) {
+        if self.incoming_buffer.last().map_or(false, |p| packet.seq_nr() > p.seq_nr()) {
             self.incoming_buffer.push(packet);
         } else {
             // Find index following the most recent packet before the one we wish to insert
             let i = self.incoming_buffer.iter().filter(|p| p.seq_nr() < packet.seq_nr()).count();
 
-            if self.incoming_buffer.get(i).map(|p| p.seq_nr() != packet.seq_nr()).unwrap_or(true) {
+            if self.incoming_buffer.get(i).map_or(true, |p| p.seq_nr() != packet.seq_nr()) {
                 self.incoming_buffer.insert(i, packet);
             }
         }
