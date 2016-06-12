@@ -453,7 +453,7 @@ impl UtpSocket {
     }
 
     fn handle_receive_timeout(&mut self) -> Result<()> {
-        self.congestion_timeout = self.congestion_timeout * 2;
+        self.congestion_timeout *= 2;
         self.cwnd = MSS;
 
         // There are three possible cases here:
