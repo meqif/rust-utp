@@ -1086,13 +1086,13 @@ impl UtpSocket {
     fn insert_into_buffer(&mut self, packet: Packet) {
         // Immediately push to the end if the packet's sequence number comes after the last
         // packet's.
-        if self.incoming_buffer.last().map(|p| packet.seq_nr() > p.seq_nr()).unwrap_or(false) {
+        if self.incoming_buffer.last().map_or(false, |p| packet.seq_nr() > p.seq_nr()) {
             self.incoming_buffer.push(packet);
         } else {
             // Find index following the most recent packet before the one we wish to insert
             let i = self.incoming_buffer.iter().filter(|p| p.seq_nr() < packet.seq_nr()).count();
 
-            if self.incoming_buffer.get(i).map(|p| p.seq_nr() != packet.seq_nr()).unwrap_or(true) {
+            if self.incoming_buffer.get(i).map_or(true, |p| p.seq_nr() != packet.seq_nr()) {
                 self.incoming_buffer.insert(i, packet);
             }
         }
