@@ -1659,7 +1659,7 @@ mod test {
             assert_eq!(client.state, SocketState::Connected);
             // Check proper difference in client's send connection id and receive connection id
             assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
-            let s = client.socket.try_clone().ok().expect("Error cloning internal UDP socket");
+            let s = client.socket.try_clone().expect("Error cloning internal UDP socket");
             let mut window: Vec<Packet> = Vec::new();
 
             for data in (1..13u8).collect::<Vec<u8>>()[..].chunks(3) {
@@ -1691,7 +1691,7 @@ mod test {
             iotry!(s.send_to(&window[0].to_bytes()[..], server_addr));
             iotry!(s.send_to(&window[4].to_bytes()[..], server_addr));
 
-            for _ in 0u8..2 {
+            for _ in 0..2 {
                 let mut buf = [0; BUF_SIZE];
                 iotry!(s.recv_from(&mut buf));
             }
@@ -1755,7 +1755,7 @@ mod test {
         packet.set_ack_nr(data_packet.seq_nr() - 1);
         packet.set_connection_id(server.sender_connection_id);
 
-        for _ in 0u8..3 {
+        for _ in 0..3 {
             iotry!(server.socket.send_to(&packet.to_bytes()[..], server.connected_to));
         }
 
@@ -1904,14 +1904,14 @@ mod test {
             packet.payload = vec!(1, 2, 3);
 
             // Send two copies of the packet, with different timestamps
-            for _ in 0u8..2 {
+            for _ in 0..2 {
                 packet.set_timestamp_microseconds(now_microseconds());
                 iotry!(client.socket.send_to(&packet.to_bytes()[..], server_addr));
             }
             client.seq_nr += 1;
 
             // Receive one ACK
-            for _ in 0u8..1 {
+            for _ in 0..1 {
                 let mut buf = [0; BUF_SIZE];
                 iotry!(client.socket.recv_from(&mut buf));
             }
@@ -2311,7 +2311,7 @@ mod test {
         }
 
         let expected = vec![7, 9];
-        let actual = socket.base_delays.iter().map(|&x| x).collect::<Vec<_>>();
+        let actual = socket.base_delays.iter().cloned().collect::<Vec<_>>();
         assert_eq!(expected, actual);
         assert_eq!(socket.min_base_delay(), 7);
     }

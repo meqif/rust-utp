@@ -530,7 +530,7 @@ mod tests {
 
     #[test]
     fn test_packet_encode() {
-        let payload = "Hello\n".as_bytes().to_vec();
+        let payload = b"Hello\n".to_vec();
         let (timestamp, timestamp_diff): (u32, u32) = (15270793, 1707040186);
         let (connection_id, seq_nr, ack_nr): (u16, u16, u16) = (16808, 15090, 17096);
         let window_size: u32 = 1048576;
@@ -566,7 +566,7 @@ mod tests {
 
     #[test]
     fn test_packet_encode_with_payload() {
-        let payload = "Hello\n".as_bytes().to_vec();
+        let payload = b"Hello\n".to_vec();
         let (timestamp, timestamp_diff): (u32, u32) = (15270793, 1707040186);
         let (connection_id, seq_nr, ack_nr): (u16, u16, u16) = (16808, 15090, 17096);
         let window_size: u32 = 1048576;
