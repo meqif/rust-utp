@@ -293,7 +293,7 @@ impl Packet {
         // The length of the SACK extension is expressed in bytes, which
         // must be a multiple of 4 and at least 4.
         assert!(bv.len() >= 4);
-        assert!(bv.len() % 4 == 0);
+        assert_eq!(bv.len() % 4, 0);
 
         let extension = Extension {
             ty: ExtensionType::SelectiveAck,
@@ -474,11 +474,11 @@ mod tests {
         assert_eq!(packet.ack_nr(), 15093);
         assert_eq!(packet.len(), buf.len());
         assert!(packet.payload.is_empty());
-        assert!(packet.extensions.len() == 1);
-        assert!(packet.extensions[0].ty == ExtensionType::SelectiveAck);
-        assert!(packet.extensions[0].data == vec!(0, 0, 0, 0));
-        assert!(packet.extensions[0].len() == packet.extensions[0].data.len());
-        assert!(packet.extensions[0].len() == 4);
+        assert_eq!(packet.extensions.len(), 1);
+        assert_eq!(packet.extensions[0].ty, ExtensionType::SelectiveAck);
+        assert_eq!(packet.extensions[0].data, vec!(0, 0, 0, 0));
+        assert_eq!(packet.extensions[0].len(), packet.extensions[0].data.len());
+        assert_eq!(packet.extensions[0].len(), 4);
         // Reversible
         assert_eq!(packet.to_bytes(), &buf);
     }
@@ -519,11 +519,11 @@ mod tests {
         assert_eq!(packet.seq_nr(), 43859);
         assert_eq!(packet.ack_nr(), 15093);
         assert!(packet.payload.is_empty());
-        assert!(packet.extensions.len() == 2);
-        assert!(packet.extensions[0].ty == ExtensionType::SelectiveAck);
-        assert!(packet.extensions[0].data == vec!(0, 0, 0, 0));
-        assert!(packet.extensions[0].len() == packet.extensions[0].data.len());
-        assert!(packet.extensions[0].len() == 4);
+        assert_eq!(packet.extensions.len(), 2);
+        assert_eq!(packet.extensions[0].ty, ExtensionType::SelectiveAck);
+        assert_eq!(packet.extensions[0].data, vec!(0, 0, 0, 0));
+        assert_eq!(packet.extensions[0].len(), packet.extensions[0].data.len());
+        assert_eq!(packet.extensions[0].len(), 4);
         // Reversible
         assert_eq!(packet.to_bytes(), &buf);
     }

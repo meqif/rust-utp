@@ -1246,11 +1246,11 @@ mod test {
         let server_addr = next_test_ip4();
 
         let mut server = iotry!(UtpSocket::bind(server_addr));
-        assert!(server.state == SocketState::New);
+        assert_eq!(server.state, SocketState::New);
 
         let child = thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
-            assert!(client.state == SocketState::Connected);
+            assert_eq!(client.state, SocketState::Connected);
             // Check proper difference in client's send connection id and receive connection id
             assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
             assert_eq!(client.connected_to,
@@ -1266,7 +1266,7 @@ mod test {
         // After establishing a new connection, the server's ids are a mirror of the client's.
         assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
 
-        assert!(server.state == SocketState::Closed);
+        assert_eq!(server.state, SocketState::Closed);
         drop(server);
 
         assert!(child.join().is_ok());
@@ -1277,11 +1277,11 @@ mod test {
         let server_addr = next_test_ip6();
 
         let mut server = iotry!(UtpSocket::bind(server_addr));
-        assert!(server.state == SocketState::New);
+        assert_eq!(server.state, SocketState::New);
 
         let child = thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
-            assert!(client.state == SocketState::Connected);
+            assert_eq!(client.state, SocketState::Connected);
             // Check proper difference in client's send connection id and receive connection id
             assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
             assert_eq!(client.connected_to,
@@ -1297,7 +1297,7 @@ mod test {
         // After establishing a new connection, the server's ids are a mirror of the client's.
         assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
 
-        assert!(server.state == SocketState::Closed);
+        assert_eq!(server.state, SocketState::Closed);
         drop(server);
 
         assert!(child.join().is_ok());
@@ -1308,18 +1308,18 @@ mod test {
         let server_addr = next_test_ip4();
 
         let mut server = iotry!(UtpSocket::bind(server_addr));
-        assert!(server.state == SocketState::New);
+        assert_eq!(server.state, SocketState::New);
 
         let child = thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
-            assert!(client.state == SocketState::Connected);
+            assert_eq!(client.state, SocketState::Connected);
             assert!(client.close().is_ok());
         });
 
         // Make the server listen for incoming connections until the end of the input
         let mut buf = [0u8; BUF_SIZE];
         let _resp = server.recv_from(&mut buf);
-        assert!(server.state == SocketState::Closed);
+        assert_eq!(server.state, SocketState::Closed);
 
         // Trying to receive again returns `Ok(0)` (equivalent to the old `EndOfFile`)
         match server.recv_from(&mut buf) {
@@ -1336,11 +1336,11 @@ mod test {
         let server_addr = next_test_ip4();
 
         let mut server = iotry!(UtpSocket::bind(server_addr));
-        assert!(server.state == SocketState::New);
+        assert_eq!(server.state, SocketState::New);
 
         let child = thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
-            assert!(client.state == SocketState::Connected);
+            assert_eq!(client.state, SocketState::Connected);
             iotry!(client.close());
         });
 
@@ -1379,17 +1379,16 @@ mod test {
         });
 
         let mut client = iotry!(UtpSocket::connect(server_addr));
-        assert!(client.state == SocketState::Connected);
+        assert_eq!(client.state, SocketState::Connected);
         let sender_seq_nr = rx.recv().unwrap();
         let ack_nr = client.ack_nr;
-        assert!(ack_nr != 0);
-        assert!(ack_nr == sender_seq_nr);
+        assert_eq!(ack_nr, sender_seq_nr);
         assert!(client.close().is_ok());
 
         // The reply to both connect (SYN) and close (FIN) should be
         // STATE packets, which don't increase the sequence number
         // and, hence, the receiver's acknowledgement number.
-        assert!(client.ack_nr == ack_nr);
+        assert_eq!(client.ack_nr, ack_nr);
         drop(client);
 
         assert!(child.join().is_ok());
@@ -1418,13 +1417,13 @@ mod test {
 
         // Is is of the correct type?
         let response = response.unwrap();
-        assert!(response.get_type() == PacketType::State);
+        assert_eq!(response.get_type(), PacketType::State);
 
         // Same connection id on both ends during connection establishment
-        assert!(response.connection_id() == packet.connection_id());
+        assert_eq!(response.connection_id(), packet.connection_id());
 
         // Response acknowledges SYN
-        assert!(response.ack_nr() == packet.seq_nr());
+        assert_eq!(response.ack_nr(), packet.seq_nr());
 
         // No payload?
         assert!(response.payload.is_empty());
@@ -1448,20 +1447,20 @@ mod test {
         assert!(response.is_some());
 
         let response = response.unwrap();
-        assert!(response.get_type() == PacketType::State);
+        assert_eq!(response.get_type(), PacketType::State);
 
         // Sender (i.e., who the initiated connection and sent a SYN) has connection id equal to
         // initial connection id + 1
         // Receiver (i.e., who accepted connection) has connection id equal to initial connection id
-        assert!(response.connection_id() == initial_connection_id);
-        assert!(response.connection_id() == packet.connection_id() - 1);
+        assert_eq!(response.connection_id(), initial_connection_id);
+        assert_eq!(response.connection_id(), packet.connection_id() - 1);
 
         // Previous packets should be ack'ed
-        assert!(response.ack_nr() == packet.seq_nr());
+        assert_eq!(response.ack_nr(), packet.seq_nr());
 
         // Responses with no payload should not increase the sequence number
         assert!(response.payload.is_empty());
-        assert!(response.seq_nr() == old_response.seq_nr());
+        assert_eq!(response.seq_nr(), old_response.seq_nr());
         // }
 
         //fn test_connection_teardown() {
@@ -1481,16 +1480,16 @@ mod test {
 
         let response = response.unwrap();
 
-        assert!(response.get_type() == PacketType::State);
+        assert_eq!(response.get_type(), PacketType::State);
 
         // FIN packets have no payload but the sequence number shouldn't increase
-        assert!(packet.seq_nr() == old_packet.seq_nr() + 1);
+        assert_eq!(packet.seq_nr(), old_packet.seq_nr() + 1);
 
         // Nor should the ACK packet's sequence number
-        assert!(response.seq_nr() == old_response.seq_nr());
+        assert_eq!(response.seq_nr(), old_response.seq_nr());
 
         // FIN should be acknowledged
-        assert!(response.ack_nr() == packet.seq_nr());
+        assert_eq!(response.ack_nr(), packet.seq_nr());
 
         //}
     }
@@ -1515,7 +1514,7 @@ mod test {
         let response = response.unwrap();
         assert!(response.is_some());
         let response = response.unwrap();
-        assert!(response.get_type() == PacketType::State);
+        assert_eq!(response.get_type(), PacketType::State);
 
         let old_packet = packet;
         let old_response = response;
@@ -1562,7 +1561,7 @@ mod test {
         assert!(response.is_ok());
         let response = response.unwrap();
         assert!(response.is_some());
-        assert!(response.unwrap().get_type() == PacketType::State);
+        assert_eq!(response.unwrap().get_type(), PacketType::State);
 
         // Now, disrupt connection with a packet with an incorrect connection id
         let new_connection_id = initial_connection_id.wrapping_mul(2);
@@ -1578,8 +1577,8 @@ mod test {
         assert!(response.is_some());
 
         let response = response.unwrap();
-        assert!(response.get_type() == PacketType::Reset);
-        assert!(response.ack_nr() == packet.seq_nr());
+        assert_eq!(response.get_type(), PacketType::Reset);
+        assert_eq!(response.ack_nr(), packet.seq_nr());
 
         // Mark socket as closed
         socket.state = SocketState::Closed;
@@ -1605,7 +1604,7 @@ mod test {
         let response = response.unwrap();
         assert!(response.is_some());
         let response = response.unwrap();
-        assert!(response.get_type() == PacketType::State);
+        assert_eq!(response.get_type(), PacketType::State);
 
         let old_packet = packet;
         let old_response = response;
@@ -1653,11 +1652,11 @@ mod test {
         let server_addr = next_test_ip4();
 
         let mut server = iotry!(UtpSocket::bind(server_addr));
-        assert!(server.state == SocketState::New);
+        assert_eq!(server.state, SocketState::New);
 
         let child = thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
-            assert!(client.state == SocketState::Connected);
+            assert_eq!(client.state, SocketState::Connected);
             // Check proper difference in client's send connection id and receive connection id
             assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
             let s = client.socket.try_clone().ok().expect("Error cloning internal UDP socket");
@@ -1768,7 +1767,7 @@ mod test {
                 let packet = iotry!(Packet::from_bytes(&buf[..read]));
                 assert_eq!(packet.get_type(), PacketType::Data);
                 assert_eq!(packet.seq_nr(), data_packet.seq_nr());
-                assert!(packet.payload == data_packet.payload);
+                assert_eq!(packet.payload, data_packet.payload);
                 let response = server.handle_packet(&packet, client_addr);
                 assert!(response.is_ok());
                 let response = response.unwrap();
@@ -1797,15 +1796,15 @@ mod test {
         let data = (0..LEN).map(|idx| idx as u8).collect::<Vec<u8>>();
         let d = data.clone();
 
-        assert!(server.state == SocketState::New);
-        assert!(client.state == SocketState::New);
+        assert_eq!(server.state, SocketState::New);
+        assert_eq!(client.state, SocketState::New);
 
         // Check proper difference in client's send connection id and receive connection id
         assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
 
         let child = thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
-            assert!(client.state == SocketState::Connected);
+            assert_eq!(client.state, SocketState::Connected);
             assert_eq!(client.connected_to, server_addr);
             iotry!(client.send_to(&d[..]));
             drop(client);
@@ -1816,7 +1815,7 @@ mod test {
         // After establishing a new connection, the server's ids are a mirror of the client's.
         assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
 
-        assert!(server.state == SocketState::Connected);
+        assert_eq!(server.state, SocketState::Connected);
 
         // Purposefully read from UDP socket directly and discard it, in order
         // to behave as if the packet was lost and thus trigger the timeout
@@ -1886,15 +1885,15 @@ mod test {
         let client = iotry!(UtpSocket::bind(client_addr));
         let mut server = iotry!(UtpSocket::bind(server_addr));
 
-        assert!(server.state == SocketState::New);
-        assert!(client.state == SocketState::New);
+        assert_eq!(server.state, SocketState::New);
+        assert_eq!(client.state, SocketState::New);
 
         // Check proper difference in client's send connection id and receive connection id
         assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
 
         let child = thread::spawn(move || {
             let mut client = iotry!(UtpSocket::connect(server_addr));
-            assert!(client.state == SocketState::Connected);
+            assert_eq!(client.state, SocketState::Connected);
 
             let mut packet = Packet::new();
             packet.set_wnd_size(BUF_SIZE as u32);
@@ -1925,7 +1924,7 @@ mod test {
         // After establishing a new connection, the server's ids are a mirror of the client's.
         assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
 
-        assert!(server.state == SocketState::Connected);
+        assert_eq!(server.state, SocketState::Connected);
 
         let expected: Vec<u8> = vec!(1, 2, 3);
         let mut received: Vec<u8> = vec!();
