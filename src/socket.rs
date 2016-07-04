@@ -269,7 +269,7 @@ impl UtpSocket {
         let addr = try!(take_address(other));
         let my_addr = match addr {
             SocketAddr::V4(_) => "0.0.0.0:0",
-            SocketAddr::V6(_) => ":::0",
+            SocketAddr::V6(_) => "[::]:0",
         };
         let mut socket = try!(UtpSocket::bind(my_addr));
         socket.connected_to = addr;
@@ -1171,7 +1171,7 @@ impl UtpListener {
                 // The address of the new socket will depend on the type of the listener.
                 let inner_socket = self.socket.local_addr().and_then(|addr| match addr {
                     SocketAddr::V4(_) => UdpSocket::bind("0.0.0.0:0"),
-                    SocketAddr::V6(_) => UdpSocket::bind(":::0"),
+                    SocketAddr::V6(_) => UdpSocket::bind("[::]:0"),
                 });
 
                 let mut socket = try!(inner_socket.map(|s| UtpSocket::from_raw_parts(s, src)));
@@ -2378,9 +2378,9 @@ mod test {
     fn test_take_address() {
         // Expected successes
         assert!(take_address(("0.0.0.0:0")).is_ok());
-        assert!(take_address((":::0")).is_ok());
+        assert!(take_address(("[::]:0")).is_ok());
         assert!(take_address(("0.0.0.0", 0)).is_ok());
-        assert!(take_address(("::", 0)).is_ok());
+        assert!(take_address(("[::]", 0)).is_ok());
         assert!(take_address(("1.2.3.4", 5)).is_ok());
 
         // Expected failures
