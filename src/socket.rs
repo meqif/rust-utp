@@ -2380,7 +2380,7 @@ mod test {
         assert!(take_address(("0.0.0.0:0")).is_ok());
         assert!(take_address(("[::]:0")).is_ok());
         assert!(take_address(("0.0.0.0", 0)).is_ok());
-        assert!(take_address(("[::]", 0)).is_ok());
+        assert!(take_address(("::", 0)).is_ok());
         assert!(take_address(("1.2.3.4", 5)).is_ok());
 
         // Expected failures
