@@ -30,6 +30,14 @@ macro_rules! make_setter {
     }
 }
 
+/// Attempt to construct `Self` through conversion.
+///
+/// Waiting for rust-lang/rust#33417 to become stable.
+trait TryFrom<T>: Sized {
+    type Err;
+    fn try_from(T) -> Result<Self, Self::Err>;
+}
+
 /// A trait for objects that can be represented as a vector of bytes.
 pub trait Encodable {
     /// Returns a vector of bytes representing the data structure in a way that can be sent over the
@@ -50,8 +58,9 @@ pub trait Decodable: Sized {
 #[derive(Debug)]
 pub enum ParseError {
     InvalidExtensionLength,
+    InvalidExtensionType(u8),
     InvalidPacketLength,
-    InvalidPacketType,
+    InvalidPacketType(u8),
     UnsupportedVersion
 }
 
@@ -66,8 +75,9 @@ impl Error for ParseError {
         use self::ParseError::*;
         match *self {
             InvalidExtensionLength => "Invalid extension length (must be a non-zero multiple of 4)",
+            InvalidExtensionType(v) => "Invalid extension type",
             InvalidPacketLength => "The packet is too small",
-            InvalidPacketType => "Invalid packet type",
+            InvalidPacketType(v) => "Invalid packet type",
             UnsupportedVersion => "Unsupported packet version",
         }
     }
@@ -82,9 +92,33 @@ pub enum PacketType {
     Syn   = 4,
 }
 
+impl TryFrom<u8> for PacketType {
+    type Err = ParseError;
+    fn try_from(original: u8) -> Result<Self, Self::Err> {
+        match original {
+            0 => Ok(PacketType::Data),
+            1 => Ok(PacketType::Fin),
+            2 => Ok(PacketType::State),
+            3 => Ok(PacketType::Reset),
+            4 => Ok(PacketType::Syn),
+            n => Err(ParseError::InvalidPacketType(n))
+        }
+    }
+}
+
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum ExtensionType {
     SelectiveAck = 1,
+}
+
+impl TryFrom<u8> for ExtensionType {
+    type Err = ParseError;
+    fn try_from(original: u8) -> Result<Self, Self::Err> {
+        match original {
+            1 => Ok(ExtensionType::SelectiveAck),
+            _ => Err(ParseError::InvalidExtensionType(original))
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -128,7 +162,7 @@ impl PacketHeader {
 
     /// Returns the packet's type.
     pub fn get_type(&self) -> PacketType {
-        unsafe { transmute(self.type_ver >> 4) }
+        PacketType::try_from(self.type_ver >> 4).unwrap()
     }
 
     /// Returns the packet's version.
@@ -168,14 +202,9 @@ impl Decodable for PacketHeader {
         }
 
         // Check packet type
-        let _ = match buf[0] >> 4 {
-            0 => PacketType::Data,
-            1 => PacketType::Fin,
-            2 => PacketType::State,
-            3 => PacketType::Reset,
-            4 => PacketType::Syn,
-            _ => return Err(ParseError::InvalidPacketType)
-        };
+        if let Err(e) = PacketType::try_from(buf[0] >> 4) {
+            return Err(e);
+        }
 
         Ok(PacketHeader {
             type_ver: buf[0],
@@ -379,11 +408,13 @@ impl Decodable for Packet {
                 return Err(ParseError::InvalidExtensionLength);
             }
 
-            let extension = Extension {
-                ty: unsafe { transmute(kind) },
-                data: buf[extension_start..payload_start].to_vec(),
-            };
-            extensions.push(extension);
+            if let Ok(extension_type) = ExtensionType::try_from(kind) {
+                let extension = Extension {
+                    ty: extension_type,
+                    data: buf[extension_start..payload_start].to_vec(),
+                };
+                extensions.push(extension);
+            }
 
             kind = buf[idx];
             idx += len + 2;
@@ -519,13 +550,12 @@ mod tests {
         assert_eq!(packet.seq_nr(), 43859);
         assert_eq!(packet.ack_nr(), 15093);
         assert!(packet.payload.is_empty());
-        assert_eq!(packet.extensions.len(), 2);
+        // The invalid extension is discarded
+        assert_eq!(packet.extensions.len(), 1);
         assert_eq!(packet.extensions[0].ty, ExtensionType::SelectiveAck);
         assert_eq!(packet.extensions[0].data, vec!(0, 0, 0, 0));
         assert_eq!(packet.extensions[0].len(), packet.extensions[0].data.len());
         assert_eq!(packet.extensions[0].len(), 4);
-        // Reversible
-        assert_eq!(packet.to_bytes(), &buf);
     }
 
     #[test]
