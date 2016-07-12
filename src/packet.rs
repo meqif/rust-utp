@@ -75,9 +75,9 @@ impl Error for ParseError {
         use self::ParseError::*;
         match *self {
             InvalidExtensionLength => "Invalid extension length (must be a non-zero multiple of 4)",
-            InvalidExtensionType(v) => "Invalid extension type",
+            InvalidExtensionType(_) => "Invalid extension type",
             InvalidPacketLength => "The packet is too small",
-            InvalidPacketType(v) => "Invalid packet type",
+            InvalidPacketType(_) => "Invalid packet type",
             UnsupportedVersion => "Unsupported packet version",
         }
     }
