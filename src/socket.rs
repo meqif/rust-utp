@@ -1032,7 +1032,7 @@ impl UtpSocket {
                                              self.duplicate_ack_count == 3;
 
         // Process extensions, if any
-        for extension in &packet.extensions {
+        for extension in packet.extensions() {
             if extension.get_type() == ExtensionType::SelectiveAck {
                 // If three or more packets are acknowledged past the implicit missing one,
                 // assume it was lost.
@@ -1060,7 +1060,7 @@ impl UtpSocket {
         // if the incoming packet doesn't have a SACK extension. If it does, the lost packets were
         // already resent.
         if !self.send_window.is_empty() && self.duplicate_ack_count == 3 &&
-            !packet.extensions.iter().any(|ext| ext.get_type() == ExtensionType::SelectiveAck) {
+            !packet.extensions().any(|ext| ext.get_type() == ExtensionType::SelectiveAck) {
             self.resend_lost_packet(packet.ack_nr() + 1);
         }
 

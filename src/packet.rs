@@ -5,6 +5,7 @@ use std::mem::transmute;
 use std::fmt;
 use std::ops::Deref;
 use bit_iterator::BitIterator;
+use std::slice::Iter;
 
 pub const HEADER_SIZE: usize = 20;
 
@@ -246,7 +247,7 @@ impl fmt::Debug for PacketHeader {
 
 pub struct Packet {
     header: PacketHeader,
-    pub extensions: Vec<Extension>,
+    extensions: Vec<Extension>,
     pub payload: Vec<u8>,
 }
 
@@ -283,6 +284,10 @@ impl Packet {
     #[inline]
     pub fn get_type(&self) -> PacketType {
         self.header.get_type()
+    }
+
+    pub fn extensions(&self) -> Iter<Extension> {
+        self.extensions.iter()
     }
 
     make_getter!(seq_nr, u16, u16);
