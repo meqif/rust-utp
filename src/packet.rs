@@ -74,11 +74,11 @@ impl Error for ParseError {
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum PacketType {
-    Data  = 0,
-    Fin   = 1,
-    State = 2,
-    Reset = 3,
-    Syn   = 4,
+    Data,
+    Fin,
+    State,
+    Reset,
+    Syn,
 }
 
 impl TryFrom<u8> for PacketType {
@@ -91,6 +91,18 @@ impl TryFrom<u8> for PacketType {
             3 => Ok(PacketType::Reset),
             4 => Ok(PacketType::Syn),
             n => Err(ParseError::InvalidPacketType(n))
+        }
+    }
+}
+
+impl From<PacketType> for u8 {
+    fn from(original: PacketType) -> u8 {
+        match original {
+            PacketType::Data => 0,
+            PacketType::Fin => 1,
+            PacketType::State => 2,
+            PacketType::Reset => 3,
+            PacketType::Syn => 4,
         }
     }
 }
@@ -158,7 +170,7 @@ impl PacketHeader {
     /// Sets the type of packet to the specified type.
     pub fn set_type(&mut self, t: PacketType) {
         let version = 0x0F & self.type_ver;
-        self.type_ver = (t as u8) << 4 | version;
+        self.type_ver = u8::from(t) << 4 | version;
     }
 
     /// Returns the packet's type.
@@ -224,7 +236,7 @@ impl<'a> TryFrom<&'a[u8]> for PacketHeader {
 impl Default for PacketHeader {
     fn default() -> PacketHeader {
         PacketHeader {
-            type_ver: (PacketType::Data as u8) << 4 | 1,
+            type_ver: u8::from(PacketType::Data) << 4 | 1,
             extension: 0,
             connection_id: 0,
             timestamp_microseconds: 0,
