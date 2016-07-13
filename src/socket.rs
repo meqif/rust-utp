@@ -1648,6 +1648,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn test_socket_unordered_packets() {
         let server_addr = next_test_ip4();
 
