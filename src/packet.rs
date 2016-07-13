@@ -97,9 +97,9 @@ impl TryFrom<u8> for PacketType {
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum ExtensionType {
-    None = 0,
-    SelectiveAck = 1,
-    Unknown,
+    None,
+    SelectiveAck,
+    Unknown(u8),
 }
 
 impl From<u8> for ExtensionType {
@@ -107,7 +107,17 @@ impl From<u8> for ExtensionType {
         match original {
             0 => ExtensionType::None,
             1 => ExtensionType::SelectiveAck,
-            _ => ExtensionType::Unknown,
+            n => ExtensionType::Unknown(n),
+        }
+    }
+}
+
+impl From<ExtensionType> for u8 {
+    fn from(original: ExtensionType) -> u8 {
+        match original {
+            ExtensionType::None => 0,
+            ExtensionType::SelectiveAck => 1,
+            ExtensionType::Unknown(n) => n,
         }
     }
 }
@@ -319,7 +329,7 @@ impl Packet {
             data: bv,
         };
         self.extensions.push(extension);
-        self.header.extension |= ExtensionType::SelectiveAck as u8;
+        self.header.extension |= u8::from(ExtensionType::SelectiveAck);
     }
 
     pub fn len(&self) -> usize {
@@ -346,7 +356,7 @@ impl Encodable for Packet {
             // - a byte with the type of the next extension or 0 to end the list,
             // - a byte with the length in bytes of this extension,
             // - the content of this extension.
-            buf.push(extensions.peek().map_or(0, |next| next.ty as u8));
+            buf.push(extensions.peek().map_or(0, |next| u8::from(next.ty)));
             buf.push(extension.len() as u8);
             buf.extend(extension.data.clone());
         }
@@ -671,17 +681,17 @@ mod tests {
     fn test_packet_encode_with_multiple_extensions() {
         let mut packet = Packet::new();
         let extension = Extension { ty: ExtensionType::SelectiveAck, data: vec!(1, 2, 3, 4) };
-        packet.header.extension = extension.ty as u8;
+        packet.header.extension = u8::from(extension.ty);
         packet.extensions.push(extension.clone());
         packet.extensions.push(extension.clone());
         let bytes = packet.to_bytes();
         assert_eq!(bytes.len(), HEADER_SIZE + (extension.len() + 2) * 2);
 
         // Type of the first extension
-        assert_eq!(bytes[1], extension.ty as u8);
+        assert_eq!(bytes[1], u8::from(extension.ty));
 
         // Type of the next (second) extension
-        assert_eq!(bytes[HEADER_SIZE], extension.ty as u8);
+        assert_eq!(bytes[HEADER_SIZE], u8::from(extension.ty));
         // Length of the first extension
         assert_eq!(bytes[HEADER_SIZE + 1], extension.data.len() as u8);
 
