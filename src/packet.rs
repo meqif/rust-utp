@@ -401,7 +401,7 @@ impl<'a> TryFrom<&'a [u8]> for Packet {
             }
 
             let extension_type = ExtensionType::from(kind);
-            if extension_type != ExtensionType::None && extension_type != ExtensionType::Unknown {
+            if extension_type != ExtensionType::None {
                 let extension = Extension {
                     ty: extension_type,
                     data: buf[extension_start..payload_start].to_vec(),
@@ -543,7 +543,7 @@ mod tests {
                 assert_eq!(packet.ack_nr(), 15093);
                 assert!(packet.payload.is_empty());
                 // The invalid extension is discarded
-                assert_eq!(packet.extensions.len(), 1);
+                assert_eq!(packet.extensions.len(), 2);
                 assert_eq!(packet.extensions[0].ty, ExtensionType::SelectiveAck);
                 assert_eq!(packet.extensions[0].data, vec!(0, 0, 0, 0));
                 assert_eq!(packet.extensions[0].len(), packet.extensions[0].data.len());
