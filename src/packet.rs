@@ -48,7 +48,6 @@ pub trait Encodable {
 #[derive(Debug)]
 pub enum ParseError {
     InvalidExtensionLength,
-    InvalidExtensionType(u8),
     InvalidPacketLength,
     InvalidPacketType(u8),
     UnsupportedVersion
@@ -65,7 +64,6 @@ impl Error for ParseError {
         use self::ParseError::*;
         match *self {
             InvalidExtensionLength => "Invalid extension length (must be a non-zero multiple of 4)",
-            InvalidExtensionType(_) => "Invalid extension type",
             InvalidPacketLength => "The packet is too small",
             InvalidPacketType(_) => "Invalid packet type",
             UnsupportedVersion => "Unsupported packet version",
@@ -98,15 +96,17 @@ impl TryFrom<u8> for PacketType {
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum ExtensionType {
+    None = 0,
     SelectiveAck = 1,
+    Unknown,
 }
 
-impl TryFrom<u8> for ExtensionType {
-    type Err = ParseError;
-    fn try_from(original: u8) -> Result<Self, Self::Err> {
+impl From<u8> for ExtensionType {
+    fn from(original: u8) -> Self {
         match original {
-            1 => Ok(ExtensionType::SelectiveAck),
-            _ => Err(ParseError::InvalidExtensionType(original))
+            0 => ExtensionType::None,
+            1 => ExtensionType::SelectiveAck,
+            _ => ExtensionType::Unknown,
         }
     }
 }
@@ -372,14 +372,14 @@ impl<'a> TryFrom<&'a [u8]> for Packet {
 
         let mut extensions = Vec::new();
         let mut idx = HEADER_SIZE;
-        let mut kind = header.extension;
+        let mut kind = ExtensionType::from(header.extension);
 
         if buf.len() == HEADER_SIZE && header.extension != 0 {
             return Err(ParseError::InvalidExtensionLength);
         }
 
         // Consume known extensions and skip over unknown ones
-        while idx < buf.len() && kind != 0 {
+        while idx < buf.len() && kind != ExtensionType::None {
             if buf.len() < idx + 2 {
                 return Err(ParseError::InvalidPacketLength);
             }
@@ -395,7 +395,8 @@ impl<'a> TryFrom<&'a [u8]> for Packet {
                 return Err(ParseError::InvalidExtensionLength);
             }
 
-            if let Ok(extension_type) = ExtensionType::try_from(kind) {
+            let extension_type = ExtensionType::from(kind);
+            if extension_type != ExtensionType::None && extension_type != ExtensionType::Unknown {
                 let extension = Extension {
                     ty: extension_type,
                     data: buf[extension_start..payload_start].to_vec(),
@@ -403,11 +404,11 @@ impl<'a> TryFrom<&'a [u8]> for Packet {
                 extensions.push(extension);
             }
 
-            kind = buf[idx];
+            kind = ExtensionType::from(buf[idx]);
             idx += len + 2;
         }
         // Check for pending extensions (early exit of previous loop)
-        if kind != 0 {
+        if kind != ExtensionType::None {
             return Err(ParseError::InvalidPacketLength);
         }
 
@@ -524,25 +525,27 @@ mod tests {
                    0x00, 0x00, 0x00, 0x00, 0x05, 0xdc, 0xab, 0x53, 0x3a, 0xf5,
                    0xff, 0x04, 0x00, 0x00, 0x00, 0x00, // Imaginary extension
                    0x00, 0x04, 0x00, 0x00, 0x00, 0x00];
-        let packet = Packet::try_from(&buf);
-        assert!(packet.is_ok());
-        let packet = packet.unwrap();
-        assert_eq!(packet.header.get_version(), 1);
-        assert_eq!(packet.header.get_type(), State);
-        assert_eq!(packet.header.extension, 1);
-        assert_eq!(packet.connection_id(), 16807);
-        assert_eq!(packet.timestamp_microseconds(), 0);
-        assert_eq!(packet.timestamp_difference_microseconds(), 0);
-        assert_eq!(packet.wnd_size(), 1500);
-        assert_eq!(packet.seq_nr(), 43859);
-        assert_eq!(packet.ack_nr(), 15093);
-        assert!(packet.payload.is_empty());
-        // The invalid extension is discarded
-        assert_eq!(packet.extensions.len(), 1);
-        assert_eq!(packet.extensions[0].ty, ExtensionType::SelectiveAck);
-        assert_eq!(packet.extensions[0].data, vec!(0, 0, 0, 0));
-        assert_eq!(packet.extensions[0].len(), packet.extensions[0].data.len());
-        assert_eq!(packet.extensions[0].len(), 4);
+        match Packet::try_from(&buf) {
+            Ok(packet) => {
+                assert_eq!(packet.header.get_version(), 1);
+                assert_eq!(packet.header.get_type(), State);
+                assert_eq!(packet.header.extension, 1);
+                assert_eq!(packet.connection_id(), 16807);
+                assert_eq!(packet.timestamp_microseconds(), 0);
+                assert_eq!(packet.timestamp_difference_microseconds(), 0);
+                assert_eq!(packet.wnd_size(), 1500);
+                assert_eq!(packet.seq_nr(), 43859);
+                assert_eq!(packet.ack_nr(), 15093);
+                assert!(packet.payload.is_empty());
+                // The invalid extension is discarded
+                assert_eq!(packet.extensions.len(), 1);
+                assert_eq!(packet.extensions[0].ty, ExtensionType::SelectiveAck);
+                assert_eq!(packet.extensions[0].data, vec!(0, 0, 0, 0));
+                assert_eq!(packet.extensions[0].len(), packet.extensions[0].data.len());
+                assert_eq!(packet.extensions[0].len(), 4);
+            }
+            Err(ref e) => panic!("{}", e)
+        }
     }
 
     #[test]
@@ -685,15 +688,15 @@ mod tests {
                     return TestResult::from_bool(packet.is_err());
                 }
 
-                let mut next_kind = x[1];
+                let mut next_kind = ExtensionType::from(x[1]);
                 let mut idx = HEADER_SIZE;
 
-                while idx < x.len() && next_kind != 0 {
+                while idx < x.len() && next_kind != ExtensionType::None {
                     if x.len() < idx + 2 {
                         return TestResult::from_bool(packet.is_err());
                     }
                     let len = x[idx + 1] as usize;
-                    next_kind = x[idx];
+                    next_kind = ExtensionType::from(x[idx]);
 
                     // Check validity of extension length:
                     // - non-zero,
@@ -705,7 +708,7 @@ mod tests {
 
                     idx += len + 2;
                 }
-                TestResult::from_bool(packet.is_ok() || next_kind != 0)
+                TestResult::from_bool(packet.is_ok() || next_kind != ExtensionType::None)
             } else {
                 TestResult::from_bool(packet.is_ok() && packet.unwrap().to_bytes() == x)
             }
