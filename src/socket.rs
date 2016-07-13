@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use std::net::{ToSocketAddrs, SocketAddr, UdpSocket};
 use std::io::{Result, Error, ErrorKind};
 use util::{now_microseconds, ewma, abs_diff};
-use packet::{Packet, PacketType, Encodable, Decodable, ExtensionType, HEADER_SIZE};
+use packet::{Packet, PacketType, Encodable, TryFrom, ExtensionType, HEADER_SIZE};
 use rand::{self, Rng};
 use std::time::{Duration, Instant};
 
@@ -308,7 +308,7 @@ impl UtpSocket {
         }
 
         let addr = socket.connected_to;
-        let packet = try!(Packet::from_bytes(&buf[..len]).or(Err(SocketError::InvalidPacket)));
+        let packet = try!(Packet::try_from(&buf[..len]).or(Err(SocketError::InvalidPacket)));
         debug!("received {:?}", packet);
         try!(socket.handle_packet(&packet, addr));
 
@@ -422,7 +422,7 @@ impl UtpSocket {
         }
 
         // Decode received data into a packet
-        let packet = match Packet::from_bytes(&b[..read]) {
+        let packet = match Packet::try_from(&b[..read]) {
             Ok(packet) => packet,
             Err(e) => {
                 debug!("{}", e);
@@ -1160,7 +1160,7 @@ impl UtpListener {
 
         match self.socket.recv_from(&mut buf) {
             Ok((nread, src)) => {
-                let packet = try!(Packet::from_bytes(&buf[..nread])
+                let packet = try!(Packet::try_from(&buf[..nread])
                                   .or(Err(SocketError::InvalidPacket)));
 
                 // Ignore non-SYN packets
@@ -1218,7 +1218,7 @@ mod test {
     use std::net::ToSocketAddrs;
     use std::io::ErrorKind;
     use super::{UtpSocket, UtpListener, SocketState, BUF_SIZE, take_address};
-    use packet::{Packet, PacketType, Encodable, Decodable};
+    use packet::{Packet, PacketType, Encodable, TryFrom};
     use util::now_microseconds;
     use rand;
 
@@ -1740,7 +1740,7 @@ mod test {
 
         // Receive data
         let data_packet = match server.socket.recv_from(&mut buf) {
-            Ok((read, _src)) => iotry!(Packet::from_bytes(&buf[..read])),
+            Ok((read, _src)) => iotry!(Packet::try_from(&buf[..read])),
             Err(e) => panic!("{}", e),
         };
         assert_eq!(data_packet.get_type(), PacketType::Data);
@@ -1764,7 +1764,7 @@ mod test {
         match server.socket.recv_from(&mut buf) {
             Ok((0, _)) => panic!("Received 0 bytes from socket"),
             Ok((read, _src)) => {
-                let packet = iotry!(Packet::from_bytes(&buf[..read]));
+                let packet = iotry!(Packet::try_from(&buf[..read]));
                 assert_eq!(packet.get_type(), PacketType::Data);
                 assert_eq!(packet.seq_nr(), data_packet.seq_nr());
                 assert_eq!(packet.payload, data_packet.payload);
@@ -2207,7 +2207,7 @@ mod test {
         let mut buf = [0; BUF_SIZE];
         match client.socket.recv_from(&mut buf) {
             Ok((len, _src)) => {
-                let reply = Packet::from_bytes(&buf[..len]).ok().unwrap();
+                let reply = Packet::try_from(&buf[..len]).ok().unwrap();
                 assert_eq!(reply.get_type(), PacketType::Reset);
             }
             Err(e) => panic!("{:?}", e)
@@ -2410,7 +2410,7 @@ mod test {
             iotry!(socket.recv_from(&mut buf));
             for _ in 0..attempts {
                 match socket.recv_from(&mut buf) {
-                    Ok((len, _src)) => assert_eq!(Packet::from_bytes(&buf[..len]).unwrap().get_type(),
+                    Ok((len, _src)) => assert_eq!(Packet::try_from(&buf[..len]).unwrap().get_type(),
                         PacketType::Data),
                     Err(e) => panic!("{}", e),
                 }
@@ -2452,7 +2452,7 @@ mod test {
             iotry!(socket.recv_from(&mut buf));
             for _ in 0..attempts {
                 match socket.recv_from(&mut buf) {
-                    Ok((len, _src)) => assert_eq!(Packet::from_bytes(&buf[..len]).unwrap().get_type(),
+                    Ok((len, _src)) => assert_eq!(Packet::try_from(&buf[..len]).unwrap().get_type(),
                                                   PacketType::Fin),
                     Err(e) => panic!("{}", e),
                 }
@@ -2491,7 +2491,7 @@ mod test {
             for _ in 0..(3 * attempts) {
                 match socket.recv_from(&mut buf) {
                     Ok((len, _src)) => {
-                        let packet = iotry!(Packet::from_bytes(&buf[..len]));
+                        let packet = iotry!(Packet::try_from(&buf[..len]));
                         assert_eq!(packet.get_type(), PacketType::State);
                         assert_eq!(packet.ack_nr(), seq_nr - 1);
                     },

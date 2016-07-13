@@ -33,7 +33,7 @@ macro_rules! make_setter {
 /// Attempt to construct `Self` through conversion.
 ///
 /// Waiting for rust-lang/rust#33417 to become stable.
-trait TryFrom<T>: Sized {
+pub trait TryFrom<T>: Sized {
     type Err;
     fn try_from(T) -> Result<Self, Self::Err>;
 }
@@ -43,16 +43,6 @@ pub trait Encodable {
     /// Returns a vector of bytes representing the data structure in a way that can be sent over the
     /// network.
     fn to_bytes(&self) -> Vec<u8>;
-}
-
-/// A trait for objects that can be decoded from slices of bytes.
-pub trait Decodable: Sized {
-    /// Decodes a slice of bytes and returns an equivalent object.
-    ///
-    /// If the slice of bytes represents a valid instance of the type, it returns `Ok`, containing
-    /// the corresponding object; if a parse error is found, it returns `Err` with the appropriate
-    /// `ParseError`.
-    fn from_bytes(&[u8]) -> Result<Self, ParseError>;
 }
 
 #[derive(Debug)]
@@ -186,11 +176,12 @@ impl Deref for PacketHeader {
     }
 }
 
-impl Decodable for PacketHeader {
+impl<'a> TryFrom<&'a[u8]> for PacketHeader {
+    type Err = ParseError;
     /// Reads a byte buffer and returns the corresponding packet header.
     /// It assumes the fields are in network (big-endian) byte order,
     /// preserving it.
-    fn from_bytes(buf: &[u8]) -> Result<PacketHeader, ParseError> {
+    fn try_from(buf: &[u8]) -> Result<Self, Self::Err> {
         // Check length
         if buf.len() < HEADER_SIZE {
             return Err(ParseError::InvalidPacketLength);
@@ -368,14 +359,16 @@ impl Encodable for Packet {
     }
 }
 
-impl Decodable for Packet {
+impl<'a> TryFrom<&'a [u8]> for Packet {
+    type Err = ParseError;
+
     /// Decodes a byte slice and construct the equivalent Packet.
     ///
     /// Note that this method makes no attempt to guess the payload size, saving
     /// all except the initial 20 bytes corresponding to the header as payload.
     /// It's the caller's responsibility to use an appropriately sized buffer.
-    fn from_bytes(buf: &[u8]) -> Result<Packet, ParseError> {
-        let header = try!(PacketHeader::from_bytes(buf));
+    fn try_from(buf: &[u8]) -> Result<Self, Self::Err> {
+        let header = try!(PacketHeader::try_from(buf));
 
         let mut extensions = Vec::new();
         let mut idx = HEADER_SIZE;
@@ -464,7 +457,7 @@ mod tests {
     fn test_packet_decode() {
         let buf = [0x21, 0x00, 0x41, 0xa8, 0x99, 0x2f, 0xd0, 0x2a, 0x9f, 0x4a,
                    0x26, 0x21, 0x00, 0x10, 0x00, 0x00, 0x3a, 0xf2, 0x6c, 0x79];
-        let pkt = Packet::from_bytes(&buf);
+        let pkt = Packet::try_from(&buf);
         assert!(pkt.is_ok());
         let pkt = pkt.unwrap();
         assert_eq!(pkt.header.get_version(), 1);
@@ -485,7 +478,7 @@ mod tests {
         let buf = [0x21, 0x01, 0x41, 0xa7, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                    0x00, 0x00, 0x00, 0x00, 0x05, 0xdc, 0xab, 0x53, 0x3a, 0xf5,
                    0x00, 0x04, 0x00, 0x00, 0x00, 0x00];
-        let packet = Packet::from_bytes(&buf);
+        let packet = Packet::try_from(&buf);
         assert!(packet.is_ok());
         let packet = packet.unwrap();
         assert_eq!(packet.header.get_version(), 1);
@@ -512,7 +505,7 @@ mod tests {
     fn test_packet_decode_with_missing_extension() {
         let buf = [0x21, 0x01, 0x41, 0xa8, 0x99, 0x2f, 0xd0, 0x2a, 0x9f, 0x4a,
                    0x26, 0x21, 0x00, 0x10, 0x00, 0x00, 0x3a, 0xf2, 0x6c, 0x79];
-        let pkt = Packet::from_bytes(&buf);
+        let pkt = Packet::try_from(&buf);
         assert!(pkt.is_err());
     }
 
@@ -521,7 +514,7 @@ mod tests {
         let buf = [0x21, 0x01, 0x41, 0xa8, 0x99, 0x2f, 0xd0, 0x2a, 0x9f, 0x4a,
                    0x26, 0x21, 0x00, 0x10, 0x00, 0x00, 0x3a, 0xf2, 0x6c, 0x79,
                    0x00, 0x04, 0x00];
-        let pkt = Packet::from_bytes(&buf);
+        let pkt = Packet::try_from(&buf);
         assert!(pkt.is_err());
     }
 
@@ -531,7 +524,7 @@ mod tests {
                    0x00, 0x00, 0x00, 0x00, 0x05, 0xdc, 0xab, 0x53, 0x3a, 0xf5,
                    0xff, 0x04, 0x00, 0x00, 0x00, 0x00, // Imaginary extension
                    0x00, 0x04, 0x00, 0x00, 0x00, 0x00];
-        let packet = Packet::from_bytes(&buf);
+        let packet = Packet::try_from(&buf);
         assert!(packet.is_ok());
         let packet = packet.unwrap();
         assert_eq!(packet.header.get_version(), 1);
@@ -653,19 +646,19 @@ mod tests {
                    0x65, 0xbf, 0x5d, 0xba, 0x00, 0x10, 0x00, 0x00,
                    0x3a, 0xf2, 0x42, 0xc8, 0x48, 0x65, 0x6c, 0x6c,
                    0x6f, 0x0a];
-        assert_eq!(&Packet::from_bytes(&buf).unwrap().to_bytes()[..], &buf[..]);
+        assert_eq!(&Packet::try_from(&buf).unwrap().to_bytes()[..], &buf[..]);
     }
 
     #[test]
     fn test_decode_evil_sequence() {
         let buf = [0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-        let packet = Packet::from_bytes(&buf);
+        let packet = Packet::try_from(&buf);
         assert!(packet.is_err());
     }
 
     #[test]
     fn test_decode_empty_packet() {
-        let packet = Packet::from_bytes(&[]);
+        let packet = Packet::try_from(&[]);
         assert!(packet.is_err());
     }
 
@@ -675,7 +668,7 @@ mod tests {
         use quickcheck::{QuickCheck, TestResult};
 
         fn run(x: Vec<u8>) -> TestResult {
-            let packet = Packet::from_bytes(&x[..]);
+            let packet = Packet::try_from(&x[..]);
 
             if x.len() < 20 {
                 // Header too small
