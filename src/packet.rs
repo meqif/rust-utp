@@ -274,19 +274,13 @@ impl Packet {
         let mut header = PacketHeader::default();
         header.set_type(PacketType::Data);
 
-        let elts = payload.len();
-        let mut v = Vec::with_capacity(elts);
-
-        unsafe {
-            use std::ptr;
-            v.set_len(elts);
-            ptr::copy_nonoverlapping(payload.as_ptr(), v.as_mut_ptr(), elts);
-        }
+        let mut p = vec![0; payload.len()];
+        p.copy_from_slice(payload);
 
         Packet {
             header: header,
             extensions: Vec::new(),
-            payload: v,
+            payload: p,
         }
     }
 
