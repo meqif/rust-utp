@@ -454,10 +454,53 @@ impl fmt::Debug for Packet {
     }
 }
 
+/// Validate correctness of packet extensions, if any, in byte slice
+fn check_extensions(data: &[u8]) -> Result<(), ParseError> {
+    if data.len() < HEADER_SIZE {
+        return Err(ParseError::InvalidPacketLength);
+    }
+
+    let mut index = HEADER_SIZE;
+    let mut extension_type = ExtensionType::from(data[1]);
+
+    if data.len() == HEADER_SIZE && extension_type != ExtensionType::None {
+        return Err(ParseError::InvalidExtensionLength);
+    }
+
+    // Consume known extensions and skip over unknown ones
+    while index < data.len() && extension_type != ExtensionType::None {
+        if data.len() < index + 2 {
+            return Err(ParseError::InvalidPacketLength);
+        }
+        let len = data[index + 1] as usize;
+        let extension_start = index + 2;
+        let payload_start = extension_start + len;
+
+        // Check validity of extension length:
+        // - non-zero,
+        // - multiple of 4,
+        // - does not exceed packet length
+        if len == 0 || len % 4 != 0 || payload_start > data.len() {
+            return Err(ParseError::InvalidExtensionLength);
+        }
+
+        extension_type = ExtensionType::from(data[index]);
+        index += len + 2;
+    }
+    // Check for pending extensions (early exit of previous loop)
+    if extension_type != ExtensionType::None {
+        return Err(ParseError::InvalidPacketLength);
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::{PacketHeader, check_extensions};
     use super::PacketType::{State, Data};
+    use quickcheck::{QuickCheck, TestResult};
 
     #[test]
     fn test_packet_decode() {
@@ -673,49 +716,15 @@ mod tests {
     // Use quickcheck to simulate a malicious attacker sending malformed packets
     #[test]
     fn quicktest() {
-        use quickcheck::{QuickCheck, TestResult};
-
         fn run(x: Vec<u8>) -> TestResult {
-            let packet = Packet::try_from(&x[..]);
+            let packet = Packet::try_from(&x);
 
-            if x.len() < 20 {
-                // Header too small
+            if PacketHeader::try_from(&x).and(check_extensions(&x)).is_err() {
                 TestResult::from_bool(packet.is_err())
-            } else if x[0] & 0x0F != 1 {
-                // Invalid version
-                TestResult::from_bool(packet.is_err())
-            } else if (x[0] >> 4) > 4 {
-                // Invalid packet type
-                TestResult::from_bool(packet.is_err())
-            } else if x[1] != 0 {
-                // Non-empty extension field, check validity of extension(s)
-                if x.len() < HEADER_SIZE + 2 {
-                    return TestResult::from_bool(packet.is_err());
-                }
-
-                let mut next_kind = ExtensionType::from(x[1]);
-                let mut idx = HEADER_SIZE;
-
-                while idx < x.len() && next_kind != ExtensionType::None {
-                    if x.len() < idx + 2 {
-                        return TestResult::from_bool(packet.is_err());
-                    }
-                    let len = x[idx + 1] as usize;
-                    next_kind = ExtensionType::from(x[idx]);
-
-                    // Check validity of extension length:
-                    // - non-zero,
-                    // - multiple of 4,
-                    // - does not exceed packet length
-                    if len == 0 || len % 4 != 0 || x.len() < idx + len + 2 {
-                        return TestResult::from_bool(packet.is_err());
-                    }
-
-                    idx += len + 2;
-                }
-                TestResult::from_bool(packet.is_ok() || next_kind != ExtensionType::None)
+            } else if let Ok(bytes) = packet.map(|p| p.to_bytes()) {
+                TestResult::from_bool(bytes == x)
             } else {
-                TestResult::from_bool(packet.is_ok() && packet.unwrap().to_bytes() == x)
+                TestResult::from_bool(false)
             }
         }
         QuickCheck::new().tests(10000).quickcheck(run as fn(Vec<u8>) -> TestResult)
