@@ -1,7 +1,8 @@
 #![allow(dead_code)]
 
 use std::error::Error;
-use std::mem::transmute;
+use std::mem;
+use std::ptr;
 use std::fmt;
 use std::ops::Deref;
 use bit_iterator::BitIterator;
@@ -185,7 +186,7 @@ impl PacketHeader {
 
     /// Returns the packet header's length.
     pub fn len(&self) -> usize {
-        return HEADER_SIZE;
+        HEADER_SIZE
     }
 }
 
@@ -194,8 +195,9 @@ impl Deref for PacketHeader {
 
     /// Returns the packet header as a slice of bytes.
     fn deref(&self) -> &[u8] {
-        let buf: &[u8; HEADER_SIZE] = unsafe { transmute(self) };
-        return &buf[..];
+        unsafe {
+            mem::transmute::<&PacketHeader, &[u8; HEADER_SIZE]>(self)
+        }
     }
 }
 
@@ -352,7 +354,6 @@ impl Packet {
 
 impl Encodable for Packet {
     fn to_bytes(&self) -> Vec<u8> {
-        use std::ptr;
         let mut buf: Vec<u8> = Vec::with_capacity(self.len());
 
         // Copy header
@@ -398,20 +399,20 @@ impl<'a> TryFrom<&'a [u8]> for Packet {
         let header = try!(PacketHeader::try_from(buf));
 
         let mut extensions = Vec::new();
-        let mut idx = HEADER_SIZE;
-        let mut kind = ExtensionType::from(header.extension);
+        let mut index = HEADER_SIZE;
+        let mut extension_type = ExtensionType::from(header.extension);
 
-        if buf.len() == HEADER_SIZE && header.extension != 0 {
+        if buf.len() == HEADER_SIZE && extension_type != ExtensionType::None {
             return Err(ParseError::InvalidExtensionLength);
         }
 
         // Consume known extensions and skip over unknown ones
-        while idx < buf.len() && kind != ExtensionType::None {
-            if buf.len() < idx + 2 {
+        while index < buf.len() && extension_type != ExtensionType::None {
+            if buf.len() < index + 2 {
                 return Err(ParseError::InvalidPacketLength);
             }
-            let len = buf[idx + 1] as usize;
-            let extension_start = idx + 2;
+            let len = buf[index + 1] as usize;
+            let extension_start = index + 2;
             let payload_start = extension_start + len;
 
             // Check validity of extension length:
@@ -422,7 +423,6 @@ impl<'a> TryFrom<&'a [u8]> for Packet {
                 return Err(ParseError::InvalidExtensionLength);
             }
 
-            let extension_type = ExtensionType::from(kind);
             if extension_type != ExtensionType::None {
                 let extension = Extension {
                     ty: extension_type,
@@ -431,25 +431,22 @@ impl<'a> TryFrom<&'a [u8]> for Packet {
                 extensions.push(extension);
             }
 
-            kind = ExtensionType::from(buf[idx]);
-            idx += len + 2;
+            extension_type = ExtensionType::from(buf[index]);
+            index += len + 2;
         }
         // Check for pending extensions (early exit of previous loop)
-        if kind != ExtensionType::None {
+        if extension_type != ExtensionType::None {
             return Err(ParseError::InvalidPacketLength);
         }
 
-        let mut payload;
-        if idx < buf.len() {
-            let payload_length = buf.len() - idx;
-            payload = Vec::with_capacity(payload_length);
+        let payload_length = buf.len() - index;
+        let mut payload = Vec::with_capacity(payload_length);
+        if payload_length > 0 {
+            let offset = index as isize;
             unsafe {
-                use std::ptr;
-                ptr::copy(buf.as_ptr().offset(idx as isize), payload.as_mut_ptr(), payload_length);
+                ptr::copy(buf.as_ptr().offset(offset), payload.as_mut_ptr(), payload_length);
                 payload.set_len(payload_length);
             }
-        } else {
-            payload = Vec::new();
         }
 
         Ok(Packet {

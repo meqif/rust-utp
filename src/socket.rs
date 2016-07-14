@@ -505,8 +505,9 @@ impl UtpSocket {
         resp.set_type(t);
         let self_t_micro: u32 = now_microseconds();
         let other_t_micro: u32 = original.timestamp_microseconds();
+        let time_difference: u32 = abs_diff(self_t_micro, other_t_micro);
         resp.set_timestamp_microseconds(self_t_micro);
-        resp.set_timestamp_difference_microseconds(abs_diff(self_t_micro, other_t_micro));
+        resp.set_timestamp_difference_microseconds(time_difference);
         resp.set_connection_id(self.sender_connection_id);
         resp.set_seq_nr(self.seq_nr);
         resp.set_ack_nr(self.ack_nr);
