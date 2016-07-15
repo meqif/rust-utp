@@ -244,25 +244,6 @@ impl Default for PacketHeader {
     }
 }
 
-impl fmt::Debug for PacketHeader {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "(type: {:?}, version: {}, extension: {}, \
-                connection_id: {}, timestamp_microseconds: {}, \
-                timestamp_difference_microseconds: {}, wnd_size: {}, \
-                seq_nr: {}, ack_nr: {})",
-                self.get_type(),
-                u8::from_be(self.get_version()),
-                u8::from_be(self.extension),
-                u16::from_be(self.connection_id),
-                u32::from_be(self.timestamp_microseconds),
-                u32::from_be(self.timestamp_difference_microseconds),
-                u32::from_be(self.wnd_size),
-                u16::from_be(self.seq_nr),
-                u16::from_be(self.ack_nr),
-        )
-    }
-}
-
 pub struct Packet {
     header: PacketHeader,
     extensions: Vec<Extension>,
@@ -450,7 +431,17 @@ impl Clone for Packet {
 
 impl fmt::Debug for Packet {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.header.fmt(f)
+        f.debug_struct("Packet")
+            .field("type", &self.get_type())
+            .field("version", &self.header.get_version())
+            .field("extension", &self.header.extension)
+            .field("connection_id", &self.connection_id())
+            .field("timestamp_microseconds", &self.timestamp_microseconds())
+            .field("timestamp_difference_microseconds", &self.timestamp_difference_microseconds())
+            .field("wnd_size", &self.wnd_size())
+            .field("seq_nr", &self.seq_nr())
+            .field("ack_nr", &self.ack_nr())
+            .finish()
     }
 }
 
