@@ -48,6 +48,11 @@
 
 #![deny(missing_docs)]
 
+// Optional feature
+#![cfg_attr(feature = "clippy", feature(plugin))]
+#![cfg_attr(feature = "clippy", plugin(clippy))]
+#![cfg_attr(feature = "clippy", allow(len_without_is_empty, doc_markdown, needless_return))]
+
 extern crate rand;
 extern crate num;
 #[macro_use] extern crate log;

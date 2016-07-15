@@ -16,6 +16,10 @@ log = "0.3"
 num = "0.1.27"
 rand = "0.3"
 
+[dependencies.clippy]
+optional = true
+version = "*"
+
 [dev-dependencies]
 quickcheck = "*"
 
