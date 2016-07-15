@@ -183,11 +183,6 @@ impl PacketHeader {
     pub fn get_version(&self) -> u8 {
         self.type_ver & 0x0F
     }
-
-    /// Returns the packet header's length.
-    pub fn len(&self) -> usize {
-        HEADER_SIZE
-    }
 }
 
 impl Deref for PacketHeader {
@@ -348,7 +343,7 @@ impl Packet {
 
     pub fn len(&self) -> usize {
         let ext_len = self.extensions.iter().fold(0, |acc, ext| acc + ext.len() + 2);
-        self.header.len() + self.payload.len() + ext_len
+        HEADER_SIZE + self.payload.len() + ext_len
     }
 }
 
@@ -358,8 +353,8 @@ impl Encodable for Packet {
 
         // Copy header
         unsafe {
-            ptr::copy(self.header.as_ptr(), buf.as_mut_ptr(), self.header.len());
-            buf.set_len(self.header.len());
+            ptr::copy(self.header.as_ptr(), buf.as_mut_ptr(), HEADER_SIZE);
+            buf.set_len(HEADER_SIZE);
         }
 
         // Copy extensions
@@ -376,11 +371,11 @@ impl Encodable for Packet {
 
         // Copy payload
         unsafe {
-            let buf_len = buf.len();
+            let length = buf.len();
             ptr::copy(self.payload.as_ptr(),
-                      buf.as_mut_ptr().offset(buf.len() as isize),
+                      buf.as_mut_ptr().offset(length as isize),
                       self.payload.len());
-            buf.set_len(buf_len + self.payload.len());
+            buf.set_len(length + self.payload.len());
         }
 
         return buf;
