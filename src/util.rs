@@ -1,5 +1,5 @@
 use std::time;
-use num::ToPrimitive;
+use num_traits::ToPrimitive;
 
 /// Return current time in microseconds since the UNIX epoch.
 pub fn now_microseconds() -> u32 {

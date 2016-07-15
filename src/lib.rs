@@ -54,7 +54,7 @@
 #![cfg_attr(feature = "clippy", allow(len_without_is_empty, doc_markdown, needless_return))]
 
 extern crate rand;
-extern crate num;
+extern crate num_traits;
 #[macro_use] extern crate log;
 #[cfg(test)] extern crate quickcheck;
 
