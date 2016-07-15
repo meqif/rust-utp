@@ -2,7 +2,6 @@
 
 use std::error::Error;
 use std::mem;
-use std::ptr;
 use std::fmt;
 use std::ops::Deref;
 use bit_iterator::BitIterator;
@@ -352,10 +351,7 @@ impl Encodable for Packet {
         let mut buf: Vec<u8> = Vec::with_capacity(self.len());
 
         // Copy header
-        unsafe {
-            ptr::copy(self.header.as_ptr(), buf.as_mut_ptr(), HEADER_SIZE);
-            buf.set_len(HEADER_SIZE);
-        }
+        buf.extend_from_slice(&self.header);
 
         // Copy extensions
         let mut extensions = self.extensions.iter().peekable();
@@ -366,17 +362,11 @@ impl Encodable for Packet {
             // - the content of this extension.
             buf.push(extensions.peek().map_or(0, |next| u8::from(next.ty)));
             buf.push(extension.len() as u8);
-            buf.extend(extension.data.clone());
+            buf.extend_from_slice(&extension.data);
         }
 
         // Copy payload
-        unsafe {
-            let length = buf.len();
-            ptr::copy(self.payload.as_ptr(),
-                      buf.as_mut_ptr().offset(length as isize),
-                      self.payload.len());
-            buf.set_len(length + self.payload.len());
-        }
+        buf.extend_from_slice(&self.payload);
 
         return buf;
     }
@@ -437,11 +427,7 @@ impl<'a> TryFrom<&'a [u8]> for Packet {
         let payload_length = buf.len() - index;
         let mut payload = Vec::with_capacity(payload_length);
         if payload_length > 0 {
-            let offset = index as isize;
-            unsafe {
-                ptr::copy(buf.as_ptr().offset(offset), payload.as_mut_ptr(), payload_length);
-                payload.set_len(payload_length);
-            }
+            payload.extend_from_slice(&buf[index..]);
         }
 
         Ok(Packet {
