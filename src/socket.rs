@@ -22,6 +22,7 @@ const MAX_CONGESTION_TIMEOUT: u64 = 60_000; // one minute
 const BASE_HISTORY: usize = 10; // base delays history size
 const MAX_SYN_RETRIES: u32 = 5; // maximum connection retries
 const MAX_RETRANSMISSION_RETRIES: u32 = 5; // maximum retransmission retries
+const WINDOW_SIZE: u32 = 1024 * 1024; // local receive window size
 
 // Maximum time (in microseconds) to wait for incoming packets when the send window is full
 const PRE_SEND_TIMEOUT: u32 = 500_000;
@@ -434,7 +435,7 @@ impl UtpSocket {
 
         // Process packet, including sending a reply if necessary
         if let Some(mut pkt) = try!(self.handle_packet(&packet, src)) {
-                pkt.set_wnd_size(BUF_SIZE as u32);
+                pkt.set_wnd_size(WINDOW_SIZE);
                 try!(self.socket.send_to(&pkt.to_bytes()[..], src));
                 debug!("sent {:?}", pkt);
         }
