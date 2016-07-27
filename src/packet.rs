@@ -74,11 +74,11 @@ impl Error for ParseError {
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum PacketType {
-    Data,
-    Fin,
-    State,
-    Reset,
-    Syn,
+    Data,  // packet carries a data payload
+    Fin,   // signals the end of a connection
+    State, // signals acknowledgment of a packet
+    Reset, // forcibly terminates a connection
+    Syn,   // initiates a new connection with a peer
 }
 
 impl TryFrom<u8> for PacketType {
