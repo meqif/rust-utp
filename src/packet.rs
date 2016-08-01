@@ -3,7 +3,6 @@
 use std::error::Error;
 use std::mem;
 use std::fmt;
-use std::ops::Deref;
 use bit_iterator::BitIterator;
 use std::slice::Iter;
 
@@ -184,11 +183,9 @@ impl PacketHeader {
     }
 }
 
-impl Deref for PacketHeader {
-    type Target = [u8];
-
+impl AsRef<[u8]> for PacketHeader {
     /// Returns the packet header as a slice of bytes.
-    fn deref(&self) -> &[u8] {
+    fn as_ref(&self) -> &[u8] {
         unsafe {
             mem::transmute::<&PacketHeader, &[u8; HEADER_SIZE]>(self)
         }
@@ -332,7 +329,7 @@ impl Encodable for Packet {
         let mut buf: Vec<u8> = Vec::with_capacity(self.len());
 
         // Copy header
-        buf.extend_from_slice(&self.header);
+        buf.extend_from_slice(self.header.as_ref());
 
         // Copy extensions
         let mut extensions = self.extensions.iter().peekable();
