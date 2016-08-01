@@ -83,9 +83,9 @@ impl Write for UtpStream {
     }
 }
 
-impl Into<UtpStream> for UtpSocket {
-    fn into(self) -> UtpStream {
-        UtpStream { socket: self }
+impl From<UtpSocket> for UtpStream {
+    fn from(socket: UtpSocket) -> Self {
+        UtpStream { socket: socket }
     }
 }
 
