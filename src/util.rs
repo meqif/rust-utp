@@ -29,7 +29,7 @@ pub fn abs_diff(a: u32, b: u32) -> u32 {
 
 #[cfg(test)]
 mod test {
-    use super::ewma;
+    use util::ewma;
 
     #[test]
     fn test_ewma_empty_vector() {

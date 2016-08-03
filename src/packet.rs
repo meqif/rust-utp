@@ -485,9 +485,9 @@ fn check_extensions(data: &[u8]) -> Result<(), ParseError> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use super::{PacketHeader, check_extensions};
-    use super::PacketType::{State, Data};
+    use packet::*;
+    use packet::{PacketHeader, check_extensions};
+    use packet::PacketType::{State, Data};
     use quickcheck::{QuickCheck, TestResult};
 
     #[test]

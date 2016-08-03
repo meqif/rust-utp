@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use std::net::{ToSocketAddrs, SocketAddr, UdpSocket};
 use std::io::{Result, Error, ErrorKind};
 use util::{now_microseconds, ewma, abs_diff};
-use packet::{Packet, PacketType, Encodable, TryFrom, ExtensionType, HEADER_SIZE};
+use packet::*;
 use rand::{self, Rng};
 use std::time::{Duration, Instant};
 
@@ -1219,7 +1219,7 @@ mod test {
     use std::thread;
     use std::net::ToSocketAddrs;
     use std::io::ErrorKind;
-    use super::{UtpSocket, UtpListener, SocketState, BUF_SIZE, take_address};
+    use socket::{UtpSocket, UtpListener, SocketState, BUF_SIZE, take_address};
     use packet::{Packet, PacketType, Encodable, TryFrom};
     use util::now_microseconds;
     use rand;
