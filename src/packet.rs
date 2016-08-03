@@ -147,7 +147,6 @@ impl<'a> Extension<'a> {
     }
 }
 
-#[derive(Clone, Copy)]
 struct PacketHeader {
     type_ver: u8, // type: u4, ver: u4
     extension: u8,
@@ -174,6 +173,11 @@ impl PacketHeader {
     /// Returns the packet's version.
     pub fn get_version(&self) -> u8 {
         self.type_ver & 0x0F
+    }
+
+    /// Returns the type of the first extension
+    pub fn get_extension_type(&self) -> ExtensionType {
+        self.extension.into()
     }
 }
 
@@ -272,6 +276,16 @@ impl Packet {
     pub fn get_type(&self) -> PacketType {
         let header: &PacketHeader = unsafe { mem::transmute(self.0.as_ptr()) };
         header.get_type()
+    }
+
+    pub fn get_version(&self) -> u8 {
+        let header: &PacketHeader = unsafe { mem::transmute(self.0.as_ptr()) };
+        header.get_version()
+    }
+
+    pub fn get_extension_type(&self) -> ExtensionType {
+        let header: &PacketHeader = unsafe { mem::transmute(self.0.as_ptr()) };
+        header.get_extension_type()
     }
 
     pub fn extensions(&self) -> ExtensionIterator {
@@ -391,11 +405,10 @@ impl Clone for Packet {
 
 impl fmt::Debug for Packet {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let header = PacketHeader::try_from(&self.0).unwrap();
         f.debug_struct("Packet")
             .field("type", &self.get_type())
-            .field("version", &header.get_version())
-            .field("extension", &header.extension)
+            .field("version", &self.get_version())
+            .field("extension", &self.get_extension_type())
             .field("connection_id", &self.connection_id())
             .field("timestamp_microseconds", &self.timestamp_microseconds())
             .field("timestamp_difference_microseconds", &self.timestamp_difference_microseconds())
@@ -511,9 +524,8 @@ mod tests {
         let packet = Packet::try_from(&buf);
         assert!(packet.is_ok());
         let packet = packet.unwrap();
-        let header = PacketHeader::try_from(&buf).unwrap();
-        assert_eq!(header.get_version(), 1);
-        assert_eq!(header.extension, 0);
+        assert_eq!(packet.get_version(), 1);
+        assert_eq!(packet.get_extension_type(), ExtensionType::None);
         assert_eq!(packet.get_type(), State);
         assert_eq!(packet.connection_id(), 16808);
         assert_eq!(packet.timestamp_microseconds(), 2570047530);
@@ -533,9 +545,8 @@ mod tests {
         let packet = Packet::try_from(&buf);
         assert!(packet.is_ok());
         let packet = packet.unwrap();
-        let header = PacketHeader::try_from(&buf).unwrap();
-        assert_eq!(header.get_version(), 1);
-        assert_eq!(header.extension, 1);
+        assert_eq!(packet.get_version(), 1);
+        assert_eq!(packet.get_extension_type(), ExtensionType::SelectiveAck);
         assert_eq!(packet.get_type(), State);
         assert_eq!(packet.connection_id(), 16807);
         assert_eq!(packet.timestamp_microseconds(), 0);
@@ -580,9 +591,8 @@ mod tests {
                    0x00, 0x04, 0x00, 0x00, 0x00, 0x00];
         match Packet::try_from(&buf) {
             Ok(packet) => {
-                let header = PacketHeader::try_from(&buf).unwrap();
-                assert_eq!(header.get_version(), 1);
-                assert_eq!(header.extension, 1);
+                assert_eq!(packet.get_version(), 1);
+                assert_eq!(packet.get_extension_type(), ExtensionType::SelectiveAck);
                 assert_eq!(packet.get_type(), State);
                 assert_eq!(packet.connection_id(), 16807);
                 assert_eq!(packet.timestamp_microseconds(), 0);
@@ -661,7 +671,6 @@ mod tests {
         packet.set_seq_nr(seq_nr);
         packet.set_ack_nr(ack_nr);
         packet.set_wnd_size(window_size);
-        let header = PacketHeader::try_from(&packet.as_ref()).unwrap();
         let buf = [0x01, 0x00, 0x41, 0xa8, 0x00, 0xe9, 0x03, 0x89,
                    0x65, 0xbf, 0x5d, 0xba, 0x00, 0x10, 0x00, 0x00,
                    0x3a, 0xf2, 0x42, 0xc8, 0x48, 0x65, 0x6c, 0x6c,
@@ -670,8 +679,8 @@ mod tests {
         assert_eq!(packet.len(), buf.len());
         assert_eq!(packet.len(), HEADER_SIZE + payload.len());
         assert_eq!(&packet.payload(), &payload.as_slice());
-        assert_eq!(header.get_version(), 1);
-        assert_eq!(header.extension, 0);
+        assert_eq!(packet.get_version(), 1);
+        assert_eq!(packet.get_extension_type(), ExtensionType::None);
         assert_eq!(packet.get_type(), Data);
         assert_eq!(packet.connection_id(), connection_id);
         assert_eq!(packet.seq_nr(), seq_nr);
@@ -695,7 +704,6 @@ mod tests {
         packet.set_seq_nr(seq_nr);
         packet.set_ack_nr(ack_nr);
         packet.set_wnd_size(window_size);
-        let header = PacketHeader::try_from(packet.as_ref()).unwrap();
         let buf = [0x01, 0x00, 0x41, 0xa8, 0x00, 0xe9, 0x03, 0x89,
                    0x65, 0xbf, 0x5d, 0xba, 0x00, 0x10, 0x00, 0x00,
                    0x3a, 0xf2, 0x42, 0xc8, 0x48, 0x65, 0x6c, 0x6c,
@@ -704,9 +712,9 @@ mod tests {
         assert_eq!(packet.len(), buf.len());
         assert_eq!(packet.len(), HEADER_SIZE + payload.len());
         assert_eq!(&packet.payload(), &payload.as_slice());
-        assert_eq!(header.get_version(), 1);
+        assert_eq!(packet.get_version(), 1);
         assert_eq!(packet.get_type(), Data);
-        assert_eq!(header.extension, 0);
+        assert_eq!(packet.get_extension_type(), ExtensionType::None);
         assert_eq!(packet.connection_id(), connection_id);
         assert_eq!(packet.seq_nr(), seq_nr);
         assert_eq!(packet.ack_nr(), ack_nr);
