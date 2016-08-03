@@ -128,12 +128,12 @@ impl From<ExtensionType> for u8 {
 }
 
 #[derive(Clone)]
-pub struct Extension {
+pub struct Extension<'a> {
     ty: ExtensionType,
-    pub data: Vec<u8>,
+    pub data: &'a [u8],
 }
 
-impl Extension {
+impl<'a> Extension<'a> {
     pub fn len(&self) -> usize {
         self.data.len()
     }
@@ -423,7 +423,7 @@ impl<'a> ExtensionIterator<'a> {
 }
 
 impl<'a> Iterator for ExtensionIterator<'a> {
-    type Item = Extension;
+    type Item = Extension<'a>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.next_extension == ExtensionType::None {
             return None;
@@ -440,7 +440,7 @@ impl<'a> Iterator for ExtensionIterator<'a> {
             if self.next_extension != ExtensionType::None {
                 let extension = Extension {
                     ty: self.next_extension,
-                    data: self.raw_bytes[extension_start..extension_end].to_owned(),
+                    data: &self.raw_bytes[extension_start..extension_end],
                 };
 
                 self.next_extension = self.raw_bytes[self.index].into();
@@ -548,7 +548,7 @@ mod tests {
         let extensions: Vec<Extension> = packet.extensions().collect();
         assert_eq!(extensions.len(), 1);
         assert_eq!(extensions[0].ty, ExtensionType::SelectiveAck);
-        assert_eq!(extensions[0].data, vec!(0, 0, 0, 0));
+        assert_eq!(extensions[0].data, &[0, 0, 0, 0]);
         assert_eq!(extensions[0].len(), extensions[0].data.len());
         assert_eq!(extensions[0].len(), 4);
         // Reversible
@@ -595,7 +595,7 @@ mod tests {
                 let extensions: Vec<Extension> = packet.extensions().collect();
                 assert_eq!(extensions.len(), 2);
                 assert_eq!(extensions[0].ty, ExtensionType::SelectiveAck);
-                assert_eq!(extensions[0].data, vec!(0, 0, 0, 0));
+                assert_eq!(extensions[0].data, &[0, 0, 0, 0]);
                 assert_eq!(extensions[0].len(), extensions[0].data.len());
                 assert_eq!(extensions[0].len(), 4);
             }
@@ -623,12 +623,14 @@ mod tests {
         let mut packet = Packet::new();
         packet.set_sack(vec![1, 2, 3, 4]);
 
-        let extensions: Vec<Extension> = packet.extensions().collect();
-        assert_eq!(extensions.len(), 1);
-        assert_eq!(extensions[0].ty, ExtensionType::SelectiveAck);
-        assert_eq!(extensions[0].data, vec!(1, 2, 3, 4));
-        assert_eq!(extensions[0].len(), extensions[0].data.len());
-        assert_eq!(extensions[0].len(), 4);
+        {
+            let extensions: Vec<Extension> = packet.extensions().collect();
+            assert_eq!(extensions.len(), 1);
+            assert_eq!(extensions[0].ty, ExtensionType::SelectiveAck);
+            assert_eq!(extensions[0].data, &[1, 2, 3, 4]);
+            assert_eq!(extensions[0].len(), extensions[0].data.len());
+            assert_eq!(extensions[0].len(), 4);
+        }
 
         // Add a second sack
         packet.set_sack(vec![5, 6, 7, 8, 9, 10, 11, 12]);
@@ -636,11 +638,11 @@ mod tests {
         let extensions: Vec<Extension> = packet.extensions().collect();
         assert_eq!(extensions.len(), 2);
         assert_eq!(extensions[0].ty, ExtensionType::SelectiveAck);
-        assert_eq!(extensions[0].data, vec!(1, 2, 3, 4));
+        assert_eq!(extensions[0].data, &[1, 2, 3, 4]);
         assert_eq!(extensions[0].len(), extensions[0].data.len());
         assert_eq!(extensions[0].len(), 4);
         assert_eq!(extensions[1].ty, ExtensionType::SelectiveAck);
-        assert_eq!(extensions[1].data, vec!(5, 6, 7, 8, 9, 10, 11, 12));
+        assert_eq!(extensions[1].data, &[5, 6, 7, 8, 9, 10, 11, 12]);
         assert_eq!(extensions[1].len(), extensions[1].data.len());
         assert_eq!(extensions[1].len(), 8);
     }
@@ -767,7 +769,7 @@ mod tests {
         let extensions: Vec<Extension> = packet.extensions().collect();
         assert_eq!(extensions.len(), 1);
         assert_eq!(extensions[0].ty, ExtensionType::SelectiveAck);
-        assert_eq!(extensions[0].data, vec!(0, 0, 0, 0));
+        assert_eq!(extensions[0].data, &[0, 0, 0, 0]);
         assert_eq!(extensions[0].len(), extensions[0].data.len());
         assert_eq!(extensions[0].len(), 4);
 
@@ -780,11 +782,11 @@ mod tests {
         let extensions: Vec<Extension> = packet.extensions().collect();
         assert_eq!(extensions.len(), 2);
         assert_eq!(extensions[0].ty, ExtensionType::SelectiveAck);
-        assert_eq!(extensions[0].data, vec!(1, 2, 3, 4));
+        assert_eq!(extensions[0].data, &[1, 2, 3, 4]);
         assert_eq!(extensions[0].len(), extensions[0].data.len());
         assert_eq!(extensions[0].len(), 4);
         assert_eq!(extensions[1].ty, ExtensionType::Unknown(0xff));
-        assert_eq!(extensions[1].data, vec!(5, 6, 7, 8));
+        assert_eq!(extensions[1].data, &[5, 6, 7, 8]);
         assert_eq!(extensions[1].len(), extensions[1].data.len());
         assert_eq!(extensions[1].len(), 4);
     }
