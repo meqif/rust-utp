@@ -289,7 +289,7 @@ impl UtpSocket {
 
             // Send packet
             debug!("Connecting to {}", socket.connected_to);
-            try!(socket.socket.send_to(&packet.to_bytes()[..], socket.connected_to));
+            try!(socket.socket.send_to(packet.as_ref(), socket.connected_to));
             socket.state = SocketState::SynSent;
             debug!("sent {:?}", packet);
 
@@ -341,7 +341,7 @@ impl UtpSocket {
         packet.set_type(PacketType::Fin);
 
         // Send FIN
-        try!(self.socket.send_to(&packet.to_bytes()[..], self.connected_to));
+        try!(self.socket.send_to(packet.as_ref(), self.connected_to));
         debug!("sent {:?}", packet);
         self.state = SocketState::FinSent;
 
@@ -436,7 +436,7 @@ impl UtpSocket {
         // Process packet, including sending a reply if necessary
         if let Some(mut pkt) = try!(self.handle_packet(&packet, src)) {
                 pkt.set_wnd_size(WINDOW_SIZE);
-                try!(self.socket.send_to(&pkt.to_bytes()[..], src));
+                try!(self.socket.send_to(pkt.as_ref(), src));
                 debug!("sent {:?}", pkt);
         }
 
@@ -481,7 +481,7 @@ impl UtpSocket {
                 packet.set_type(PacketType::Fin);
 
                 // Send FIN
-                try!(self.socket.send_to(&packet.to_bytes()[..], self.connected_to));
+                try!(self.socket.send_to(packet.as_ref(), self.connected_to));
                 debug!("resent FIN: {:?}", packet);
             } else if self.state != SocketState::New {
                 // The socket is waiting for incoming packets but the remote peer is silent:
@@ -494,7 +494,7 @@ impl UtpSocket {
             // peer: resend the first unacknowledged packet with the current timestamp.
             let mut packet = &mut self.send_window[0];
             packet.set_timestamp_microseconds(now_microseconds());
-            try!(self.socket.send_to(&packet.to_bytes()[..], self.connected_to));
+            try!(self.socket.send_to(packet.as_ref(), self.connected_to));
             debug!("resent {:?}", packet);
         }
 
@@ -562,12 +562,12 @@ impl UtpSocket {
             (self.ack_nr == self.incoming_buffer[0].seq_nr() ||
              self.ack_nr + 1 == self.incoming_buffer[0].seq_nr())
         {
-            let flushed = unsafe_copy(&self.incoming_buffer[0].payload[..], buf);
+            let flushed = unsafe_copy(&self.incoming_buffer[0].payload()[..], buf);
 
-            if flushed == self.incoming_buffer[0].payload.len() {
+            if flushed == self.incoming_buffer[0].payload().len() {
                 self.advance_incoming_buffer();
             } else {
-                self.pending_data = self.incoming_buffer[0].payload[flushed..].to_vec();
+                self.pending_data = self.incoming_buffer[0].payload()[flushed..].to_vec();
             }
 
             return flushed;
@@ -666,7 +666,7 @@ impl UtpSocket {
 
         packet.set_timestamp_microseconds(now_microseconds());
         packet.set_timestamp_difference_microseconds(self.their_delay);
-        try!(self.socket.send_to(&packet.to_bytes()[..], self.connected_to));
+        try!(self.socket.send_to(packet.as_ref(), self.connected_to));
         debug!("sent {:?}", packet);
 
         Ok(())
@@ -775,7 +775,7 @@ impl UtpSocket {
             packet.set_connection_id(self.sender_connection_id);
             packet.set_seq_nr(self.seq_nr);
             packet.set_ack_nr(self.ack_nr);
-            let _ = self.socket.send_to(&packet.to_bytes()[..], self.connected_to);
+            let _ = self.socket.send_to(packet.as_ref(), self.connected_to);
         }
     }
 
@@ -1180,7 +1180,7 @@ impl UtpListener {
 
                 // Establish connection with remote peer
                 match socket.handle_packet(&packet, src) {
-                    Ok(Some(reply)) => { try!(socket.socket.send_to(&reply.to_bytes()[..], src)) },
+                    Ok(Some(reply)) => { try!(socket.socket.send_to(reply.as_ref(), src)) },
                     Ok(None) => return Err(Error::from(SocketError::InvalidPacket)),
                     Err(e) => return Err(e)
                 };
@@ -1220,7 +1220,7 @@ mod test {
     use std::net::ToSocketAddrs;
     use std::io::ErrorKind;
     use socket::{UtpSocket, UtpListener, SocketState, BUF_SIZE, take_address};
-    use packet::{Packet, PacketType, Encodable, TryFrom};
+    use packet::*;
     use util::now_microseconds;
     use rand;
 
@@ -1428,7 +1428,7 @@ mod test {
         assert_eq!(response.ack_nr(), packet.seq_nr());
 
         // No payload?
-        assert!(response.payload.is_empty());
+        assert!(response.payload().is_empty());
         //}
 
         // ---------------------------------
@@ -1461,7 +1461,7 @@ mod test {
         assert_eq!(response.ack_nr(), packet.seq_nr());
 
         // Responses with no payload should not increase the sequence number
-        assert!(response.payload.is_empty());
+        assert!(response.payload().is_empty());
         assert_eq!(response.seq_nr(), old_response.seq_nr());
         // }
 
@@ -1614,22 +1614,18 @@ mod test {
         let mut window: Vec<Packet> = Vec::new();
 
         // Now, send a keepalive packet
-        let mut packet = Packet::new();
+        let mut packet = Packet::with_payload(&[1, 2, 3]);
         packet.set_wnd_size(BUF_SIZE as u32);
-        packet.set_type(PacketType::Data);
         packet.set_connection_id(initial_connection_id);
         packet.set_seq_nr(old_packet.seq_nr() + 1);
         packet.set_ack_nr(old_response.seq_nr());
-        packet.payload = vec!(1, 2, 3);
         window.push(packet);
 
-        let mut packet = Packet::new();
+        let mut packet = Packet::with_payload(&[4, 5, 6]);
         packet.set_wnd_size(BUF_SIZE as u32);
-        packet.set_type(PacketType::Data);
         packet.set_connection_id(initial_connection_id);
         packet.set_seq_nr(old_packet.seq_nr() + 2);
         packet.set_ack_nr(old_response.seq_nr());
-        packet.payload = vec!(4, 5, 6);
         window.push(packet);
 
         // Send packets in reverse order
@@ -1666,13 +1662,11 @@ mod test {
             let mut window: Vec<Packet> = Vec::new();
 
             for data in (1..13u8).collect::<Vec<u8>>()[..].chunks(3) {
-                let mut packet = Packet::new();
+                let mut packet = Packet::with_payload(&data);
                 packet.set_wnd_size(BUF_SIZE as u32);
-                packet.set_type(PacketType::Data);
                 packet.set_connection_id(client.sender_connection_id);
                 packet.set_seq_nr(client.seq_nr);
                 packet.set_ack_nr(client.ack_nr);
-                packet.payload = data.to_vec();
                 window.push(packet.clone());
                 client.send_window.push(packet.clone());
                 client.seq_nr += 1;
@@ -1688,11 +1682,11 @@ mod test {
             window.push(packet);
             client.seq_nr += 1;
 
-            iotry!(s.send_to(&window[3].to_bytes()[..], server_addr));
-            iotry!(s.send_to(&window[2].to_bytes()[..], server_addr));
-            iotry!(s.send_to(&window[1].to_bytes()[..], server_addr));
-            iotry!(s.send_to(&window[0].to_bytes()[..], server_addr));
-            iotry!(s.send_to(&window[4].to_bytes()[..], server_addr));
+            iotry!(s.send_to(window[3].as_ref(), server_addr));
+            iotry!(s.send_to(window[2].as_ref(), server_addr));
+            iotry!(s.send_to(window[1].as_ref(), server_addr));
+            iotry!(s.send_to(window[0].as_ref(), server_addr));
+            iotry!(s.send_to(window[4].as_ref(), server_addr));
 
             for _ in 0..2 {
                 let mut buf = [0; BUF_SIZE];
@@ -1747,8 +1741,8 @@ mod test {
             Err(e) => panic!("{}", e),
         };
         assert_eq!(data_packet.get_type(), PacketType::Data);
-        assert_eq!(data_packet.payload, data);
-        assert_eq!(data_packet.payload.len(), data.len());
+        assert_eq!(&data_packet.payload(), &data.as_slice());
+        assert_eq!(data_packet.payload().len(), data.len());
 
         // Send triple ACK
         let mut packet = Packet::new();
@@ -1759,7 +1753,7 @@ mod test {
         packet.set_connection_id(server.sender_connection_id);
 
         for _ in 0..3 {
-            iotry!(server.socket.send_to(&packet.to_bytes()[..], server.connected_to));
+            iotry!(server.socket.send_to(packet.as_ref(), server.connected_to));
         }
 
         // Receive data again and check that it's the same we reported as missing
@@ -1770,13 +1764,13 @@ mod test {
                 let packet = iotry!(Packet::try_from(&buf[..read]));
                 assert_eq!(packet.get_type(), PacketType::Data);
                 assert_eq!(packet.seq_nr(), data_packet.seq_nr());
-                assert_eq!(packet.payload, data_packet.payload);
+                assert_eq!(packet.payload(), data_packet.payload());
                 let response = server.handle_packet(&packet, client_addr);
                 assert!(response.is_ok());
                 let response = response.unwrap();
                 assert!(response.is_some());
                 let response = response.unwrap();
-                iotry!(server.socket.send_to(&response.to_bytes()[..], server.connected_to));
+                iotry!(server.socket.send_to(response.as_ref(), server.connected_to));
             },
             Err(e) => panic!("{}", e),
         }
@@ -1898,18 +1892,16 @@ mod test {
             let mut client = iotry!(UtpSocket::connect(server_addr));
             assert_eq!(client.state, SocketState::Connected);
 
-            let mut packet = Packet::new();
+            let mut packet = Packet::with_payload(&[1, 2, 3]);
             packet.set_wnd_size(BUF_SIZE as u32);
-            packet.set_type(PacketType::Data);
             packet.set_connection_id(client.sender_connection_id);
             packet.set_seq_nr(client.seq_nr);
             packet.set_ack_nr(client.ack_nr);
-            packet.payload = vec!(1, 2, 3);
 
             // Send two copies of the packet, with different timestamps
             for _ in 0..2 {
                 packet.set_timestamp_microseconds(now_microseconds());
-                iotry!(client.socket.send_to(&packet.to_bytes()[..], server_addr));
+                iotry!(client.socket.send_to(packet.as_ref(), server_addr));
             }
             client.seq_nr += 1;
 
@@ -1985,7 +1977,7 @@ mod test {
     //     packet.set_sack(vec!(12, 0, 0, 0));
 
     //     // Send SACK
-    //     iotry!(server.socket.send_to(&packet.to_bytes()[..], server.connected_to.clone()));
+    //     iotry!(server.socket.send_to(packet.as_ref(), server.connected_to.clone()));
 
     //     // Expect to receive "missing" packets
     //     let mut received: Vec<u8> = vec!();
@@ -2017,16 +2009,14 @@ mod test {
             let chunks = to_send[..].chunks(BUF_SIZE);
             let dst = client.connected_to;
             for (index, chunk) in chunks.enumerate() {
-                let mut packet = Packet::new();
+                let mut packet = Packet::with_payload(chunk);
                 packet.set_seq_nr(client.seq_nr);
                 packet.set_ack_nr(client.ack_nr);
                 packet.set_connection_id(client.sender_connection_id);
                 packet.set_timestamp_microseconds(now_microseconds());
-                packet.payload = chunk.to_vec();
-                packet.set_type(PacketType::Data);
 
                 if index % 2 == 0 {
-                    iotry!(client.socket.send_to(&packet.to_bytes()[..], dst));
+                    iotry!(client.socket.send_to(packet.as_ref(), dst));
                 }
 
                 client.curr_window += packet.len() as u32;
@@ -2167,7 +2157,7 @@ mod test {
 
             match server.recv_from(&mut buf) {
                 Ok((_len, client_addr)) => {
-                    iotry!(server.send_to(&packet.to_bytes()[..], client_addr));
+                    iotry!(server.send_to(packet.as_ref(), client_addr));
                 },
                 _ => panic!()
             }
@@ -2206,7 +2196,7 @@ mod test {
         packet.set_connection_id(client.sender_connection_id);
         packet.set_seq_nr(client.seq_nr);
         packet.set_ack_nr(client.ack_nr);
-        iotry!(client.socket.send_to(&packet.to_bytes()[..], server_addr));
+        iotry!(client.socket.send_to(packet.as_ref(), server_addr));
         let mut buf = [0; BUF_SIZE];
         match client.socket.recv_from(&mut buf) {
             Ok((len, _src)) => {
@@ -2234,7 +2224,7 @@ mod test {
             packet.set_connection_id(client.sender_connection_id);
             packet.set_seq_nr(client.seq_nr);
             packet.set_ack_nr(client.ack_nr);
-            iotry!(client.socket.send_to(&packet.to_bytes()[..], server_addr));
+            iotry!(client.socket.send_to(packet.as_ref(), server_addr));
             let mut buf = [0; BUF_SIZE];
             match client.socket.recv_from(&mut buf) {
                 Ok((_len, _src)) => (),
@@ -2282,7 +2272,7 @@ mod test {
         packet.set_ack_nr(server.ack_nr);
         packet.set_timestamp_microseconds(now_microseconds());
         packet.set_type(PacketType::Fin);
-        iotry!(server.socket.send_to(&packet.to_bytes()[..], client_addr));
+        iotry!(server.socket.send_to(packet.as_ref(), client_addr));
 
         // Receive until end
         let mut received: Vec<u8> = vec!();

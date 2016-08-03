@@ -7,7 +7,7 @@ extern crate quickcheck;
 #[path = "../src/bit_iterator.rs"] mod bit_iterator;
 #[path = "../src/packet.rs"] mod packet;
 use test::Bencher;
-use packet::{Packet, Encodable, TryFrom};
+use packet::{Packet, TryFrom};
 
 #[bench]
 fn bench_decode(b: &mut Bencher) {
@@ -19,9 +19,6 @@ fn bench_decode(b: &mut Bencher) {
 
 #[bench]
 fn bench_encode(b: &mut Bencher) {
-    let payload = [1, 2, 3, 4, 5, 6];
-    let mut packet = Packet::new();
-    packet.payload = payload.to_vec();
-
-    b.iter(|| { let _ = test::black_box(packet.to_bytes()); });
+    let packet = Packet::with_payload(&[1, 2, 3, 4, 5, 6]);
+    b.iter(|| { let _ = test::black_box(packet.as_ref()); });
 }

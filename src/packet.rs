@@ -4,7 +4,6 @@ use std::error::Error;
 use std::mem;
 use std::fmt;
 use bit_iterator::BitIterator;
-use std::slice::Iter;
 
 pub const HEADER_SIZE: usize = 20;
 
@@ -17,7 +16,8 @@ macro_rules! u8_to_unsigned_be {
 macro_rules! make_getter {
     ($name:ident, $t:ty, $m:ident) => {
         pub fn $name(&self) -> $t {
-            $m::from_be(self.header.$name)
+            let header: &PacketHeader = unsafe { mem::transmute(self.0.as_ptr()) };
+            $m::from_be(header.$name)
         }
     }
 }
@@ -25,7 +25,8 @@ macro_rules! make_getter {
 macro_rules! make_setter {
     ($fn_name:ident, $field:ident, $t: ty) => {
         pub fn $fn_name(&mut self, new: $t) {
-            self.header.$field = new.to_be();
+            let mut header: &mut PacketHeader = unsafe { mem::transmute(self.0.as_ptr()) };
+            header.$field = new.to_be();
         }
     }
 }
@@ -36,13 +37,6 @@ macro_rules! make_setter {
 pub trait TryFrom<T>: Sized {
     type Err;
     fn try_from(T) -> Result<Self, Self::Err>;
-}
-
-/// A trait for objects that can be represented as a vector of bytes.
-pub trait Encodable {
-    /// Returns a vector of bytes representing the data structure in a way that can be sent over the
-    /// network.
-    fn to_bytes(&self) -> Vec<u8>;
 }
 
 #[derive(Debug)]
@@ -241,49 +235,65 @@ impl Default for PacketHeader {
     }
 }
 
-pub struct Packet {
-    header: PacketHeader,
-    extensions: Vec<Extension>,
-    pub payload: Vec<u8>,
+pub struct Packet(Vec<u8>);
+
+impl AsRef<[u8]> for Packet {
+    fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
+    }
 }
 
 impl Packet {
     /// Constructs a new, empty packet.
     pub fn new() -> Packet {
-        Packet {
-            header: PacketHeader::default(),
-            extensions: Vec::new(),
-            payload: Vec::new(),
-        }
+        Packet(PacketHeader::default().as_ref().to_owned())
     }
 
     /// Constructs a new data packet with the given payload.
     pub fn with_payload(payload: &[u8]) -> Packet {
+        let mut inner = Vec::with_capacity(HEADER_SIZE + payload.len());
         let mut header = PacketHeader::default();
         header.set_type(PacketType::Data);
+        // inner.copy_from_slice(header.as_ref());
+        // inner.copy_from_slice(payload);
+        inner.extend_from_slice(header.as_ref());
+        inner.extend_from_slice(payload);
 
-        let mut p = vec![0; payload.len()];
-        p.copy_from_slice(payload);
-
-        Packet {
-            header: header,
-            extensions: Vec::new(),
-            payload: p,
-        }
+        Packet(inner)
     }
 
     #[inline]
     pub fn set_type(&mut self, t: PacketType) {
-        self.header.set_type(t);
+        let mut header: &mut PacketHeader = unsafe { mem::transmute(self.0.as_ptr()) };
+        header.set_type(t);
     }
 
     #[inline]
     pub fn get_type(&self) -> PacketType {
-        self.header.get_type()
+        let header: &PacketHeader = unsafe { mem::transmute(self.0.as_ptr()) };
+        header.get_type()
     }
 
-    pub fn extensions(&self) -> Iter<Extension> {
-        self.extensions.iter()
+    pub fn extensions(&self) -> ExtensionIterator {
+        ExtensionIterator::new(&self)
+    }
+
+    pub fn payload(&self) -> &[u8] {
+        let mut index = HEADER_SIZE;
+        let mut extension_type = ExtensionType::from(self.0[1]);
+
+        // Consume known extensions and skip over unknown ones
+        while index < self.0.len() && extension_type != ExtensionType::None {
+            let len = self.0[index + 1] as usize;
+
+            // Assume extension is valid because the bytes come from a (valid) Packet
+            // ...
+
+            extension_type = ExtensionType::from(self.0[index]);
+            index += len + 2;
+        }
+
+        &self.0[index..]
     }
 
     make_getter!(seq_nr, u16, u16);
@@ -310,43 +320,51 @@ impl Packet {
         assert!(bv.len() >= 4);
         assert_eq!(bv.len() % 4, 0);
 
-        let extension = Extension {
-            ty: ExtensionType::SelectiveAck,
-            data: bv,
-        };
-        self.extensions.push(extension);
-        self.header.extension |= u8::from(ExtensionType::SelectiveAck);
+        let mut index = HEADER_SIZE;
+        let mut extension_type = ExtensionType::from(self.0[1]);
+
+        // Set extension type in header if none is used, otherwise find and update the
+        // "next extension type" marker in the last extension before payload
+        if extension_type == ExtensionType::None {
+            self.0[1] = ExtensionType::SelectiveAck.into();
+        } else {
+            // Skip over all extensions until last, then modify its "next extension type" field and
+            // add the new extension after it.
+
+            // Consume known extensions and skip over unknown ones
+            while index < self.0.len() && extension_type != ExtensionType::None {
+                let len = self.0[index + 1] as usize;
+                // No validity checks needed
+                // ...
+
+                extension_type = ExtensionType::from(self.0[index]);
+
+                // Arrived at last extension
+                if extension_type == ExtensionType::None {
+                    // Mark existence of an additional extension
+                    self.0[index] = ExtensionType::SelectiveAck.into();
+                }
+                index += len + 2;
+            }
+        }
+
+        // Insert the new extension into the packet's data.
+        // The way this is currently done is potentially slower than the alternative of resizing the
+        // underlying Vec, moving the payload forward and then writing the extension in the "new"
+        // place before the payload.
+
+        // Set the type of the following (non-existent) extension
+        self.0.insert(index, ExtensionType::None.into());
+        // Set this extension's length
+        self.0.insert(index + 1, bv.len() as u8);
+        // Write this extension's data
+        for i in 0..bv.len() {
+            self.0.insert(index + 2 + i, bv[i]);
+        }
     }
 
     pub fn len(&self) -> usize {
-        let ext_len = self.extensions.iter().fold(0, |acc, ext| acc + ext.len() + 2);
-        HEADER_SIZE + self.payload.len() + ext_len
-    }
-}
-
-impl Encodable for Packet {
-    fn to_bytes(&self) -> Vec<u8> {
-        let mut buf: Vec<u8> = Vec::with_capacity(self.len());
-
-        // Copy header
-        buf.extend_from_slice(self.header.as_ref());
-
-        // Copy extensions
-        let mut extensions = self.extensions.iter().peekable();
-        while let Some(extension) = extensions.next() {
-            // Extensions are a linked list in which each entry contains:
-            // - a byte with the type of the next extension or 0 to end the list,
-            // - a byte with the length in bytes of this extension,
-            // - the content of this extension.
-            buf.push(extensions.peek().map_or(0, |next| u8::from(next.ty)));
-            buf.push(extension.len() as u8);
-            buf.extend_from_slice(&extension.data);
-        }
-
-        // Copy payload
-        buf.extend_from_slice(&self.payload);
-
-        return buf;
+        self.0.len()
     }
 }
 
@@ -359,79 +377,25 @@ impl<'a> TryFrom<&'a [u8]> for Packet {
     /// all except the initial 20 bytes corresponding to the header as payload.
     /// It's the caller's responsibility to use an appropriately sized buffer.
     fn try_from(buf: &[u8]) -> Result<Self, Self::Err> {
-        let header = try!(PacketHeader::try_from(buf));
-
-        let mut extensions = Vec::new();
-        let mut index = HEADER_SIZE;
-        let mut extension_type = ExtensionType::from(header.extension);
-
-        if buf.len() == HEADER_SIZE && extension_type != ExtensionType::None {
-            return Err(ParseError::InvalidExtensionLength);
-        }
-
-        // Consume known extensions and skip over unknown ones
-        while index < buf.len() && extension_type != ExtensionType::None {
-            if buf.len() < index + 2 {
-                return Err(ParseError::InvalidPacketLength);
-            }
-            let len = buf[index + 1] as usize;
-            let extension_start = index + 2;
-            let payload_start = extension_start + len;
-
-            // Check validity of extension length:
-            // - non-zero,
-            // - multiple of 4,
-            // - does not exceed packet length
-            if len == 0 || len % 4 != 0 || payload_start > buf.len() {
-                return Err(ParseError::InvalidExtensionLength);
-            }
-
-            if extension_type != ExtensionType::None {
-                let extension = Extension {
-                    ty: extension_type,
-                    data: buf[extension_start..payload_start].to_vec(),
-                };
-                extensions.push(extension);
-            }
-
-            extension_type = ExtensionType::from(buf[index]);
-            index += len + 2;
-        }
-        // Check for pending extensions (early exit of previous loop)
-        if extension_type != ExtensionType::None {
-            return Err(ParseError::InvalidPacketLength);
-        }
-
-        let payload_length = buf.len() - index;
-        let mut payload = Vec::with_capacity(payload_length);
-        if payload_length > 0 {
-            payload.extend_from_slice(&buf[index..]);
-        }
-
-        Ok(Packet {
-            header: header,
-            extensions: extensions,
-            payload: payload,
-        })
+        PacketHeader::try_from(buf)
+            .and(check_extensions(&buf))
+            .and(Ok(Packet(buf.to_owned())))
     }
 }
 
 impl Clone for Packet {
     fn clone(&self) -> Packet {
-        Packet {
-            header: self.header,
-            extensions: self.extensions.clone(),
-            payload: self.payload.clone(),
-        }
+        Packet(self.0.clone())
     }
 }
 
 impl fmt::Debug for Packet {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let header = PacketHeader::try_from(&self.0).unwrap();
         f.debug_struct("Packet")
             .field("type", &self.get_type())
-            .field("version", &self.header.get_version())
-            .field("extension", &self.header.extension)
+            .field("version", &header.get_version())
+            .field("extension", &header.extension)
             .field("connection_id", &self.connection_id())
             .field("timestamp_microseconds", &self.timestamp_microseconds())
             .field("timestamp_difference_microseconds", &self.timestamp_difference_microseconds())
@@ -439,6 +403,56 @@ impl fmt::Debug for Packet {
             .field("seq_nr", &self.seq_nr())
             .field("ack_nr", &self.ack_nr())
             .finish()
+    }
+}
+
+pub struct ExtensionIterator<'a> {
+    raw_bytes: &'a [u8],
+    next_extension: ExtensionType,
+    index: usize,
+}
+
+impl<'a> ExtensionIterator<'a> {
+    fn new(packet: &'a Packet) -> Self {
+        ExtensionIterator {
+            raw_bytes: packet.as_ref(),
+            next_extension: ExtensionType::from(packet.as_ref()[1]),
+            index: HEADER_SIZE,
+        }
+    }
+}
+
+impl<'a> Iterator for ExtensionIterator<'a> {
+    type Item = Extension;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.next_extension == ExtensionType::None {
+            return None;
+        }
+
+        if self.index < self.raw_bytes.len() && self.next_extension != ExtensionType::None {
+            let len = self.raw_bytes[self.index + 1] as usize;
+            let extension_start = self.index + 2;
+            let extension_end = extension_start + len;
+
+            // Assume extension is valid because the bytes come from a (valid) Packet
+            // ...
+
+            if self.next_extension != ExtensionType::None {
+                let extension = Extension {
+                    ty: self.next_extension,
+                    data: self.raw_bytes[extension_start..extension_end].to_owned(),
+                };
+
+                self.next_extension = self.raw_bytes[self.index].into();
+                self.index += len + 2;
+
+                return Some(extension);
+            }
+
+            return None;
+        }
+
+        None
     }
 }
 
@@ -462,13 +476,13 @@ fn check_extensions(data: &[u8]) -> Result<(), ParseError> {
         }
         let len = data[index + 1] as usize;
         let extension_start = index + 2;
-        let payload_start = extension_start + len;
+        let extension_end = extension_start + len;
 
         // Check validity of extension length:
         // - non-zero,
         // - multiple of 4,
         // - does not exceed packet length
-        if len == 0 || len % 4 != 0 || payload_start > data.len() {
+        if len == 0 || len % 4 != 0 || extension_end > data.len() {
             return Err(ParseError::InvalidExtensionLength);
         }
 
@@ -494,20 +508,21 @@ mod tests {
     fn test_packet_decode() {
         let buf = [0x21, 0x00, 0x41, 0xa8, 0x99, 0x2f, 0xd0, 0x2a, 0x9f, 0x4a,
                    0x26, 0x21, 0x00, 0x10, 0x00, 0x00, 0x3a, 0xf2, 0x6c, 0x79];
-        let pkt = Packet::try_from(&buf);
-        assert!(pkt.is_ok());
-        let pkt = pkt.unwrap();
-        assert_eq!(pkt.header.get_version(), 1);
-        assert_eq!(pkt.header.get_type(), State);
-        assert_eq!(pkt.header.extension, 0);
-        assert_eq!(pkt.connection_id(), 16808);
-        assert_eq!(pkt.timestamp_microseconds(), 2570047530);
-        assert_eq!(pkt.timestamp_difference_microseconds(), 2672436769);
-        assert_eq!(pkt.wnd_size(), 2u32.pow(20));
-        assert_eq!(pkt.seq_nr(), 15090);
-        assert_eq!(pkt.ack_nr(), 27769);
-        assert_eq!(pkt.len(), buf.len());
-        assert!(pkt.payload.is_empty());
+        let packet = Packet::try_from(&buf);
+        assert!(packet.is_ok());
+        let packet = packet.unwrap();
+        let header = PacketHeader::try_from(&buf).unwrap();
+        assert_eq!(header.get_version(), 1);
+        assert_eq!(header.extension, 0);
+        assert_eq!(packet.get_type(), State);
+        assert_eq!(packet.connection_id(), 16808);
+        assert_eq!(packet.timestamp_microseconds(), 2570047530);
+        assert_eq!(packet.timestamp_difference_microseconds(), 2672436769);
+        assert_eq!(packet.wnd_size(), 2u32.pow(20));
+        assert_eq!(packet.seq_nr(), 15090);
+        assert_eq!(packet.ack_nr(), 27769);
+        assert_eq!(packet.len(), buf.len());
+        assert!(packet.payload().is_empty());
     }
 
     #[test]
@@ -518,9 +533,10 @@ mod tests {
         let packet = Packet::try_from(&buf);
         assert!(packet.is_ok());
         let packet = packet.unwrap();
-        assert_eq!(packet.header.get_version(), 1);
-        assert_eq!(packet.header.get_type(), State);
-        assert_eq!(packet.header.extension, 1);
+        let header = PacketHeader::try_from(&buf).unwrap();
+        assert_eq!(header.get_version(), 1);
+        assert_eq!(header.extension, 1);
+        assert_eq!(packet.get_type(), State);
         assert_eq!(packet.connection_id(), 16807);
         assert_eq!(packet.timestamp_microseconds(), 0);
         assert_eq!(packet.timestamp_difference_microseconds(), 0);
@@ -528,22 +544,23 @@ mod tests {
         assert_eq!(packet.seq_nr(), 43859);
         assert_eq!(packet.ack_nr(), 15093);
         assert_eq!(packet.len(), buf.len());
-        assert!(packet.payload.is_empty());
-        assert_eq!(packet.extensions.len(), 1);
-        assert_eq!(packet.extensions[0].ty, ExtensionType::SelectiveAck);
-        assert_eq!(packet.extensions[0].data, vec!(0, 0, 0, 0));
-        assert_eq!(packet.extensions[0].len(), packet.extensions[0].data.len());
-        assert_eq!(packet.extensions[0].len(), 4);
+        assert!(packet.payload().is_empty());
+        let extensions: Vec<Extension> = packet.extensions().collect();
+        assert_eq!(extensions.len(), 1);
+        assert_eq!(extensions[0].ty, ExtensionType::SelectiveAck);
+        assert_eq!(extensions[0].data, vec!(0, 0, 0, 0));
+        assert_eq!(extensions[0].len(), extensions[0].data.len());
+        assert_eq!(extensions[0].len(), 4);
         // Reversible
-        assert_eq!(packet.to_bytes(), &buf);
+        assert_eq!(packet.as_ref(), &buf);
     }
 
     #[test]
     fn test_packet_decode_with_missing_extension() {
         let buf = [0x21, 0x01, 0x41, 0xa8, 0x99, 0x2f, 0xd0, 0x2a, 0x9f, 0x4a,
                    0x26, 0x21, 0x00, 0x10, 0x00, 0x00, 0x3a, 0xf2, 0x6c, 0x79];
-        let pkt = Packet::try_from(&buf);
-        assert!(pkt.is_err());
+        let packet = Packet::try_from(&buf);
+        assert!(packet.is_err());
     }
 
     #[test]
@@ -551,8 +568,8 @@ mod tests {
         let buf = [0x21, 0x01, 0x41, 0xa8, 0x99, 0x2f, 0xd0, 0x2a, 0x9f, 0x4a,
                    0x26, 0x21, 0x00, 0x10, 0x00, 0x00, 0x3a, 0xf2, 0x6c, 0x79,
                    0x00, 0x04, 0x00];
-        let pkt = Packet::try_from(&buf);
-        assert!(pkt.is_err());
+        let packet = Packet::try_from(&buf);
+        assert!(packet.is_err());
     }
 
     #[test]
@@ -563,25 +580,69 @@ mod tests {
                    0x00, 0x04, 0x00, 0x00, 0x00, 0x00];
         match Packet::try_from(&buf) {
             Ok(packet) => {
-                assert_eq!(packet.header.get_version(), 1);
-                assert_eq!(packet.header.get_type(), State);
-                assert_eq!(packet.header.extension, 1);
+                let header = PacketHeader::try_from(&buf).unwrap();
+                assert_eq!(header.get_version(), 1);
+                assert_eq!(header.extension, 1);
+                assert_eq!(packet.get_type(), State);
                 assert_eq!(packet.connection_id(), 16807);
                 assert_eq!(packet.timestamp_microseconds(), 0);
                 assert_eq!(packet.timestamp_difference_microseconds(), 0);
                 assert_eq!(packet.wnd_size(), 1500);
                 assert_eq!(packet.seq_nr(), 43859);
                 assert_eq!(packet.ack_nr(), 15093);
-                assert!(packet.payload.is_empty());
+                assert!(packet.payload().is_empty());
                 // The invalid extension is discarded
-                assert_eq!(packet.extensions.len(), 2);
-                assert_eq!(packet.extensions[0].ty, ExtensionType::SelectiveAck);
-                assert_eq!(packet.extensions[0].data, vec!(0, 0, 0, 0));
-                assert_eq!(packet.extensions[0].len(), packet.extensions[0].data.len());
-                assert_eq!(packet.extensions[0].len(), 4);
+                let extensions: Vec<Extension> = packet.extensions().collect();
+                assert_eq!(extensions.len(), 2);
+                assert_eq!(extensions[0].ty, ExtensionType::SelectiveAck);
+                assert_eq!(extensions[0].data, vec!(0, 0, 0, 0));
+                assert_eq!(extensions[0].len(), extensions[0].data.len());
+                assert_eq!(extensions[0].len(), 4);
             }
             Err(ref e) => panic!("{}", e)
         }
+    }
+
+    #[test]
+    fn test_packet_set_type() {
+        let mut packet = Packet::new();
+        packet.set_type(PacketType::Syn);
+        assert_eq!(packet.get_type(), PacketType::Syn);
+        packet.set_type(PacketType::State);
+        assert_eq!(packet.get_type(), PacketType::State);
+        packet.set_type(PacketType::Fin);
+        assert_eq!(packet.get_type(), PacketType::Fin);
+        packet.set_type(PacketType::Reset);
+        assert_eq!(packet.get_type(), PacketType::Reset);
+        packet.set_type(PacketType::Data);
+        assert_eq!(packet.get_type(), PacketType::Data);
+    }
+
+    #[test]
+    fn test_packet_set_selective_acknowledgment() {
+        let mut packet = Packet::new();
+        packet.set_sack(vec![1, 2, 3, 4]);
+
+        let extensions: Vec<Extension> = packet.extensions().collect();
+        assert_eq!(extensions.len(), 1);
+        assert_eq!(extensions[0].ty, ExtensionType::SelectiveAck);
+        assert_eq!(extensions[0].data, vec!(1, 2, 3, 4));
+        assert_eq!(extensions[0].len(), extensions[0].data.len());
+        assert_eq!(extensions[0].len(), 4);
+
+        // Add a second sack
+        packet.set_sack(vec![5, 6, 7, 8, 9, 10, 11, 12]);
+
+        let extensions: Vec<Extension> = packet.extensions().collect();
+        assert_eq!(extensions.len(), 2);
+        assert_eq!(extensions[0].ty, ExtensionType::SelectiveAck);
+        assert_eq!(extensions[0].data, vec!(1, 2, 3, 4));
+        assert_eq!(extensions[0].len(), extensions[0].data.len());
+        assert_eq!(extensions[0].len(), 4);
+        assert_eq!(extensions[1].ty, ExtensionType::SelectiveAck);
+        assert_eq!(extensions[1].data, vec!(5, 6, 7, 8, 9, 10, 11, 12));
+        assert_eq!(extensions[1].len(), extensions[1].data.len());
+        assert_eq!(extensions[1].len(), 8);
     }
 
     #[test]
@@ -590,34 +651,33 @@ mod tests {
         let (timestamp, timestamp_diff): (u32, u32) = (15270793, 1707040186);
         let (connection_id, seq_nr, ack_nr): (u16, u16, u16) = (16808, 15090, 17096);
         let window_size: u32 = 1048576;
-        let mut pkt = Packet::new();
-        pkt.set_type(Data);
-        pkt.header.timestamp_microseconds = timestamp.to_be();
-        pkt.header.timestamp_difference_microseconds = timestamp_diff.to_be();
-        pkt.header.connection_id = connection_id.to_be();
-        pkt.header.seq_nr = seq_nr.to_be();
-        pkt.header.ack_nr = ack_nr.to_be();
-        pkt.header.wnd_size = window_size.to_be();
-        pkt.payload = payload.clone();
-        let header = pkt.header;
+        let mut packet = Packet::with_payload(&payload[..]);
+        packet.set_type(Data);
+        packet.set_timestamp_microseconds(timestamp);
+        packet.set_timestamp_difference_microseconds(timestamp_diff);
+        packet.set_connection_id(connection_id);
+        packet.set_seq_nr(seq_nr);
+        packet.set_ack_nr(ack_nr);
+        packet.set_wnd_size(window_size);
+        let header = PacketHeader::try_from(&packet.as_ref()).unwrap();
         let buf = [0x01, 0x00, 0x41, 0xa8, 0x00, 0xe9, 0x03, 0x89,
                    0x65, 0xbf, 0x5d, 0xba, 0x00, 0x10, 0x00, 0x00,
                    0x3a, 0xf2, 0x42, 0xc8, 0x48, 0x65, 0x6c, 0x6c,
                    0x6f, 0x0a];
 
-        assert_eq!(pkt.len(), buf.len());
-        assert_eq!(pkt.len(), HEADER_SIZE + payload.len());
-        assert_eq!(pkt.payload, payload);
+        assert_eq!(packet.len(), buf.len());
+        assert_eq!(packet.len(), HEADER_SIZE + payload.len());
+        assert_eq!(&packet.payload(), &payload.as_slice());
         assert_eq!(header.get_version(), 1);
-        assert_eq!(header.get_type(), Data);
         assert_eq!(header.extension, 0);
-        assert_eq!(pkt.connection_id(), connection_id);
-        assert_eq!(pkt.seq_nr(), seq_nr);
-        assert_eq!(pkt.ack_nr(), ack_nr);
-        assert_eq!(pkt.wnd_size(), window_size);
-        assert_eq!(pkt.timestamp_microseconds(), timestamp);
-        assert_eq!(pkt.timestamp_difference_microseconds(), timestamp_diff);
-        assert_eq!(pkt.to_bytes(), buf.to_vec());
+        assert_eq!(packet.get_type(), Data);
+        assert_eq!(packet.connection_id(), connection_id);
+        assert_eq!(packet.seq_nr(), seq_nr);
+        assert_eq!(packet.ack_nr(), ack_nr);
+        assert_eq!(packet.wnd_size(), window_size);
+        assert_eq!(packet.timestamp_microseconds(), timestamp);
+        assert_eq!(packet.timestamp_difference_microseconds(), timestamp_diff);
+        assert_eq!(packet.as_ref(), buf);
     }
 
     #[test]
@@ -626,57 +686,32 @@ mod tests {
         let (timestamp, timestamp_diff): (u32, u32) = (15270793, 1707040186);
         let (connection_id, seq_nr, ack_nr): (u16, u16, u16) = (16808, 15090, 17096);
         let window_size: u32 = 1048576;
-        let mut pkt = Packet::with_payload(&payload[..]);
-        pkt.header.timestamp_microseconds = timestamp.to_be();
-        pkt.header.timestamp_difference_microseconds = timestamp_diff.to_be();
-        pkt.header.connection_id = connection_id.to_be();
-        pkt.header.seq_nr = seq_nr.to_be();
-        pkt.header.ack_nr = ack_nr.to_be();
-        pkt.header.wnd_size = window_size.to_be();
-        pkt.payload = payload.clone();
-        let header = pkt.header;
+        let mut packet = Packet::with_payload(&payload[..]);
+        packet.set_timestamp_microseconds(timestamp);
+        packet.set_timestamp_difference_microseconds(timestamp_diff);
+        packet.set_connection_id(connection_id);
+        packet.set_seq_nr(seq_nr);
+        packet.set_ack_nr(ack_nr);
+        packet.set_wnd_size(window_size);
+        let header = PacketHeader::try_from(packet.as_ref()).unwrap();
         let buf = [0x01, 0x00, 0x41, 0xa8, 0x00, 0xe9, 0x03, 0x89,
                    0x65, 0xbf, 0x5d, 0xba, 0x00, 0x10, 0x00, 0x00,
                    0x3a, 0xf2, 0x42, 0xc8, 0x48, 0x65, 0x6c, 0x6c,
                    0x6f, 0x0a];
 
-        assert_eq!(pkt.len(), buf.len());
-        assert_eq!(pkt.len(), HEADER_SIZE + payload.len());
-        assert_eq!(pkt.payload, payload);
+        assert_eq!(packet.len(), buf.len());
+        assert_eq!(packet.len(), HEADER_SIZE + payload.len());
+        assert_eq!(&packet.payload(), &payload.as_slice());
         assert_eq!(header.get_version(), 1);
-        assert_eq!(header.get_type(), Data);
+        assert_eq!(packet.get_type(), Data);
         assert_eq!(header.extension, 0);
-        assert_eq!(pkt.connection_id(), connection_id);
-        assert_eq!(pkt.seq_nr(), seq_nr);
-        assert_eq!(pkt.ack_nr(), ack_nr);
-        assert_eq!(pkt.wnd_size(), window_size);
-        assert_eq!(pkt.timestamp_microseconds(), timestamp);
-        assert_eq!(pkt.timestamp_difference_microseconds(), timestamp_diff);
-        assert_eq!(pkt.to_bytes(), buf.to_vec());
-    }
-
-    #[test]
-    fn test_packet_encode_with_multiple_extensions() {
-        let mut packet = Packet::new();
-        let extension = Extension { ty: ExtensionType::SelectiveAck, data: vec!(1, 2, 3, 4) };
-        packet.header.extension = u8::from(extension.ty);
-        packet.extensions.push(extension.clone());
-        packet.extensions.push(extension.clone());
-        let bytes = packet.to_bytes();
-        assert_eq!(bytes.len(), HEADER_SIZE + (extension.len() + 2) * 2);
-
-        // Type of the first extension
-        assert_eq!(bytes[1], u8::from(extension.ty));
-
-        // Type of the next (second) extension
-        assert_eq!(bytes[HEADER_SIZE], u8::from(extension.ty));
-        // Length of the first extension
-        assert_eq!(bytes[HEADER_SIZE + 1], extension.data.len() as u8);
-
-        // Type of the next (third, non-existent) extension
-        assert_eq!(bytes[HEADER_SIZE + 2 + extension.len()], 0);
-        // Length of the second extension
-        assert_eq!(bytes[HEADER_SIZE + 2 + extension.len() + 1], extension.data.len() as u8);
+        assert_eq!(packet.connection_id(), connection_id);
+        assert_eq!(packet.seq_nr(), seq_nr);
+        assert_eq!(packet.ack_nr(), ack_nr);
+        assert_eq!(packet.wnd_size(), window_size);
+        assert_eq!(packet.timestamp_microseconds(), timestamp);
+        assert_eq!(packet.timestamp_difference_microseconds(), timestamp_diff);
+        assert_eq!(packet.as_ref(), buf);
     }
 
     #[test]
@@ -685,7 +720,7 @@ mod tests {
                    0x65, 0xbf, 0x5d, 0xba, 0x00, 0x10, 0x00, 0x00,
                    0x3a, 0xf2, 0x42, 0xc8, 0x48, 0x65, 0x6c, 0x6c,
                    0x6f, 0x0a];
-        assert_eq!(&Packet::try_from(&buf).unwrap().to_bytes()[..], &buf[..]);
+        assert_eq!(&Packet::try_from(&buf).unwrap().as_ref(), &buf);
     }
 
     #[test]
@@ -709,12 +744,48 @@ mod tests {
 
             if PacketHeader::try_from(&x).and(check_extensions(&x)).is_err() {
                 TestResult::from_bool(packet.is_err())
-            } else if let Ok(bytes) = packet.map(|p| p.to_bytes()) {
-                TestResult::from_bool(bytes == x)
+            } else if let Ok(packet) = packet {
+                TestResult::from_bool(&packet.as_ref() == &x.as_slice())
             } else {
                 TestResult::from_bool(false)
             }
         }
         QuickCheck::new().tests(10000).quickcheck(run as fn(Vec<u8>) -> TestResult)
+    }
+
+    #[test]
+    fn extension_iterator() {
+        let buf = [0x21, 0x00, 0x41, 0xa8, 0x99, 0x2f, 0xd0, 0x2a, 0x9f, 0x4a,
+                   0x26, 0x21, 0x00, 0x10, 0x00, 0x00, 0x3a, 0xf2, 0x6c, 0x79];
+        let packet = Packet::try_from(&buf).unwrap();
+        assert_eq!(packet.extensions().count(), 0);
+
+        let buf = [0x21, 0x01, 0x41, 0xa7, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                   0x00, 0x00, 0x00, 0x00, 0x05, 0xdc, 0xab, 0x53, 0x3a, 0xf5,
+                   0x00, 0x04, 0x00, 0x00, 0x00, 0x00];
+        let packet = Packet::try_from(&buf).unwrap();
+        let extensions: Vec<Extension> = packet.extensions().collect();
+        assert_eq!(extensions.len(), 1);
+        assert_eq!(extensions[0].ty, ExtensionType::SelectiveAck);
+        assert_eq!(extensions[0].data, vec!(0, 0, 0, 0));
+        assert_eq!(extensions[0].len(), extensions[0].data.len());
+        assert_eq!(extensions[0].len(), 4);
+
+        let buf = [0x21, 0x01, 0x41, 0xa7, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                   0x00, 0x00, 0x00, 0x00, 0x05, 0xdc, 0xab, 0x53, 0x3a, 0xf5,
+                   0xff, 0x04, 0x01, 0x02, 0x03, 0x04, // Imaginary extension
+                   0x00, 0x04, 0x05, 0x06, 0x07, 0x08];
+
+        let packet = Packet::try_from(&buf).unwrap();
+        let extensions: Vec<Extension> = packet.extensions().collect();
+        assert_eq!(extensions.len(), 2);
+        assert_eq!(extensions[0].ty, ExtensionType::SelectiveAck);
+        assert_eq!(extensions[0].data, vec!(1, 2, 3, 4));
+        assert_eq!(extensions[0].len(), extensions[0].data.len());
+        assert_eq!(extensions[0].len(), 4);
+        assert_eq!(extensions[1].ty, ExtensionType::Unknown(0xff));
+        assert_eq!(extensions[1].data, vec!(5, 6, 7, 8));
+        assert_eq!(extensions[1].len(), extensions[1].data.len());
+        assert_eq!(extensions[1].len(), 4);
     }
 }
