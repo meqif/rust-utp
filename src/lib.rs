@@ -51,7 +51,8 @@
 // Optional feature
 #![cfg_attr(feature = "clippy", feature(plugin))]
 #![cfg_attr(feature = "clippy", plugin(clippy))]
-#![cfg_attr(feature = "clippy", allow(len_without_is_empty, doc_markdown, needless_return))]
+#![cfg_attr(feature = "clippy", allow(len_without_is_empty, doc_markdown, needless_return,
+                                      transmute_ptr_to_ref))]
 
 extern crate rand;
 extern crate num_traits;

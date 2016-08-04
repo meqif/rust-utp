@@ -143,7 +143,7 @@ impl<'a> Extension<'a> {
     }
 
     pub fn iter(&self) -> BitIterator {
-        BitIterator::from_bytes(&self.data)
+        BitIterator::from_bytes(self.data)
     }
 }
 
@@ -289,7 +289,7 @@ impl Packet {
     }
 
     pub fn extensions(&self) -> ExtensionIterator {
-        ExtensionIterator::new(&self)
+        ExtensionIterator::new(self)
     }
 
     pub fn payload(&self) -> &[u8] {
@@ -372,8 +372,8 @@ impl Packet {
         // Set this extension's length
         self.0.insert(index + 1, bv.len() as u8);
         // Write this extension's data
-        for i in 0..bv.len() {
-            self.0.insert(index + 2 + i, bv[i]);
+        for (i, &value) in bv.iter().enumerate() {
+            self.0.insert(index + 2 + i, value);
         }
     }
 
@@ -392,7 +392,7 @@ impl<'a> TryFrom<&'a [u8]> for Packet {
     /// It's the caller's responsibility to use an appropriately sized buffer.
     fn try_from(buf: &[u8]) -> Result<Self, Self::Err> {
         PacketHeader::try_from(buf)
-            .and(check_extensions(&buf))
+            .and(check_extensions(buf))
             .and(Ok(Packet(buf.to_owned())))
     }
 }

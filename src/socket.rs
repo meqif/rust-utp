@@ -1662,7 +1662,7 @@ mod test {
             let mut window: Vec<Packet> = Vec::new();
 
             for data in (1..13u8).collect::<Vec<u8>>()[..].chunks(3) {
-                let mut packet = Packet::with_payload(&data);
+                let mut packet = Packet::with_payload(data);
                 packet.set_wnd_size(BUF_SIZE as u32);
                 packet.set_connection_id(client.sender_connection_id);
                 packet.set_seq_nr(client.seq_nr);
