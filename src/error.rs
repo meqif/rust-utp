@@ -11,6 +11,7 @@ pub enum SocketError {
     InvalidPacket,
     InvalidReply,
     NotConnected,
+    Other(String),
 }
 
 impl Error for SocketError {
@@ -24,6 +25,7 @@ impl Error for SocketError {
             InvalidPacket      => "Error parsing packet",
             InvalidReply       => "The remote peer sent an invalid reply",
             NotConnected       => "The socket is not connected",
+            Other(ref s) => s,
         }
     }
 }
@@ -45,7 +47,6 @@ impl From<SocketError> for io::Error {
             InvalidAddress     => ErrorKind::InvalidInput,
             InvalidReply       => ErrorKind::ConnectionRefused,
             InvalidPacket      => ErrorKind::Other,
-            Unimplemented(_)   => ErrorKind::Other,
             Other(_)           => ErrorKind::Other,
         };
         io::Error::new(kind, error.description())

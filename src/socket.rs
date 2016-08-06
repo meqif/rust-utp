@@ -896,7 +896,7 @@ impl UtpSocket {
             (state, ty) => {
                 let message = format!("Unimplemented handling for ({:?},{:?})", state, ty);
                 debug!("{}", message);
-                Err(io::Error::new(ErrorKind::Other, message))
+                Err(SocketError::Other(message).into())
             }
         }
     }
