@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
-use std::error::Error;
-use std::fmt;
 use bit_iterator::BitIterator;
+use error::ParseError;
+use std::fmt;
 
 pub const HEADER_SIZE: usize = 20;
 
@@ -36,32 +36,6 @@ macro_rules! make_setter {
 pub trait TryFrom<T>: Sized {
     type Err;
     fn try_from(T) -> Result<Self, Self::Err>;
-}
-
-#[derive(Debug)]
-pub enum ParseError {
-    InvalidExtensionLength,
-    InvalidPacketLength,
-    InvalidPacketType(u8),
-    UnsupportedVersion,
-}
-
-impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.description())
-    }
-}
-
-impl Error for ParseError {
-    fn description(&self) -> &str {
-        use self::ParseError::*;
-        match *self {
-            InvalidExtensionLength => "Invalid extension length (must be a non-zero multiple of 4)",
-            InvalidPacketLength => "The packet is too small",
-            InvalidPacketType(_) => "Invalid packet type",
-            UnsupportedVersion => "Unsupported packet version",
-        }
-    }
 }
 
 #[derive(PartialEq, Eq, Debug)]
