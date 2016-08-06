@@ -1,7 +1,6 @@
 #![allow(dead_code)]
 
 use std::error::Error;
-use std::mem;
 use std::fmt;
 use bit_iterator::BitIterator;
 
@@ -16,7 +15,7 @@ macro_rules! u8_to_unsigned_be {
 macro_rules! make_getter {
     ($name:ident, $t:ty, $m:ident) => {
         pub fn $name(&self) -> $t {
-            let header: &PacketHeader = unsafe { mem::transmute(self.0.as_ptr()) };
+            let header = unsafe { &*(self.0.as_ptr() as *const PacketHeader) };
             $m::from_be(header.$name)
         }
     }
@@ -25,7 +24,7 @@ macro_rules! make_getter {
 macro_rules! make_setter {
     ($fn_name:ident, $field:ident, $t: ty) => {
         pub fn $fn_name(&mut self, new: $t) {
-            let mut header: &mut PacketHeader = unsafe { mem::transmute(self.0.as_ptr()) };
+            let mut header = unsafe { &mut*(self.0.as_mut_ptr() as *mut PacketHeader) };
             header.$field = new.to_be();
         }
     }
@@ -185,7 +184,7 @@ impl AsRef<[u8]> for PacketHeader {
     /// Returns the packet header as a slice of bytes.
     fn as_ref(&self) -> &[u8] {
         unsafe {
-            mem::transmute::<&PacketHeader, &[u8; HEADER_SIZE]>(self)
+            &*(self as *const PacketHeader as *const [u8; HEADER_SIZE])
         }
     }
 }
@@ -268,23 +267,23 @@ impl Packet {
 
     #[inline]
     pub fn set_type(&mut self, t: PacketType) {
-        let mut header: &mut PacketHeader = unsafe { mem::transmute(self.0.as_ptr()) };
+        let mut header = unsafe { &mut*(self.0.as_mut_ptr() as *mut PacketHeader) };
         header.set_type(t);
     }
 
     #[inline]
     pub fn get_type(&self) -> PacketType {
-        let header: &PacketHeader = unsafe { mem::transmute(self.0.as_ptr()) };
+        let header = unsafe { &*(self.0.as_ptr() as *const PacketHeader) };
         header.get_type()
     }
 
     pub fn get_version(&self) -> u8 {
-        let header: &PacketHeader = unsafe { mem::transmute(self.0.as_ptr()) };
+        let header = unsafe { &*(self.0.as_ptr() as *const PacketHeader) };
         header.get_version()
     }
 
     pub fn get_extension_type(&self) -> ExtensionType {
-        let header: &PacketHeader = unsafe { mem::transmute(self.0.as_ptr()) };
+        let header = unsafe { &*(self.0.as_ptr() as *const PacketHeader) };
         header.get_extension_type()
     }
 
