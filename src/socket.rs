@@ -75,7 +75,7 @@ struct DelayDifferenceSample {
 /// Returns the first valid address in a `ToSocketAddrs` iterator.
 fn take_address<A: ToSocketAddrs>(addr: A) -> Result<SocketAddr> {
     addr.to_socket_addrs()
-        .and_then(|mut it| it.next().ok_or_else(|| From::from(SocketError::InvalidAddress)))
+        .and_then(|mut it| it.next().ok_or(SocketError::InvalidAddress.into()))
 }
 
 /// A structure that represents a uTP (Micro Transport Protocol) connection between a local socket
@@ -256,7 +256,7 @@ impl UtpSocket {
         if self.state == SocketState::Connected || self.state == SocketState::FinSent {
             Ok(self.connected_to)
         } else {
-            Err(Error::from(SocketError::NotConnected))
+            Err(SocketError::NotConnected.into())
         }
     }
 
@@ -368,7 +368,7 @@ impl UtpSocket {
             // If the socket received a reset packet and all data has been flushed, then it can't
             // receive anything else
             if self.state == SocketState::ResetReceived {
-                return Err(Error::from(SocketError::ConnectionReset));
+                return Err(SocketError::ConnectionReset.into());
             }
 
             loop {
@@ -397,7 +397,7 @@ impl UtpSocket {
             // Abort loop if the current try exceeds the maximum number of retransmission retries.
             if retries >= self.max_retransmission_retries {
                 self.state = SocketState::Closed;
-                return Err(Error::from(SocketError::ConnectionTimedOut));
+                return Err(SocketError::ConnectionTimedOut.into());
             }
 
             let timeout = if self.state != SocketState::New {
@@ -589,7 +589,7 @@ impl UtpSocket {
     // size, which will result in the data being split over several packets.
     pub fn send_to(&mut self, buf: &[u8]) -> Result<usize> {
         if self.state == SocketState::Closed {
-            return Err(Error::from(SocketError::ConnectionClosed));
+            return Err(SocketError::ConnectionClosed.into());
         }
 
         let total_length = buf.len();
@@ -872,7 +872,7 @@ impl UtpSocket {
                 Ok(None)
             },
             (SocketState::SynSent, _) => {
-                Err(Error::from(SocketError::InvalidReply))
+                Err(SocketError::InvalidReply.into())
             }
             (SocketState::Connected, PacketType::Data) |
             (SocketState::FinSent, PacketType::Data) => {
@@ -914,7 +914,7 @@ impl UtpSocket {
             }
             (_, PacketType::Reset) => {
                 self.state = SocketState::ResetReceived;
-                Err(Error::from(SocketError::ConnectionReset))
+                Err(SocketError::ConnectionReset.into())
             },
             (state, ty) => {
                 let message = format!("Unimplemented handling for ({:?},{:?})", state, ty);
@@ -1167,7 +1167,7 @@ impl UtpListener {
 
                 // Ignore non-SYN packets
                 if packet.get_type() != PacketType::Syn {
-                    return Err(Error::from(SocketError::InvalidPacket));
+                    return Err(SocketError::InvalidPacket.into());
                 }
 
                 // The address of the new socket will depend on the type of the listener.
@@ -1181,7 +1181,7 @@ impl UtpListener {
                 // Establish connection with remote peer
                 match socket.handle_packet(&packet, src) {
                     Ok(Some(reply)) => { try!(socket.socket.send_to(reply.as_ref(), src)) },
-                    Ok(None) => return Err(Error::from(SocketError::InvalidPacket)),
+                    Ok(None) => return Err(SocketError::InvalidPacket.into()),
                     Err(e) => return Err(e)
                 };
 
