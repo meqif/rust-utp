@@ -1,9 +1,10 @@
 use std::cmp::{min, max};
 use std::collections::VecDeque;
 use std::net::{ToSocketAddrs, SocketAddr, UdpSocket};
-use std::io::{Result, Error, ErrorKind};
+use std::io::{Result, ErrorKind};
 use util::{now_microseconds, ewma, abs_diff};
 use packet::*;
+use error::SocketError;
 use rand::{self, Rng};
 use std::time::{Duration, Instant};
 
@@ -29,33 +30,6 @@ const PRE_SEND_TIMEOUT: u32 = 500_000;
 
 // Maximum age of base delay sample (60 seconds)
 const MAX_BASE_DELAY_AGE: i64 = 60_000_000;
-
-#[derive(Debug)]
-pub enum SocketError {
-    ConnectionClosed,
-    ConnectionReset,
-    ConnectionTimedOut,
-    InvalidAddress,
-    InvalidPacket,
-    InvalidReply,
-    NotConnected,
-}
-
-impl From<SocketError> for Error {
-    fn from(error: SocketError) -> Error {
-        use self::SocketError::*;
-        let (kind, message) = match error {
-            ConnectionClosed => (ErrorKind::NotConnected, "The socket is closed"),
-            ConnectionReset => (ErrorKind::ConnectionReset, "Connection reset by remote peer"),
-            ConnectionTimedOut => (ErrorKind::TimedOut, "Connection timed out"),
-            InvalidAddress => (ErrorKind::InvalidInput, "Invalid address"),
-            InvalidPacket => (ErrorKind::Other, "Error parsing packet"),
-            InvalidReply => (ErrorKind::ConnectionRefused, "The remote peer sent an invalid reply"),
-            NotConnected => (ErrorKind::NotConnected, "The socket is not connected"),
-        };
-        Error::new(kind, message)
-    }
-}
 
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
 enum SocketState {
@@ -922,7 +896,7 @@ impl UtpSocket {
             (state, ty) => {
                 let message = format!("Unimplemented handling for ({:?},{:?})", state, ty);
                 debug!("{}", message);
-                Err(Error::new(ErrorKind::Other, message))
+                Err(io::Error::new(ErrorKind::Other, message))
             }
         }
     }
