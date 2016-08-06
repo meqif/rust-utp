@@ -1160,35 +1160,29 @@ impl UtpListener {
     pub fn accept(&self) -> Result<(UtpSocket, SocketAddr)> {
         let mut buf = [0; BUF_SIZE];
 
-        match self.socket.recv_from(&mut buf) {
-            Ok((nread, src)) => {
-                let packet = try!(Packet::try_from(&buf[..nread])
-                                  .or(Err(SocketError::InvalidPacket)));
+        self.socket.recv_from(&mut buf).and_then(|(nread, src)| {
+            let packet = try!(Packet::try_from(&buf[..nread])
+                              .or(Err(SocketError::InvalidPacket)));
 
-                // Ignore non-SYN packets
-                if packet.get_type() != PacketType::Syn {
-                    return Err(SocketError::InvalidPacket.into());
-                }
+            // Ignore non-SYN packets
+            if packet.get_type() != PacketType::Syn {
+                return Err(SocketError::InvalidPacket.into());
+            }
 
-                // The address of the new socket will depend on the type of the listener.
-                let inner_socket = self.socket.local_addr().and_then(|addr| match addr {
-                    SocketAddr::V4(_) => UdpSocket::bind("0.0.0.0:0"),
-                    SocketAddr::V6(_) => UdpSocket::bind("[::]:0"),
-                });
+            // The address of the new socket will depend on the type of the listener.
+            let inner_socket = self.socket.local_addr().and_then(|addr| match addr {
+                SocketAddr::V4(_) => UdpSocket::bind("0.0.0.0:0"),
+                SocketAddr::V6(_) => UdpSocket::bind("[::]:0"),
+            });
 
-                let mut socket = try!(inner_socket.map(|s| UtpSocket::from_raw_parts(s, src)));
+            let mut socket = try!(inner_socket.map(|s| UtpSocket::from_raw_parts(s, src)));
 
-                // Establish connection with remote peer
-                match socket.handle_packet(&packet, src) {
-                    Ok(Some(reply)) => { try!(socket.socket.send_to(reply.as_ref(), src)) },
-                    Ok(None) => return Err(SocketError::InvalidPacket.into()),
-                    Err(e) => return Err(e)
-                };
-
-                Ok((socket, src))
-            },
-            Err(e) => Err(e)
-        }
+            // Establish connection with remote peer
+            socket.handle_packet(&packet, src).and_then(|reply| match reply {
+                Some(reply) => socket.socket.send_to(reply.as_ref(), src),
+                None => Err(SocketError::InvalidPacket.into()),
+            }).and(Ok((socket, src)))
+        })
     }
 
     /// Returns an iterator over the connections being received by this listener.
