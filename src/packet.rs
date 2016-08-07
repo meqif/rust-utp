@@ -43,7 +43,7 @@ pub enum ParseError {
     InvalidExtensionLength,
     InvalidPacketLength,
     InvalidPacketType(u8),
-    UnsupportedVersion
+    UnsupportedVersion,
 }
 
 impl fmt::Display for ParseError {
@@ -82,7 +82,7 @@ impl TryFrom<u8> for PacketType {
             2 => Ok(PacketType::State),
             3 => Ok(PacketType::Reset),
             4 => Ok(PacketType::Syn),
-            n => Err(ParseError::InvalidPacketType(n))
+            n => Err(ParseError::InvalidPacketType(n)),
         }
     }
 }
@@ -184,13 +184,11 @@ impl PacketHeader {
 impl AsRef<[u8]> for PacketHeader {
     /// Returns the packet header as a slice of bytes.
     fn as_ref(&self) -> &[u8] {
-        unsafe {
-            &*(self as *const PacketHeader as *const [u8; HEADER_SIZE])
-        }
+        unsafe { &*(self as *const PacketHeader as *const [u8; HEADER_SIZE]) }
     }
 }
 
-impl<'a> TryFrom<&'a[u8]> for PacketHeader {
+impl<'a> TryFrom<&'a [u8]> for PacketHeader {
     type Err = ParseError;
     /// Reads a byte buffer and returns the corresponding packet header.
     /// It assumes the fields are in network (big-endian) byte order,
@@ -268,7 +266,7 @@ impl Packet {
 
     #[inline]
     pub fn set_type(&mut self, t: PacketType) {
-        let mut header = unsafe { &mut*(self.0.as_mut_ptr() as *mut PacketHeader) };
+        let mut header = unsafe { &mut *(self.0.as_mut_ptr() as *mut PacketHeader) };
         header.set_type(t);
     }
 
@@ -406,16 +404,16 @@ impl Clone for Packet {
 impl fmt::Debug for Packet {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.debug_struct("Packet")
-            .field("type", &self.get_type())
-            .field("version", &self.get_version())
-            .field("extension", &self.get_extension_type())
-            .field("connection_id", &self.connection_id())
-            .field("timestamp", &self.timestamp())
-            .field("timestamp_difference", &self.timestamp_difference())
-            .field("wnd_size", &self.wnd_size())
-            .field("seq_nr", &self.seq_nr())
-            .field("ack_nr", &self.ack_nr())
-            .finish()
+         .field("type", &self.get_type())
+         .field("version", &self.get_version())
+         .field("extension", &self.get_extension_type())
+         .field("connection_id", &self.connection_id())
+         .field("timestamp", &self.timestamp())
+         .field("timestamp_difference", &self.timestamp_difference())
+         .field("wnd_size", &self.wnd_size())
+         .field("seq_nr", &self.seq_nr())
+         .field("ack_nr", &self.ack_nr())
+         .finish()
     }
 }
 
@@ -609,7 +607,7 @@ mod tests {
                 assert_eq!(extensions[0].len(), extensions[0].data.len());
                 assert_eq!(extensions[0].len(), 4);
             }
-            Err(ref e) => panic!("{}", e)
+            Err(ref e) => panic!("{}", e),
         }
     }
 

@@ -294,16 +294,21 @@ impl UtpSocket {
             debug!("sent {:?}", packet);
 
             // Validate response
-            socket.socket.set_read_timeout(Some(Duration::from_millis(syn_timeout)))
-                .expect("Error setting read timeout");
+            socket.socket
+                  .set_read_timeout(Some(Duration::from_millis(syn_timeout)))
+                  .expect("Error setting read timeout");
             match socket.socket.recv_from(&mut buf) {
-                Ok((read, src)) => { socket.connected_to = src; len = read; break; },
+                Ok((read, src)) => {
+                    socket.connected_to = src;
+                    len = read;
+                    break;
+                }
                 Err(ref e) if (e.kind() == ErrorKind::WouldBlock ||
                                e.kind() == ErrorKind::TimedOut) => {
                     debug!("Timed out, retrying");
                     syn_timeout *= 2;
                     continue;
-                },
+                }
                 Err(e) => return Err(e),
             };
         }
@@ -359,7 +364,7 @@ impl UtpSocket {
     /// On success, returns the number of bytes read and the sender's address.
     /// Returns 0 bytes read after receiving a FIN packet when the remaining
     /// in-flight packets are consumed.
-    pub fn recv_from(&mut self, buf: &mut[u8]) -> Result<(usize, SocketAddr)> {
+    pub fn recv_from(&mut self, buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
         let read = self.flush_incoming_buffer(buf);
 
         if read > 0 {
@@ -380,13 +385,13 @@ impl UtpSocket {
                 match self.recv(buf) {
                     Ok((0, _src)) => continue,
                     Ok(x) => return Ok(x),
-                    Err(e) => return Err(e)
+                    Err(e) => return Err(e),
                 }
             }
         }
     }
 
-    fn recv(&mut self, buf: &mut[u8]) -> Result<(usize, SocketAddr)> {
+    fn recv(&mut self, buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
         let mut b = [0; BUF_SIZE + HEADER_SIZE];
         let start = Instant::now();
         let (read, src);
@@ -412,7 +417,7 @@ impl UtpSocket {
                                e.kind() == ErrorKind::TimedOut) => {
                     debug!("recv_from timed out");
                     try!(self.handle_receive_timeout());
-                },
+                }
                 Err(e) => return Err(e),
             };
 
@@ -435,15 +440,15 @@ impl UtpSocket {
 
         // Process packet, including sending a reply if necessary
         if let Some(mut pkt) = try!(self.handle_packet(&packet, src)) {
-                pkt.set_wnd_size(WINDOW_SIZE);
-                try!(self.socket.send_to(pkt.as_ref(), src));
-                debug!("sent {:?}", pkt);
+            pkt.set_wnd_size(WINDOW_SIZE);
+            try!(self.socket.send_to(pkt.as_ref(), src));
+            debug!("sent {:?}", pkt);
         }
 
         // Insert data packet into the incoming buffer if it isn't a duplicate of a previously
         // discarded packet
         if packet.get_type() == PacketType::Data &&
-            packet.seq_nr().wrapping_sub(self.last_dropped) > 0 {
+           packet.seq_nr().wrapping_sub(self.last_dropped) > 0 {
             self.insert_into_buffer(packet);
         }
 
@@ -466,8 +471,8 @@ impl UtpSocket {
         //   for incoming packets: send a fast resend request;
         //
         // - If the socket sent a FIN previously, resend it.
-        debug!("self.send_window: {:?}", self.send_window.iter()
-               .map(Packet::seq_nr).collect::<Vec<u16>>());
+        debug!("self.send_window: {:?}",
+               self.send_window.iter().map(Packet::seq_nr).collect::<Vec<u16>>());
 
         if self.send_window.is_empty() {
             // The socket is trying to close, all sent packets were acknowledged, and it has
@@ -707,7 +712,10 @@ impl UtpSocket {
         }
 
         // Insert new measurement
-        self.current_delays.push(DelayDifferenceSample{ received_at: now, difference: v });
+        self.current_delays.push(DelayDifferenceSample {
+            received_at: now,
+            difference: v,
+        });
     }
 
     fn update_congestion_timeout(&mut self, current_delay: i32) {
@@ -809,8 +817,7 @@ impl UtpSocket {
         // number matches `last_acked` because it might never match, and in that case no packets
         // should be removed.
         if let Some(position) = self.send_window.iter()
-            .position(|pkt| pkt.seq_nr() == self.last_acked)
-        {
+                                    .position(|packet| packet.seq_nr() == self.last_acked) {
             for _ in 0..position + 1 {
                 let packet = self.send_window.remove(0);
                 self.curr_window -= packet.len() as u32;
@@ -831,10 +838,9 @@ impl UtpSocket {
         }
 
         // Reset connection if connection id doesn't match and this isn't a SYN
-        if packet.get_type() != PacketType::Syn &&
-            self.state != SocketState::SynSent &&
-            !(packet.connection_id() == self.sender_connection_id ||
-              packet.connection_id() == self.receiver_connection_id) {
+        if packet.get_type() != PacketType::Syn && self.state != SocketState::SynSent &&
+           !(packet.connection_id() == self.sender_connection_id ||
+             packet.connection_id() == self.receiver_connection_id) {
             return Ok(Some(self.prepare_reply(packet, PacketType::Reset)));
         }
 
@@ -858,10 +864,8 @@ impl UtpSocket {
                 self.last_dropped = self.ack_nr;
 
                 Ok(Some(self.prepare_reply(packet, PacketType::State)))
-            },
-            (_, PacketType::Syn) => {
-                Ok(Some(self.prepare_reply(packet, PacketType::Reset)))
             }
+            (_, PacketType::Syn) => Ok(Some(self.prepare_reply(packet, PacketType::Reset))),
             (SocketState::SynSent, PacketType::State) => {
                 self.connected_to = src;
                 self.ack_nr = packet.seq_nr();
@@ -870,20 +874,16 @@ impl UtpSocket {
                 self.last_acked = packet.ack_nr();
                 self.last_acked_timestamp = now_microseconds();
                 Ok(None)
-            },
-            (SocketState::SynSent, _) => {
-                Err(SocketError::InvalidReply.into())
             }
+            (SocketState::SynSent, _) => Err(SocketError::InvalidReply.into()),
             (SocketState::Connected, PacketType::Data) |
-            (SocketState::FinSent, PacketType::Data) => {
-                Ok(self.handle_data_packet(packet))
-            },
+            (SocketState::FinSent, PacketType::Data) => Ok(self.handle_data_packet(packet)),
             (SocketState::Connected, PacketType::State) => {
                 self.handle_state_packet(packet);
                 Ok(None)
-            },
+            }
             (SocketState::Connected, PacketType::Fin) |
-            (SocketState::FinSent,   PacketType::Fin) => {
+            (SocketState::FinSent, PacketType::Fin) => {
                 if packet.ack_nr() < self.seq_nr {
                     debug!("FIN received but there are missing acknowledgements for sent packets");
                 }
@@ -918,7 +918,7 @@ impl UtpSocket {
             (_, PacketType::Reset) => {
                 self.state = SocketState::ResetReceived;
                 Err(SocketError::ConnectionReset.into())
-            },
+            }
             (state, ty) => {
                 let message = format!("Unimplemented handling for ({:?},{:?})", state, ty);
                 debug!("{}", message);
@@ -1047,13 +1047,16 @@ impl UtpSocket {
                 }
 
                 if let Some(last_seq_nr) = self.send_window.last().map(Packet::seq_nr) {
-                    for seq_nr in extension.iter().enumerate()
-                        .filter(|&(_idx, received)| !received)
-                        .map(|(idx, _received)| packet.ack_nr() + 2 + idx as u16)
-                        .take_while(|&seq_nr| seq_nr < last_seq_nr) {
-                            debug!("SACK: packet {} lost", seq_nr);
-                            self.resend_lost_packet(seq_nr);
-                            packet_loss_detected = true;
+                    let lost_packets = extension.iter()
+                        .enumerate()
+                        .filter(|&(_, received)| !received)
+                        .map(|(idx, _)| packet.ack_nr() + 2 + idx as u16)
+                        .take_while(|&seq_nr| seq_nr < last_seq_nr);
+
+                    for seq_nr in lost_packets {
+                        debug!("SACK: packet {} lost", seq_nr);
+                        self.resend_lost_packet(seq_nr);
+                        packet_loss_detected = true;
                     }
                 }
             } else {
@@ -1065,7 +1068,7 @@ impl UtpSocket {
         // if the incoming packet doesn't have a SACK extension. If it does, the lost packets were
         // already resent.
         if !self.send_window.is_empty() && self.duplicate_ack_count == 3 &&
-            !packet.extensions().any(|ext| ext.get_type() == ExtensionType::SelectiveAck) {
+           !packet.extensions().any(|ext| ext.get_type() == ExtensionType::SelectiveAck) {
             self.resend_lost_packet(packet.ack_nr() + 1);
         }
 
@@ -1150,7 +1153,7 @@ impl UtpListener {
     ///
     /// If more than one valid address is specified, only the first will be used.
     pub fn bind<A: ToSocketAddrs>(addr: A) -> Result<UtpListener> {
-        UdpSocket::bind(addr).and_then(|s| Ok(UtpListener { socket: s}))
+        UdpSocket::bind(addr).and_then(|s| Ok(UtpListener { socket: s }))
     }
 
     /// Accepts a new incoming connection from this listener.
@@ -1201,7 +1204,9 @@ impl UtpListener {
     }
 }
 
-pub struct Incoming<'a> { listener: &'a UtpListener }
+pub struct Incoming<'a> {
+    listener: &'a UtpListener,
+}
 
 impl<'a> Iterator for Incoming<'a> {
     type Item = Result<(UtpSocket, SocketAddr)>;
@@ -1322,7 +1327,7 @@ mod test {
 
         // Trying to receive again returns `Ok(0)` (equivalent to the old `EndOfFile`)
         match server.recv_from(&mut buf) {
-            Ok((0, _src)) => {},
+            Ok((0, _src)) => {}
             e => panic!("Expected Ok(0), got {:?}", e),
         }
         assert_eq!(server.state, SocketState::Closed);
@@ -1693,12 +1698,12 @@ mod test {
 
         let mut buf = [0; BUF_SIZE];
         let expected: Vec<u8> = (1..13u8).collect();
-        let mut received: Vec<u8> = vec!();
+        let mut received: Vec<u8> = vec![];
         loop {
             match server.recv_from(&mut buf) {
                 Ok((0, _src)) => break,
                 Ok((len, _src)) => received.extend(buf[..len].to_vec()),
-                Err(e) => panic!("{:?}", e)
+                Err(e) => panic!("{:?}", e),
             }
         }
 
@@ -1768,7 +1773,7 @@ mod test {
                 assert!(response.is_some());
                 let response = response.unwrap();
                 iotry!(server.socket.send_to(response.as_ref(), server.connected_to));
-            },
+            }
             Err(e) => panic!("{}", e),
         }
 
@@ -1918,13 +1923,13 @@ mod test {
 
         assert_eq!(server.state, SocketState::Connected);
 
-        let expected: Vec<u8> = vec!(1, 2, 3);
-        let mut received: Vec<u8> = vec!();
+        let expected: Vec<u8> = vec![1, 2, 3];
+        let mut received: Vec<u8> = vec![];
         loop {
             match server.recv_from(&mut buf) {
                 Ok((0, _src)) => break,
                 Ok((len, _src)) => received.extend(buf[..len].to_vec()),
-                Err(e) => panic!("{:?}", e)
+                Err(e) => panic!("{:?}", e),
             }
         }
         assert_eq!(received.len(), expected.len());
@@ -2025,12 +2030,12 @@ mod test {
         });
 
         let mut buf = [0; BUF_SIZE];
-        let mut received: Vec<u8> = vec!();
+        let mut received: Vec<u8> = vec![];
         loop {
             match server.recv_from(&mut buf) {
                 Ok((0, _src)) => break,
                 Ok((len, _src)) => received.extend(buf[..len].to_vec()),
-                Err(e) => panic!("{}", e)
+                Err(e) => panic!("{}", e),
             }
         }
         assert_eq!(received.len(), data.len());
@@ -2095,12 +2100,12 @@ mod test {
         });
 
         let mut buf = [0; BUF_SIZE];
-        let mut received: Vec<u8> = vec!();
+        let mut received: Vec<u8> = vec![];
         loop {
             match server.recv_from(&mut buf) {
                 Ok((0, _src)) => break,
                 Ok((len, _src)) => received.extend(buf[..len].to_vec()),
-                Err(e) => panic!("{}", e)
+                Err(e) => panic!("{}", e),
             }
         }
         assert_eq!(received.len(), data.len());
@@ -2128,14 +2133,14 @@ mod test {
             let mut buf = [0; BUF_SIZE];
             match server.recv_from(&mut buf) {
                 Ok((_len, client_addr)) => { iotry!(server.send_to(&[], client_addr)); },
-                _ => panic!()
+                _ => panic!(),
             }
         });
 
         match UtpSocket::connect(server_addr) {
             Err(ref e) if e.kind() == ErrorKind::Other => (), // OK
             Err(e) => panic!("Expected ErrorKind::Other, got {:?}", e),
-            Ok(_) => panic!("Expected Err, got Ok")
+            Ok(_) => panic!("Expected Err, got Ok"),
         }
 
         assert!(child.join().is_ok());
@@ -2155,15 +2160,15 @@ mod test {
             match server.recv_from(&mut buf) {
                 Ok((_len, client_addr)) => {
                     iotry!(server.send_to(packet.as_ref(), client_addr));
-                },
-                _ => panic!()
+                }
+                _ => panic!(),
             }
         });
 
         match UtpSocket::connect(server_addr) {
             Err(ref e) if e.kind() == ErrorKind::ConnectionRefused => (), // OK
             Err(e) => panic!("Expected ErrorKind::ConnectionRefused, got {:?}", e),
-            Ok(_) => panic!("Expected Err, got Ok")
+            Ok(_) => panic!("Expected Err, got Ok"),
         }
 
         assert!(child.join().is_ok());
@@ -2181,7 +2186,7 @@ mod test {
                 match server.recv_from(&mut buf) {
                     Ok((0, _src)) => break,
                     Ok(_) => (),
-                    Err(e) => panic!("{:?}", e)
+                    Err(e) => panic!("{:?}", e),
                 }
             }
         });
@@ -2200,7 +2205,7 @@ mod test {
                 let reply = Packet::try_from(&buf[..len]).ok().unwrap();
                 assert_eq!(reply.get_type(), PacketType::Reset);
             }
-            Err(e) => panic!("{:?}", e)
+            Err(e) => panic!("{:?}", e),
         }
         iotry!(client.close());
 
@@ -2225,7 +2230,7 @@ mod test {
             let mut buf = [0; BUF_SIZE];
             match client.socket.recv_from(&mut buf) {
                 Ok((_len, _src)) => (),
-                Err(e) => panic!("{:?}", e)
+                Err(e) => panic!("{:?}", e),
             }
         });
 
@@ -2235,7 +2240,7 @@ mod test {
                 Ok((0, _src)) => break,
                 Ok(_) => (),
                 Err(ref e) if e.kind() == ErrorKind::ConnectionReset => return,
-                Err(e) => panic!("{:?}", e)
+                Err(e) => panic!("{:?}", e),
             }
         }
         assert!(child.join().is_ok());
@@ -2272,12 +2277,12 @@ mod test {
         iotry!(server.socket.send_to(packet.as_ref(), client_addr));
 
         // Receive until end
-        let mut received: Vec<u8> = vec!();
+        let mut received: Vec<u8> = vec![];
         loop {
             match server.recv_from(&mut buf) {
                 Ok((0, _src)) => break,
                 Ok((len, _src)) => received.extend(buf[..len].to_vec()),
-                Err(e) => panic!("{}", e)
+                Err(e) => panic!("{}", e),
             }
         }
         assert_eq!(received.len(), data.len());
@@ -2296,7 +2301,7 @@ mod test {
         let addr = next_test_ip4();
         let mut socket = UtpSocket::bind(addr).unwrap();
 
-        for (timestamp, delay) in samples{
+        for (timestamp, delay) in samples {
             socket.update_base_delay(delay, timestamp + delay);
         }
 
@@ -2484,7 +2489,7 @@ mod test {
                         let packet = iotry!(Packet::try_from(&buf[..len]));
                         assert_eq!(packet.get_type(), PacketType::State);
                         assert_eq!(packet.ack_nr(), seq_nr - 1);
-                    },
+                    }
                     Err(e) => panic!("{}", e),
                 }
             }
