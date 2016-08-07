@@ -1,9 +1,10 @@
 use std::cmp::{min, max};
 use std::collections::VecDeque;
 use std::net::{ToSocketAddrs, SocketAddr, UdpSocket};
-use std::io::{Result, Error, ErrorKind};
+use std::io::{Result, ErrorKind};
 use util::{now_microseconds, ewma, abs_diff};
 use packet::*;
+use error::SocketError;
 use rand::{self, Rng};
 use std::time::{Duration, Instant};
 
@@ -29,33 +30,6 @@ const PRE_SEND_TIMEOUT: u32 = 500_000;
 
 // Maximum age of base delay sample (60 seconds)
 const MAX_BASE_DELAY_AGE: i64 = 60_000_000;
-
-#[derive(Debug)]
-pub enum SocketError {
-    ConnectionClosed,
-    ConnectionReset,
-    ConnectionTimedOut,
-    InvalidAddress,
-    InvalidPacket,
-    InvalidReply,
-    NotConnected,
-}
-
-impl From<SocketError> for Error {
-    fn from(error: SocketError) -> Error {
-        use self::SocketError::*;
-        let (kind, message) = match error {
-            ConnectionClosed => (ErrorKind::NotConnected, "The socket is closed"),
-            ConnectionReset => (ErrorKind::ConnectionReset, "Connection reset by remote peer"),
-            ConnectionTimedOut => (ErrorKind::TimedOut, "Connection timed out"),
-            InvalidAddress => (ErrorKind::InvalidInput, "Invalid address"),
-            InvalidPacket => (ErrorKind::Other, "Error parsing packet"),
-            InvalidReply => (ErrorKind::ConnectionRefused, "The remote peer sent an invalid reply"),
-            NotConnected => (ErrorKind::NotConnected, "The socket is not connected"),
-        };
-        Error::new(kind, message)
-    }
-}
 
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
 enum SocketState {
@@ -314,7 +288,7 @@ impl UtpSocket {
         }
 
         let addr = socket.connected_to;
-        let packet = try!(Packet::try_from(&buf[..len]).or(Err(SocketError::InvalidPacket)));
+        let packet = try!(Packet::try_from(&buf[..len]));
         debug!("received {:?}", packet);
         try!(socket.handle_packet(&packet, addr));
 
@@ -922,7 +896,7 @@ impl UtpSocket {
             (state, ty) => {
                 let message = format!("Unimplemented handling for ({:?},{:?})", state, ty);
                 debug!("{}", message);
-                Err(Error::new(ErrorKind::Other, message))
+                Err(SocketError::Other(message).into())
             }
         }
     }
@@ -1167,12 +1141,12 @@ impl UtpListener {
         let mut buf = [0; BUF_SIZE];
 
         self.socket.recv_from(&mut buf).and_then(|(nread, src)| {
-            let packet = try!(Packet::try_from(&buf[..nread])
-                              .or(Err(SocketError::InvalidPacket)));
+            let packet = try!(Packet::try_from(&buf[..nread]));
 
             // Ignore non-SYN packets
             if packet.get_type() != PacketType::Syn {
-                return Err(SocketError::InvalidPacket.into());
+                let message = format!("Expected SYN packet, got {:?} instead", packet.get_type());
+                return Err(SocketError::Other(message).into());
             }
 
             // The address of the new socket will depend on the type of the listener.
@@ -1184,10 +1158,11 @@ impl UtpListener {
             let mut socket = try!(inner_socket.map(|s| UtpSocket::from_raw_parts(s, src)));
 
             // Establish connection with remote peer
-            socket.handle_packet(&packet, src).and_then(|reply| match reply {
-                Some(reply) => socket.socket.send_to(reply.as_ref(), src),
-                None => Err(SocketError::InvalidPacket.into()),
-            }).and(Ok((socket, src)))
+            if let Ok(Some(reply)) = socket.handle_packet(&packet, src) {
+                socket.socket.send_to(reply.as_ref(), src).and(Ok((socket, src)))
+            } else {
+                Err(SocketError::Other("Reached unreachable statement".to_owned()).into())
+            }
         })
     }
 

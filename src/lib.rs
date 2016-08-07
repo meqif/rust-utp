@@ -64,8 +64,9 @@ pub use socket::UtpSocket;
 pub use socket::UtpListener;
 pub use stream::UtpStream;
 
-mod util;
 mod bit_iterator;
+mod error;
 mod packet;
 mod socket;
 mod stream;
+mod util;
