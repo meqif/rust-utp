@@ -904,6 +904,9 @@ impl UtpSocket {
                 self.state = SocketState::Closed;
                 Ok(Some(reply))
             }
+            (SocketState::Closed, PacketType::Fin) => {
+                Ok(Some(self.prepare_reply(packet, PacketType::State)))
+            }
             (SocketState::FinSent, PacketType::State) => {
                 if packet.ack_nr() == self.seq_nr {
                     self.state = SocketState::Closed;
