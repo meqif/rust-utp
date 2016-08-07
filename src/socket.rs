@@ -285,7 +285,7 @@ impl UtpSocket {
 
         let mut syn_timeout = socket.congestion_timeout;
         for _ in 0..MAX_SYN_RETRIES {
-            packet.set_timestamp_microseconds(now_microseconds());
+            packet.set_timestamp(now_microseconds());
 
             // Send packet
             debug!("Connecting to {}", socket.connected_to);
@@ -337,7 +337,7 @@ impl UtpSocket {
         packet.set_connection_id(self.sender_connection_id);
         packet.set_seq_nr(self.seq_nr);
         packet.set_ack_nr(self.ack_nr);
-        packet.set_timestamp_microseconds(now_microseconds());
+        packet.set_timestamp(now_microseconds());
         packet.set_type(PacketType::Fin);
 
         // Send FIN
@@ -477,7 +477,7 @@ impl UtpSocket {
                 packet.set_connection_id(self.sender_connection_id);
                 packet.set_seq_nr(self.seq_nr);
                 packet.set_ack_nr(self.ack_nr);
-                packet.set_timestamp_microseconds(now_microseconds());
+                packet.set_timestamp(now_microseconds());
                 packet.set_type(PacketType::Fin);
 
                 // Send FIN
@@ -493,7 +493,7 @@ impl UtpSocket {
             // The socket is sending data packets but there is no reply from the remote
             // peer: resend the first unacknowledged packet with the current timestamp.
             let mut packet = &mut self.send_window[0];
-            packet.set_timestamp_microseconds(now_microseconds());
+            packet.set_timestamp(now_microseconds());
             try!(self.socket.send_to(packet.as_ref(), self.connected_to));
             debug!("resent {:?}", packet);
         }
@@ -505,10 +505,10 @@ impl UtpSocket {
         let mut resp = Packet::new();
         resp.set_type(t);
         let self_t_micro: u32 = now_microseconds();
-        let other_t_micro: u32 = original.timestamp_microseconds();
+        let other_t_micro: u32 = original.timestamp();
         let time_difference: u32 = abs_diff(self_t_micro, other_t_micro);
-        resp.set_timestamp_microseconds(self_t_micro);
-        resp.set_timestamp_difference_microseconds(time_difference);
+        resp.set_timestamp(self_t_micro);
+        resp.set_timestamp_difference(time_difference);
         resp.set_connection_id(self.sender_connection_id);
         resp.set_seq_nr(self.seq_nr);
         resp.set_ack_nr(self.ack_nr);
@@ -664,8 +664,8 @@ impl UtpSocket {
             return Ok(());
         }
 
-        packet.set_timestamp_microseconds(now_microseconds());
-        packet.set_timestamp_difference_microseconds(self.their_delay);
+        packet.set_timestamp(now_microseconds());
+        packet.set_timestamp_difference(self.their_delay);
         try!(self.socket.send_to(packet.as_ref(), self.connected_to));
         debug!("sent {:?}", packet);
 
@@ -770,8 +770,8 @@ impl UtpSocket {
             let mut packet = Packet::new();
             packet.set_type(PacketType::State);
             let self_t_micro: u32 = now_microseconds();
-            packet.set_timestamp_microseconds(self_t_micro);
-            packet.set_timestamp_difference_microseconds(self.their_delay);
+            packet.set_timestamp(self_t_micro);
+            packet.set_timestamp_difference(self.their_delay);
             packet.set_connection_id(self.sender_connection_id);
             packet.set_seq_nr(self.seq_nr);
             packet.set_ack_nr(self.ack_nr);
@@ -844,7 +844,7 @@ impl UtpSocket {
 
         // Update remote peer's delay between them sending the packet and us receiving it
         let now = now_microseconds();
-        self.their_delay = abs_diff(now, packet.timestamp_microseconds());
+        self.their_delay = abs_diff(now, packet.timestamp());
         debug!("self.their_delay: {}", self.their_delay);
 
         match (self.state, packet.get_type()) {
@@ -1018,7 +1018,7 @@ impl UtpSocket {
 
             // Update base and current delay
             let now = now_microseconds() as i64;
-            let our_delay = now - self.send_window[index].timestamp_microseconds() as i64;
+            let our_delay = now - self.send_window[index].timestamp() as i64;
             debug!("our_delay: {}", our_delay);
             self.update_base_delay(our_delay, now);
             self.update_current_delay(our_delay, now);
@@ -1847,29 +1847,29 @@ mod test {
         assert_eq!(socket.incoming_buffer.len(), 1);
 
         packet.set_seq_nr(2);
-        packet.set_timestamp_microseconds(128);
+        packet.set_timestamp(128);
 
         socket.insert_into_buffer(packet.clone());
         assert_eq!(socket.incoming_buffer.len(), 2);
         assert_eq!(socket.incoming_buffer[1].seq_nr(), 2);
-        assert_eq!(socket.incoming_buffer[1].timestamp_microseconds(), 128);
+        assert_eq!(socket.incoming_buffer[1].timestamp(), 128);
 
         packet.set_seq_nr(3);
-        packet.set_timestamp_microseconds(256);
+        packet.set_timestamp(256);
 
         socket.insert_into_buffer(packet.clone());
         assert_eq!(socket.incoming_buffer.len(), 3);
         assert_eq!(socket.incoming_buffer[2].seq_nr(), 3);
-        assert_eq!(socket.incoming_buffer[2].timestamp_microseconds(), 256);
+        assert_eq!(socket.incoming_buffer[2].timestamp(), 256);
 
         // Replacing a packet with a more recent version doesn't work
         packet.set_seq_nr(2);
-        packet.set_timestamp_microseconds(456);
+        packet.set_timestamp(456);
 
         socket.insert_into_buffer(packet.clone());
         assert_eq!(socket.incoming_buffer.len(), 3);
         assert_eq!(socket.incoming_buffer[1].seq_nr(), 2);
-        assert_eq!(socket.incoming_buffer[1].timestamp_microseconds(), 128);
+        assert_eq!(socket.incoming_buffer[1].timestamp(), 128);
     }
 
     #[test]
@@ -1897,7 +1897,7 @@ mod test {
 
             // Send two copies of the packet, with different timestamps
             for _ in 0..2 {
-                packet.set_timestamp_microseconds(now_microseconds());
+                packet.set_timestamp(now_microseconds());
                 iotry!(client.socket.send_to(packet.as_ref(), server_addr));
             }
             client.seq_nr += 1;
@@ -1969,7 +1969,7 @@ mod test {
     //     packet.set_seq_nr(server.seq_nr);
     //     packet.set_ack_nr(server.ack_nr - 1);
     //     packet.set_connection_id(server.sender_connection_id);
-    //     packet.set_timestamp_microseconds(now_microseconds());
+    //     packet.set_timestamp(now_microseconds());
     //     packet.set_type(PacketType::State);
     //     packet.set_sack(vec!(12, 0, 0, 0));
 
@@ -2010,7 +2010,7 @@ mod test {
                 packet.set_seq_nr(client.seq_nr);
                 packet.set_ack_nr(client.ack_nr);
                 packet.set_connection_id(client.sender_connection_id);
-                packet.set_timestamp_microseconds(now_microseconds());
+                packet.set_timestamp(now_microseconds());
 
                 if index % 2 == 0 {
                     iotry!(client.socket.send_to(packet.as_ref(), dst));
@@ -2267,7 +2267,7 @@ mod test {
         packet.set_connection_id(server.sender_connection_id);
         packet.set_seq_nr(server.seq_nr);
         packet.set_ack_nr(server.ack_nr);
-        packet.set_timestamp_microseconds(now_microseconds());
+        packet.set_timestamp(now_microseconds());
         packet.set_type(PacketType::Fin);
         iotry!(server.socket.send_to(packet.as_ref(), client_addr));
 

@@ -150,8 +150,9 @@ struct PacketHeader {
     type_ver: u8, // type: u4, ver: u4
     extension: u8,
     connection_id: u16,
-    timestamp_microseconds: u32,
-    timestamp_difference_microseconds: u32,
+    // Both timestamps are in microseconds
+    timestamp: u32,
+    timestamp_difference: u32,
     wnd_size: u32,
     seq_nr: u16,
     ack_nr: u16,
@@ -214,8 +215,8 @@ impl<'a> TryFrom<&'a[u8]> for PacketHeader {
             type_ver: buf[0],
             extension: buf[1],
             connection_id: u8_to_unsigned_be!(buf, 2, 3, u16),
-            timestamp_microseconds: u8_to_unsigned_be!(buf, 4, 7, u32),
-            timestamp_difference_microseconds: u8_to_unsigned_be!(buf, 8, 11, u32),
+            timestamp: u8_to_unsigned_be!(buf, 4, 7, u32),
+            timestamp_difference: u8_to_unsigned_be!(buf, 8, 11, u32),
             wnd_size: u8_to_unsigned_be!(buf, 12, 15, u32),
             seq_nr: u8_to_unsigned_be!(buf, 16, 17, u16),
             ack_nr: u8_to_unsigned_be!(buf, 18, 19, u16),
@@ -229,8 +230,8 @@ impl Default for PacketHeader {
             type_ver: u8::from(PacketType::Data) << 4 | 1,
             extension: 0,
             connection_id: 0,
-            timestamp_microseconds: 0,
-            timestamp_difference_microseconds: 0,
+            timestamp: 0,
+            timestamp_difference: 0,
             wnd_size: 0,
             seq_nr: 0,
             ack_nr: 0,
@@ -313,15 +314,15 @@ impl Packet {
     make_getter!(ack_nr, u16, u16);
     make_getter!(connection_id, u16, u16);
     make_getter!(wnd_size, u32, u32);
-    make_getter!(timestamp_microseconds, u32, u32);
-    make_getter!(timestamp_difference_microseconds, u32, u32);
+    make_getter!(timestamp, u32, u32);
+    make_getter!(timestamp_difference, u32, u32);
 
     make_setter!(set_seq_nr, seq_nr, u16);
     make_setter!(set_ack_nr, ack_nr, u16);
     make_setter!(set_connection_id, connection_id, u16);
     make_setter!(set_wnd_size, wnd_size, u32);
-    make_setter!(set_timestamp_microseconds, timestamp_microseconds, u32);
-    make_setter!(set_timestamp_difference_microseconds, timestamp_difference_microseconds, u32);
+    make_setter!(set_timestamp, timestamp, u32);
+    make_setter!(set_timestamp_difference, timestamp_difference, u32);
 
     /// Sets Selective ACK field in packet header and adds appropriate data.
     ///
@@ -409,8 +410,8 @@ impl fmt::Debug for Packet {
             .field("version", &self.get_version())
             .field("extension", &self.get_extension_type())
             .field("connection_id", &self.connection_id())
-            .field("timestamp_microseconds", &self.timestamp_microseconds())
-            .field("timestamp_difference_microseconds", &self.timestamp_difference_microseconds())
+            .field("timestamp", &self.timestamp())
+            .field("timestamp_difference", &self.timestamp_difference())
             .field("wnd_size", &self.wnd_size())
             .field("seq_nr", &self.seq_nr())
             .field("ack_nr", &self.ack_nr())
@@ -527,8 +528,8 @@ mod tests {
         assert_eq!(packet.get_extension_type(), ExtensionType::None);
         assert_eq!(packet.get_type(), State);
         assert_eq!(packet.connection_id(), 16808);
-        assert_eq!(packet.timestamp_microseconds(), 2570047530);
-        assert_eq!(packet.timestamp_difference_microseconds(), 2672436769);
+        assert_eq!(packet.timestamp(), 2570047530);
+        assert_eq!(packet.timestamp_difference(), 2672436769);
         assert_eq!(packet.wnd_size(), 2u32.pow(20));
         assert_eq!(packet.seq_nr(), 15090);
         assert_eq!(packet.ack_nr(), 27769);
@@ -548,8 +549,8 @@ mod tests {
         assert_eq!(packet.get_extension_type(), ExtensionType::SelectiveAck);
         assert_eq!(packet.get_type(), State);
         assert_eq!(packet.connection_id(), 16807);
-        assert_eq!(packet.timestamp_microseconds(), 0);
-        assert_eq!(packet.timestamp_difference_microseconds(), 0);
+        assert_eq!(packet.timestamp(), 0);
+        assert_eq!(packet.timestamp_difference(), 0);
         assert_eq!(packet.wnd_size(), 1500);
         assert_eq!(packet.seq_nr(), 43859);
         assert_eq!(packet.ack_nr(), 15093);
@@ -594,8 +595,8 @@ mod tests {
                 assert_eq!(packet.get_extension_type(), ExtensionType::SelectiveAck);
                 assert_eq!(packet.get_type(), State);
                 assert_eq!(packet.connection_id(), 16807);
-                assert_eq!(packet.timestamp_microseconds(), 0);
-                assert_eq!(packet.timestamp_difference_microseconds(), 0);
+                assert_eq!(packet.timestamp(), 0);
+                assert_eq!(packet.timestamp_difference(), 0);
                 assert_eq!(packet.wnd_size(), 1500);
                 assert_eq!(packet.seq_nr(), 43859);
                 assert_eq!(packet.ack_nr(), 15093);
@@ -664,8 +665,8 @@ mod tests {
         let window_size: u32 = 1048576;
         let mut packet = Packet::with_payload(&payload[..]);
         packet.set_type(Data);
-        packet.set_timestamp_microseconds(timestamp);
-        packet.set_timestamp_difference_microseconds(timestamp_diff);
+        packet.set_timestamp(timestamp);
+        packet.set_timestamp_difference(timestamp_diff);
         packet.set_connection_id(connection_id);
         packet.set_seq_nr(seq_nr);
         packet.set_ack_nr(ack_nr);
@@ -685,8 +686,8 @@ mod tests {
         assert_eq!(packet.seq_nr(), seq_nr);
         assert_eq!(packet.ack_nr(), ack_nr);
         assert_eq!(packet.wnd_size(), window_size);
-        assert_eq!(packet.timestamp_microseconds(), timestamp);
-        assert_eq!(packet.timestamp_difference_microseconds(), timestamp_diff);
+        assert_eq!(packet.timestamp(), timestamp);
+        assert_eq!(packet.timestamp_difference(), timestamp_diff);
         assert_eq!(packet.as_ref(), buf);
     }
 
@@ -697,8 +698,8 @@ mod tests {
         let (connection_id, seq_nr, ack_nr): (u16, u16, u16) = (16808, 15090, 17096);
         let window_size: u32 = 1048576;
         let mut packet = Packet::with_payload(&payload[..]);
-        packet.set_timestamp_microseconds(timestamp);
-        packet.set_timestamp_difference_microseconds(timestamp_diff);
+        packet.set_timestamp(timestamp);
+        packet.set_timestamp_difference(timestamp_diff);
         packet.set_connection_id(connection_id);
         packet.set_seq_nr(seq_nr);
         packet.set_ack_nr(ack_nr);
@@ -718,8 +719,8 @@ mod tests {
         assert_eq!(packet.seq_nr(), seq_nr);
         assert_eq!(packet.ack_nr(), ack_nr);
         assert_eq!(packet.wnd_size(), window_size);
-        assert_eq!(packet.timestamp_microseconds(), timestamp);
-        assert_eq!(packet.timestamp_difference_microseconds(), timestamp_diff);
+        assert_eq!(packet.timestamp(), timestamp);
+        assert_eq!(packet.timestamp_difference(), timestamp_diff);
         assert_eq!(packet.as_ref(), buf);
     }
 
