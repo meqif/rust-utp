@@ -1623,75 +1623,6 @@ mod test {
     }
 
     #[test]
-    #[ignore]
-    fn test_socket_unordered_packets() {
-        let server_addr = next_test_ip4();
-
-        let mut server = iotry!(UtpSocket::bind(server_addr));
-        assert_eq!(server.state, SocketState::New);
-
-        let child = thread::spawn(move || {
-            let mut client = iotry!(UtpSocket::connect(server_addr));
-            assert_eq!(client.state, SocketState::Connected);
-            // Check proper difference in client's send connection id and receive connection id
-            assert_eq!(client.sender_connection_id, client.receiver_connection_id + 1);
-            let s = client.socket.try_clone().expect("Error cloning internal UDP socket");
-            let mut window: Vec<Packet> = Vec::new();
-
-            for data in (1..13u8).collect::<Vec<u8>>()[..].chunks(3) {
-                let mut packet = Packet::with_payload(data);
-                packet.set_wnd_size(BUF_SIZE as u32);
-                packet.set_connection_id(client.sender_connection_id);
-                packet.set_seq_nr(client.seq_nr);
-                packet.set_ack_nr(client.ack_nr);
-                window.push(packet.clone());
-                client.send_window.push(packet.clone());
-                client.seq_nr += 1;
-                client.curr_window += packet.len() as u32;
-            }
-
-            let mut packet = Packet::new();
-            packet.set_wnd_size(BUF_SIZE as u32);
-            packet.set_type(PacketType::Fin);
-            packet.set_connection_id(client.sender_connection_id);
-            packet.set_seq_nr(client.seq_nr);
-            packet.set_ack_nr(client.ack_nr);
-            window.push(packet);
-            client.seq_nr += 1;
-
-            iotry!(s.send_to(window[3].as_ref(), server_addr));
-            iotry!(s.send_to(window[2].as_ref(), server_addr));
-            iotry!(s.send_to(window[1].as_ref(), server_addr));
-            iotry!(s.send_to(window[0].as_ref(), server_addr));
-            iotry!(s.send_to(window[4].as_ref(), server_addr));
-
-            for _ in 0..2 {
-                let mut buf = [0; BUF_SIZE];
-                iotry!(s.recv_from(&mut buf));
-            }
-        });
-
-        let mut buf = [0; BUF_SIZE];
-        let expected: Vec<u8> = (1..13u8).collect();
-        let mut received: Vec<u8> = vec![];
-        loop {
-            match server.recv_from(&mut buf) {
-                Ok((0, _src)) => break,
-                Ok((len, _src)) => received.extend(buf[..len].to_vec()),
-                Err(e) => panic!("{:?}", e),
-            }
-        }
-
-        // After establishing a new connection, the server's ids are a mirror of the client's.
-        assert_eq!(server.receiver_connection_id, server.sender_connection_id + 1);
-        assert_eq!(server.state, SocketState::Closed);
-        assert_eq!(received.len(), expected.len());
-        assert_eq!(received, expected);
-
-        assert!(child.join().is_ok());
-    }
-
-    #[test]
     fn test_response_to_triple_ack() {
         let server_addr = next_test_ip4();
         let mut server = iotry!(UtpSocket::bind(server_addr));
@@ -1912,63 +1843,6 @@ mod test {
 
         assert!(child.join().is_ok());
     }
-
-    // #[test]
-    // #[ignore]
-    // fn test_selective_ack_response() {
-    //     let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
-    //     const LEN: usize = 1024 * 10;
-    //     let data = (0..LEN).map(|idx| idx as u8).collect::<Vec<u8>>();
-    //     let to_send = data.clone();
-
-    //     // Client
-    //     thread::spawn(move || {
-    //         let client = iotry!(UtpSocket::bind(client_addr));
-    //         let mut client = iotry!(UtpSocket::connect(server_addr));
-    //         client.congestion_timeout = 50;
-
-    //         iotry!(client.send_to(&to_send[..]));
-    //         iotry!(client.close());
-    //     });
-
-    //     // Server
-    //     let mut server = iotry!(UtpSocket::bind(server_addr));
-
-    //     let mut buf = [0; BUF_SIZE];
-
-    //     // Connect
-    //     iotry!(server.recv_from(&mut buf));
-
-    //     // Discard packets
-    //     iotry!(server.socket.recv_from(&mut buf));
-    //     iotry!(server.socket.recv_from(&mut buf));
-    //     iotry!(server.socket.recv_from(&mut buf));
-
-    //     // Generate SACK
-    //     let mut packet = Packet::new();
-    //     packet.set_seq_nr(server.seq_nr);
-    //     packet.set_ack_nr(server.ack_nr - 1);
-    //     packet.set_connection_id(server.sender_connection_id);
-    //     packet.set_timestamp(now_microseconds());
-    //     packet.set_type(PacketType::State);
-    //     packet.set_sack(vec!(12, 0, 0, 0));
-
-    //     // Send SACK
-    //     iotry!(server.socket.send_to(packet.as_ref(), server.connected_to.clone()));
-
-    //     // Expect to receive "missing" packets
-    //     let mut received: Vec<u8> = vec!();
-    //     loop {
-    //         match server.recv_from(&mut buf) {
-    //             Ok((0, _src)) => break,
-    //             Ok((len, _src)) => received.extend(buf[..len].to_vec()),
-    //             Err(e) => panic!("{:?}", e)
-    //         }
-    //     }
-    //     assert!(!received.is_empty());
-    //     assert_eq!(received.len(), data.len());
-    //     assert_eq!(received, data);
-    // }
 
     #[test]
     fn test_correct_packet_loss() {
