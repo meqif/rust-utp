@@ -17,8 +17,11 @@ matrix:
 before_script:
   - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
 after_success: |
-  travis-cargo --only stable doc && travis-cargo --only stable doc-upload &&
-  travis-cargo coveralls --no-sudo
+  travis-cargo --only stable doc &&
+  travis-cargo --only stable doc-upload &&
+  travis-cargo coveralls --no-sudo &&
+  bash <(curl -s https://codecov.io/bash) &&
+    echo "Uploaded code coverage"
 env:
   global:
     secure: cqq4PpUsrmCNLbWrmkkuf/SaCKET0+QN5w0lXmuOndBES5C+m/aR417T3Pb+7PR4gqibf47eSXgaVCQa64eZAI5PjgXrdZ7FtPRu/mgcsgcgiVrSUz5C/KSMsmp876Gl67csjCZ6SZXJ3YC0/Jh3jiJLiRt9Giqzn/s1v15j/CY=
