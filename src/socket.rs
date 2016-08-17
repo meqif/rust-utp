@@ -2236,6 +2236,7 @@ mod test {
     }
 
     // Test reaction to connection loss when sending data packets
+    #[ignore]
     #[test]
     fn test_connection_loss_data() {
         let server_addr = next_test_ip4();
@@ -2278,6 +2279,7 @@ mod test {
     }
 
     // Test reaction to connection loss when sending FIN
+    #[ignore]
     #[test]
     fn test_connection_loss_fin() {
         let server_addr = next_test_ip4();
@@ -2316,6 +2318,7 @@ mod test {
     }
 
     // Test reaction to connection loss when waiting for data packets
+    #[ignore]
     #[test]
     fn test_connection_loss_waiting() {
         let server_addr = next_test_ip4();
