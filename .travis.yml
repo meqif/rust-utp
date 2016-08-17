@@ -19,9 +19,18 @@ before_script:
 after_success: |
   travis-cargo --only stable doc &&
   travis-cargo --only stable doc-upload &&
-  travis-cargo coveralls --no-sudo &&
+  wget https://github.com/SimonKagstrom/kcov/archive/master.tar.gz &&
+  tar xzf master.tar.gz &&
+  mv kcov-master kcov
+  cd kcov &&
+  mkdir build &&
+  cd build &&
+  cmake .. &&
+  make &&
+  cd ../.. &&
+  for file in target/debug/{utp,stream}-*; do mkdir -p "target/cov/$(basename $file)"; kcov/build/src/kcov --exclude-pattern=/.cargo,/usr/lib --verify "target/cov/$(basename $file)" "$file"; done &&
   bash <(curl -s https://codecov.io/bash) &&
-    echo "Uploaded code coverage"
+  echo "Uploaded code coverage"
 env:
   global:
     secure: cqq4PpUsrmCNLbWrmkkuf/SaCKET0+QN5w0lXmuOndBES5C+m/aR417T3Pb+7PR4gqibf47eSXgaVCQa64eZAI5PjgXrdZ7FtPRu/mgcsgcgiVrSUz5C/KSMsmp876Gl67csjCZ6SZXJ3YC0/Jh3jiJLiRt9Giqzn/s1v15j/CY=
