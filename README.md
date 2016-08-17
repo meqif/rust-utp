@@ -3,7 +3,7 @@
 [![Crate Version](https://img.shields.io/crates/v/utp.svg?style=flat)](https://crates.io/crates/utp)
 [![Build Status](https://img.shields.io/travis/meqif/rust-utp.svg?style=flat)](http://travis-ci.org/meqif/rust-utp)
 [![Windows Build Status](https://ci.appveyor.com/api/projects/status/q38b38fendqat8o6?svg=true)](https://ci.appveyor.com/project/meqif/rust-utp)
-[![Coverage Status](https://img.shields.io/coveralls/meqif/rust-utp.svg?style=flat)](https://coveralls.io/r/meqif/rust-utp?branch=master)
+[![codecov](https://codecov.io/gh/meqif/rust-utp/branch/master/graph/badge.svg)](https://codecov.io/gh/meqif/rust-utp)
 [![Dependency Status](https://dependencyci.com/github/meqif/rust-utp/badge)](https://dependencyci.com/github/meqif/rust-utp)
 
 A [Micro Transport Protocol](http://www.bittorrent.org/beps/bep_0029.html)
