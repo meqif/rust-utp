@@ -48,11 +48,12 @@
 
 #![deny(missing_docs)]
 
-// Optional feature
+// Optional features
 #![cfg_attr(feature = "clippy", feature(plugin))]
 #![cfg_attr(feature = "clippy", plugin(clippy))]
 #![cfg_attr(feature = "clippy", allow(len_without_is_empty, doc_markdown, needless_return,
                                       transmute_ptr_to_ref))]
+#![cfg_attr(feature = "unstable", feature(test))]
 
 extern crate rand;
 extern crate num_traits;

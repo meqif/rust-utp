@@ -25,3 +25,6 @@ quickcheck = "*"
 
 [lib]
 name = "utp"
+
+[features]
+unstable = []
