@@ -14,7 +14,7 @@ use time::*;
 const BUF_SIZE: usize = 1500;
 const GAIN: f64 = 1.0;
 const ALLOWED_INCREASE: u32 = 1;
-const TARGET: i64 = 100_000; // 100 milliseconds
+const TARGET: f64 = 100_000.0; // 100 milliseconds
 const MSS: u32 = 1400;
 const MIN_CWND: u32 = 2;
 const INIT_CWND: u32 = 2;
@@ -30,7 +30,7 @@ const WINDOW_SIZE: u32 = 1024 * 1024; // local receive window size
 const PRE_SEND_TIMEOUT: u32 = 500_000;
 
 // Maximum age of base delay sample (60 seconds)
-const MAX_BASE_DELAY_AGE: i64 = 60_000_000;
+const MAX_BASE_DELAY_AGE: Delay = Delay(60_000_000);
 
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
 enum SocketState {
@@ -43,8 +43,8 @@ enum SocketState {
 }
 
 struct DelayDifferenceSample {
-    received_at: i64,
-    difference: i64,
+    received_at: Timestamp,
+    difference: Delay,
 }
 
 /// Returns the first valid address in a `ToSocketAddrs` iterator.
@@ -120,7 +120,7 @@ pub struct UtpSocket {
     last_acked: u16,
 
     /// Timestamp of the latest packet the remote peer acknowledged
-    last_acked_timestamp: u32,
+    last_acked_timestamp: Timestamp,
 
     /// Sequence number of the last packet removed from the incoming buffer
     last_dropped: u16,
@@ -141,16 +141,16 @@ pub struct UtpSocket {
     remote_wnd_size: u32,
 
     /// Rolling window of packet delay to remote peer
-    base_delays: VecDeque<i64>,
+    base_delays: VecDeque<Delay>,
 
     /// Rolling window of the difference between sending a packet and receiving its acknowledgement
     current_delays: Vec<DelayDifferenceSample>,
 
     /// Difference between timestamp of the latest packet received and time of reception
-    their_delay: u32,
+    their_delay: Delay,
 
     /// Start of the current minute for sampling purposes
-    last_rollover: i64,
+    last_rollover: Timestamp,
 
     /// Current congestion timeout in milliseconds
     congestion_timeout: u64,
@@ -194,7 +194,7 @@ impl UtpSocket {
             unsent_queue: VecDeque::new(),
             duplicate_ack_count: 0,
             last_acked: 0,
-            last_acked_timestamp: 0,
+            last_acked_timestamp: Timestamp::default(),
             last_dropped: 0,
             rtt: 0,
             rtt_variance: 0,
@@ -203,8 +203,8 @@ impl UtpSocket {
             remote_wnd_size: 0,
             current_delays: Vec::new(),
             base_delays: VecDeque::with_capacity(BASE_HISTORY),
-            their_delay: 0,
-            last_rollover: 0,
+            their_delay: Delay::default(),
+            last_rollover: Timestamp::default(),
             congestion_timeout: INITIAL_CONGESTION_TIMEOUT,
             cwnd: INIT_CWND * MSS,
             max_retransmission_retries: MAX_RETRANSMISSION_RETRIES,
@@ -484,9 +484,9 @@ impl UtpSocket {
     fn prepare_reply(&self, original: &Packet, t: PacketType) -> Packet {
         let mut resp = Packet::new();
         resp.set_type(t);
-        let self_t_micro: u32 = now_microseconds();
-        let other_t_micro: u32 = original.timestamp();
-        let time_difference: u32 = abs_diff(self_t_micro, other_t_micro);
+        let self_t_micro = now_microseconds();
+        let other_t_micro = original.timestamp();
+        let time_difference: Delay = abs_diff(self_t_micro, other_t_micro);
         resp.set_timestamp(self_t_micro);
         resp.set_timestamp_difference(time_difference);
         resp.set_connection_id(self.sender_connection_id);
@@ -623,7 +623,7 @@ impl UtpSocket {
 
         // Wait until enough in-flight packets are acknowledged for rate control purposes, but don't
         // wait more than 500 ms (PRE_SEND_TIMEOUT) before sending the packet.
-        while self.curr_window >= max_inflight && now_microseconds() - now < PRE_SEND_TIMEOUT {
+        while self.curr_window >= max_inflight && now_microseconds() - now < PRE_SEND_TIMEOUT.into() {
             debug!("self.curr_window: {}", self.curr_window);
             debug!("max_inflight: {}", max_inflight);
             debug!("self.duplicate_ack_count: {}", self.duplicate_ack_count);
@@ -656,7 +656,7 @@ impl UtpSocket {
     //
     // The base delay list contains at most `BASE_HISTORY` samples, each sample is the minimum
     // measured over a period of a minute (MAX_BASE_DELAY_AGE).
-    fn update_base_delay(&mut self, base_delay: i64, now: i64) {
+    fn update_base_delay(&mut self, base_delay: Delay, now: Timestamp) {
         if self.base_delays.is_empty() || now - self.last_rollover > MAX_BASE_DELAY_AGE {
             // Update last rollover
             self.last_rollover = now;
@@ -679,9 +679,9 @@ impl UtpSocket {
 
     /// Inserts a new sample in the current delay list after removing samples older than one RTT, as
     /// specified in RFC6817.
-    fn update_current_delay(&mut self, v: i64, now: i64) {
+    fn update_current_delay(&mut self, v: Delay, now: Timestamp) {
         // Remove samples more than one RTT old
-        let rtt = self.rtt as i64 * 100;
+        let rtt = (self.rtt as i64 * 100).into();
         while !self.current_delays.is_empty() && now - self.current_delays[0].received_at > rtt {
             self.current_delays.remove(0);
         }
@@ -713,14 +713,14 @@ impl UtpSocket {
     /// The current delay is calculated through application of the exponential
     /// weighted moving average filter with smoothing factor 0.333 over the
     /// current delays in the current window.
-    fn filtered_current_delay(&self) -> i64 {
+    fn filtered_current_delay(&self) -> Delay {
         let input = self.current_delays.iter().map(|delay| &delay.difference);
-        ewma(input, 0.333) as i64
+        (ewma(input, 0.333) as i64).into()
     }
 
     /// Calculates the lowest base delay in the current window.
-    fn min_base_delay(&self) -> i64 {
-        self.base_delays.iter().min().cloned().unwrap_or(0)
+    fn min_base_delay(&self) -> Delay {
+        self.base_delays.iter().min().cloned().unwrap_or_default()
     }
 
     /// Builds the selective acknowledgement extension data for usage in packets.
@@ -752,7 +752,7 @@ impl UtpSocket {
         for _ in 0..3 {
             let mut packet = Packet::new();
             packet.set_type(PacketType::State);
-            let self_t_micro: u32 = now_microseconds();
+            let self_t_micro = now_microseconds();
             packet.set_timestamp(self_t_micro);
             packet.set_timestamp_difference(self.their_delay);
             packet.set_connection_id(self.sender_connection_id);
@@ -926,7 +926,7 @@ impl UtpSocket {
         Some(reply)
     }
 
-    fn queuing_delay(&self) -> i64 {
+    fn queuing_delay(&self) -> Delay {
         let filtered_current_delay = self.filtered_current_delay();
         let min_base_delay = self.min_base_delay();
         let queuing_delay = filtered_current_delay - min_base_delay;
@@ -992,19 +992,19 @@ impl UtpSocket {
                 .fold(0, |acc, p| acc + p.len());
 
             // Update base and current delay
-            let now = now_microseconds() as i64;
-            let our_delay = now - self.send_window[index].timestamp() as i64;
+            let now = now_microseconds();
+            let our_delay = now - self.send_window[index].timestamp();
             debug!("our_delay: {}", our_delay);
             self.update_base_delay(our_delay, now);
             self.update_current_delay(our_delay, now);
 
-            let off_target: f64 = (TARGET as f64 - self.queuing_delay() as f64) / TARGET as f64;
+            let off_target: f64 = (TARGET - u32::from(self.queuing_delay()) as f64) / TARGET;
             debug!("off_target: {}", off_target);
 
             self.update_congestion_window(off_target, bytes_newly_acked as u32);
 
             // Update congestion timeout
-            let rtt = (our_delay - self.queuing_delay()) / 1000; // in milliseconds
+            let rtt = u32::from(our_delay - self.queuing_delay()) / 1000; // in milliseconds
             self.update_congestion_timeout(rtt as i32);
         }
 
@@ -1199,7 +1199,7 @@ mod test {
     use std::io::ErrorKind;
     use socket::{UtpSocket, UtpListener, SocketState, BUF_SIZE, take_address};
     use packet::*;
-    use util::now_microseconds;
+    use time::now_microseconds;
     use rand;
 
     macro_rules! iotry {
@@ -1759,29 +1759,29 @@ mod test {
         assert_eq!(socket.incoming_buffer.len(), 1);
 
         packet.set_seq_nr(2);
-        packet.set_timestamp(128);
+        packet.set_timestamp(128.into());
 
         socket.insert_into_buffer(packet.clone());
         assert_eq!(socket.incoming_buffer.len(), 2);
         assert_eq!(socket.incoming_buffer[1].seq_nr(), 2);
-        assert_eq!(socket.incoming_buffer[1].timestamp(), 128);
+        assert_eq!(socket.incoming_buffer[1].timestamp(), 128.into());
 
         packet.set_seq_nr(3);
-        packet.set_timestamp(256);
+        packet.set_timestamp(256.into());
 
         socket.insert_into_buffer(packet.clone());
         assert_eq!(socket.incoming_buffer.len(), 3);
         assert_eq!(socket.incoming_buffer[2].seq_nr(), 3);
-        assert_eq!(socket.incoming_buffer[2].timestamp(), 256);
+        assert_eq!(socket.incoming_buffer[2].timestamp(), 256.into());
 
         // Replacing a packet with a more recent version doesn't work
         packet.set_seq_nr(2);
-        packet.set_timestamp(456);
+        packet.set_timestamp(456.into());
 
         socket.insert_into_buffer(packet.clone());
         assert_eq!(socket.incoming_buffer.len(), 3);
         assert_eq!(socket.incoming_buffer[1].seq_nr(), 2);
-        assert_eq!(socket.incoming_buffer[1].timestamp(), 128);
+        assert_eq!(socket.incoming_buffer[1].timestamp(), 128.into());
     }
 
     #[test]
@@ -2152,13 +2152,13 @@ mod test {
         let mut socket = UtpSocket::bind(addr).unwrap();
 
         for (timestamp, delay) in samples {
-            socket.update_base_delay(delay, timestamp + delay);
+            socket.update_base_delay(delay.into(), ((timestamp + delay) as u32).into());
         }
 
-        let expected = vec![7, 9];
+        let expected = vec![7i64, 9i64].into_iter().map(Into::into).collect::<Vec<_>>();
         let actual = socket.base_delays.iter().cloned().collect::<Vec<_>>();
         assert_eq!(expected, actual);
-        assert_eq!(socket.min_base_delay(), 7);
+        assert_eq!(socket.min_base_delay(), expected.iter().min().cloned().unwrap_or_default());
     }
 
     #[test]

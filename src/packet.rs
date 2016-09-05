@@ -3,6 +3,7 @@
 use bit_iterator::BitIterator;
 use error::ParseError;
 use std::fmt;
+use time::{Timestamp, Delay};
 
 pub const HEADER_SIZE: usize = 20;
 
@@ -282,19 +283,35 @@ impl Packet {
         &self.0[index..]
     }
 
+    pub fn timestamp(&self) -> Timestamp {
+        let header = unsafe { &*(self.0.as_ptr() as *const PacketHeader) };
+        u32::from_be(header.timestamp).into()
+    }
+
+    pub fn set_timestamp(&mut self, timestamp: Timestamp) {
+        let header = unsafe { &mut *(self.0.as_mut_ptr() as *mut PacketHeader) };
+        header.timestamp = u32::from(timestamp).to_be();
+    }
+
+    pub fn timestamp_difference(&self) -> Delay {
+        let header = unsafe { &*(self.0.as_ptr() as *const PacketHeader) };
+        u32::from_be(header.timestamp_difference).into()
+    }
+
+    pub fn set_timestamp_difference(&mut self, delay: Delay) {
+        let header = unsafe { &mut *(self.0.as_mut_ptr() as *mut PacketHeader) };
+        header.timestamp_difference = u32::from(delay).to_be();
+    }
+
     make_getter!(seq_nr, u16, u16);
     make_getter!(ack_nr, u16, u16);
     make_getter!(connection_id, u16, u16);
     make_getter!(wnd_size, u32, u32);
-    make_getter!(timestamp, u32, u32);
-    make_getter!(timestamp_difference, u32, u32);
 
     make_setter!(set_seq_nr, seq_nr, u16);
     make_setter!(set_ack_nr, ack_nr, u16);
     make_setter!(set_connection_id, connection_id, u16);
     make_setter!(set_wnd_size, wnd_size, u32);
-    make_setter!(set_timestamp, timestamp, u32);
-    make_setter!(set_timestamp_difference, timestamp_difference, u32);
 
     /// Sets Selective ACK field in packet header and adds appropriate data.
     ///
@@ -488,6 +505,7 @@ mod tests {
     use packet::{PacketHeader, check_extensions};
     use packet::PacketType::{State, Data};
     use quickcheck::{QuickCheck, TestResult};
+    use time::*;
 
     #[test]
     fn test_packet_decode() {
@@ -500,8 +518,8 @@ mod tests {
         assert_eq!(packet.get_extension_type(), ExtensionType::None);
         assert_eq!(packet.get_type(), State);
         assert_eq!(packet.connection_id(), 16808);
-        assert_eq!(packet.timestamp(), 2570047530);
-        assert_eq!(packet.timestamp_difference(), 2672436769);
+        assert_eq!(packet.timestamp(), Timestamp(2570047530));
+        assert_eq!(packet.timestamp_difference(), Delay(2672436769));
         assert_eq!(packet.wnd_size(), 2u32.pow(20));
         assert_eq!(packet.seq_nr(), 15090);
         assert_eq!(packet.ack_nr(), 27769);
@@ -521,8 +539,8 @@ mod tests {
         assert_eq!(packet.get_extension_type(), ExtensionType::SelectiveAck);
         assert_eq!(packet.get_type(), State);
         assert_eq!(packet.connection_id(), 16807);
-        assert_eq!(packet.timestamp(), 0);
-        assert_eq!(packet.timestamp_difference(), 0);
+        assert_eq!(packet.timestamp(), Timestamp(0));
+        assert_eq!(packet.timestamp_difference(), Delay(0));
         assert_eq!(packet.wnd_size(), 1500);
         assert_eq!(packet.seq_nr(), 43859);
         assert_eq!(packet.ack_nr(), 15093);
@@ -567,8 +585,8 @@ mod tests {
                 assert_eq!(packet.get_extension_type(), ExtensionType::SelectiveAck);
                 assert_eq!(packet.get_type(), State);
                 assert_eq!(packet.connection_id(), 16807);
-                assert_eq!(packet.timestamp(), 0);
-                assert_eq!(packet.timestamp_difference(), 0);
+                assert_eq!(packet.timestamp(), Timestamp(0));
+                assert_eq!(packet.timestamp_difference(), Delay(0));
                 assert_eq!(packet.wnd_size(), 1500);
                 assert_eq!(packet.seq_nr(), 43859);
                 assert_eq!(packet.ack_nr(), 15093);
@@ -632,7 +650,8 @@ mod tests {
     #[test]
     fn test_packet_encode() {
         let payload = b"Hello\n".to_vec();
-        let (timestamp, timestamp_diff): (u32, u32) = (15270793, 1707040186);
+        let timestamp = Timestamp(15270793);
+        let timestamp_diff = Delay(1707040186);
         let (connection_id, seq_nr, ack_nr): (u16, u16, u16) = (16808, 15090, 17096);
         let window_size: u32 = 1048576;
         let mut packet = Packet::with_payload(&payload[..]);
@@ -666,7 +685,8 @@ mod tests {
     #[test]
     fn test_packet_encode_with_payload() {
         let payload = b"Hello\n".to_vec();
-        let (timestamp, timestamp_diff): (u32, u32) = (15270793, 1707040186);
+        let timestamp = Timestamp(15270793);
+        let timestamp_diff = Delay(1707040186);
         let (connection_id, seq_nr, ack_nr): (u16, u16, u16) = (16808, 15090, 17096);
         let window_size: u32 = 1048576;
         let mut packet = Packet::with_payload(&payload[..]);
