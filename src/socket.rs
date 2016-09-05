@@ -2097,6 +2097,7 @@ mod test {
         panic!("Should have received Reset");
     }
 
+    #[cfg(not(windows))]
     #[test]
     fn test_premature_fin() {
         let (server_addr, client_addr) = (next_test_ip4(), next_test_ip4());
