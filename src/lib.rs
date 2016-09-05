@@ -70,4 +70,5 @@ mod error;
 mod packet;
 mod socket;
 mod stream;
+mod time;
 mod util;
