@@ -2,11 +2,12 @@ use std::cmp::{min, max};
 use std::collections::VecDeque;
 use std::net::{ToSocketAddrs, SocketAddr, UdpSocket};
 use std::io::{Result, ErrorKind};
-use util::{now_microseconds, ewma, abs_diff};
+use util::{ewma, abs_diff};
 use packet::*;
 use error::SocketError;
 use rand::{self, Rng};
 use std::time::{Duration, Instant};
+use time::*;
 
 // For simplicity's sake, let us assume no packet will ever exceed the
 // Ethernet maximum transfer unit of 1500 bytes.
