@@ -23,7 +23,7 @@ pub fn abs_diff<T: PartialOrd + Sub<Output = U>, U>(a: T, b: T) -> U {
 
 #[cfg(test)]
 mod test {
-    use util::ewma;
+    use util::*;
 
     #[test]
     fn test_ewma_empty_vector() {
@@ -54,5 +54,13 @@ mod test {
                         46439.0 / 6561.0,
                         158488.0 / 19683.0];
         assert_eq!(ewma(input.iter(), alpha), expected[expected.len() - 1]);
+    }
+
+    #[test]
+    fn test_abs_diff() {
+        let a = 10;
+        let b = 5;
+        assert_eq!(abs_diff(a, b), 5);
+        assert_eq!(abs_diff(b, a), 5);
     }
 }
