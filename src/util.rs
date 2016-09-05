@@ -1,4 +1,5 @@
 use std::time;
+use std::ops::Sub;
 use num_traits::ToPrimitive;
 
 /// Return current time in microseconds since the UNIX epoch.
@@ -20,9 +21,8 @@ pub fn ewma<'a, T, I>(mut samples: I, alpha: f64) -> f64
            .fold(first, |avg, sample| alpha * sample + (1.0 - alpha) * avg)
 }
 
-/// Returns the absolute difference between two integers.
-#[inline]
-pub fn abs_diff(a: u32, b: u32) -> u32 {
+/// Returns the absolute difference between two values.
+pub fn abs_diff<T: PartialOrd + Sub<Output = U>, U>(a: T, b: T) -> U {
     if a > b {
         a - b
     } else {
