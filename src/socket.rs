@@ -2,10 +2,10 @@ use std::cmp::{min, max};
 use std::collections::VecDeque;
 use std::net::{ToSocketAddrs, SocketAddr, UdpSocket};
 use std::io::{Result, ErrorKind};
-use util::{ewma, abs_diff};
+use util::*;
 use packet::*;
 use error::SocketError;
-use rand::{self, Rng};
+use rand;
 use std::time::{Duration, Instant};
 use time::*;
 
@@ -167,19 +167,7 @@ impl UtpSocket {
     ///
     /// The connection identifier of the resulting socket is randomly generated.
     fn from_raw_parts(s: UdpSocket, src: SocketAddr) -> UtpSocket {
-        // Safely generate the two sequential connection identifiers.
-        // This avoids an overflow when the generated receiver identifier is the largest
-        // representable value in u16 and it is incremented to yield the corresponding sender
-        // identifier.
-        let (receiver_id, sender_id) = {
-            let mut rng = rand::thread_rng();
-            let id = rng.gen::<u16>();
-            if id.checked_add(1).is_some() {
-                (id, id + 1)
-            } else {
-                (id - 1, id)
-            }
-        };
+        let (receiver_id, sender_id) = generate_sequential_identifiers();
 
         UtpSocket {
             socket: s,
