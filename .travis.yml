@@ -17,6 +17,7 @@ matrix:
 before_script:
   - pip install 'travis-cargo<0.2' --user && export PATH=$HOME/.local/bin:$PATH
 after_success: |
+  export RUSTFLAGS="$RUSTFLAGS -C link-dead-code" &&
   travis-cargo --only stable doc &&
   travis-cargo --only stable doc-upload &&
   wget https://github.com/SimonKagstrom/kcov/archive/master.tar.gz &&
