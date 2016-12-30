@@ -121,6 +121,7 @@ impl<'a> Extension<'a> {
     }
 }
 
+#[repr(C)]
 struct PacketHeader {
     type_ver: u8, // type: u4, ver: u4
     extension: u8,
