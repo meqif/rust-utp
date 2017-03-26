@@ -821,6 +821,7 @@ impl UtpSocket {
                 self.connected_to = src;
                 self.ack_nr = packet.seq_nr();
                 self.seq_nr = rand::random();
+                self.last_acked = self.seq_nr.wrapping_sub(1);
                 self.receiver_connection_id = packet.connection_id() + 1;
                 self.sender_connection_id = packet.connection_id();
                 self.state = SocketState::Connected;
@@ -2349,4 +2350,60 @@ mod test {
         }
         assert!(child.join().is_ok());
     }
+
+    // Test data exchange
+    #[test]
+    fn test_data_exchange_utp() {
+        let listener = iotry!(UtpListener::bind("127.0.0.1:0"));
+        let server_addr = iotry!(listener.local_addr());
+
+        static TX_BUF: [u8; 10] = [0,1,2,3,4,5,6,7,8,9];
+
+        let client_t = thread::spawn(move || {
+            let mut client = iotry!(UtpSocket::connect(server_addr));
+            assert_eq!(iotry!(client.send_to(&TX_BUF)), TX_BUF.len());
+            let mut buf = [0; 10];
+            iotry!(client.recv_from(&mut buf));
+            assert_eq!(buf, TX_BUF);
+        });
+
+        let mut server = iotry!(listener.accept()).0;
+
+        assert_eq!(iotry!(server.send_to(&TX_BUF)), TX_BUF.len());
+        let mut buf = [0; 10];
+        iotry!(server.recv_from(&mut buf));
+        assert_eq!(buf, TX_BUF);
+
+        assert!(client_t.join().is_ok());
+    }
+
+    /// Analogous to the above, but with TCP sockets.
+    #[test]
+    fn test_data_exchange_tcp() {
+        use std::net::{TcpListener, TcpStream};
+        use std::io::{Read, Write};
+
+        static TX_BUF: [u8; 10] = [0,1,2,3,4,5,6,7,8,9];
+
+        let listener = iotry!(TcpListener::bind("127.0.0.1:0"));
+        let server_addr = iotry!(listener.local_addr());
+
+        let client_t = thread::spawn(move || {
+            let mut client = iotry!(TcpStream::connect(server_addr));
+            assert_eq!(iotry!(client.write(&TX_BUF)), TX_BUF.len());
+            let mut buf = [0; 10];
+            iotry!(client.read(&mut buf));
+            assert_eq!(buf, TX_BUF);
+        });
+
+        let mut server = iotry!(listener.accept()).0;
+
+        assert_eq!(iotry!(server.write(&TX_BUF)), TX_BUF.len());
+        let mut buf = [0; 10];
+        iotry!(server.read(&mut buf));
+        assert_eq!(buf, TX_BUF);
+
+        assert!(client_t.join().is_ok());
+    }
+
 }
