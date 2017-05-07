@@ -18,10 +18,10 @@ rand = "0.3"
 
 [dependencies.clippy]
 optional = true
-version = "*"
+version = "0.0.131"
 
 [dev-dependencies]
-quickcheck = "*"
+quickcheck = "0.4"
 
 [lib]
 name = "utp"
