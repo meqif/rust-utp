@@ -26,7 +26,7 @@ macro_rules! make_getter {
 macro_rules! make_setter {
     ($fn_name:ident, $field:ident, $t: ty) => {
         pub fn $fn_name(&mut self, new: $t) {
-            let mut header = unsafe { &mut*(self.0.as_mut_ptr() as *mut PacketHeader) };
+            let header = unsafe { &mut*(self.0.as_mut_ptr() as *mut PacketHeader) };
             header.$field = new.to_be();
         }
     }
@@ -235,7 +235,7 @@ impl Packet {
 
     #[inline]
     pub fn set_type(&mut self, t: PacketType) {
-        let mut header = unsafe { &mut *(self.0.as_mut_ptr() as *mut PacketHeader) };
+        let header = unsafe { &mut *(self.0.as_mut_ptr() as *mut PacketHeader) };
         header.set_type(t);
     }
 
