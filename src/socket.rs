@@ -1,13 +1,14 @@
-use std::cmp::{min, max};
-use std::collections::VecDeque;
-use std::net::{ToSocketAddrs, SocketAddr, UdpSocket};
-use std::io::{Result, ErrorKind};
-use util::*;
-use packet::*;
 use error::SocketError;
 use rand;
+use std::cmp::{min, max};
+use std::collections::VecDeque;
+use std::convert::TryFrom;
+use std::io::{Result, ErrorKind};
+use std::net::{ToSocketAddrs, SocketAddr, UdpSocket};
 use std::time::{Duration, Instant};
 use time::*;
+use util::*;
+use utp_packet::{Packet, PacketType, ExtensionType, Timestamp, Delay};
 
 // For simplicity's sake, let us assume no packet will ever exceed the
 // Ethernet maximum transfer unit of 1500 bytes.
@@ -355,7 +356,7 @@ impl UtpSocket {
     }
 
     fn recv(&mut self, buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
-        let mut b = [0; BUF_SIZE + HEADER_SIZE];
+        let mut b = [0; BUF_SIZE + Packet::HEADER_SIZE];
         let start = Instant::now();
         let (read, src);
         let mut retries = 0;
@@ -562,7 +563,7 @@ impl UtpSocket {
 
         let total_length = buf.len();
 
-        for chunk in buf.chunks(MSS as usize - HEADER_SIZE) {
+        for chunk in buf.chunks(MSS as usize - Packet::HEADER_SIZE) {
             let mut packet = Packet::with_payload(chunk);
             packet.set_seq_nr(self.seq_nr);
             packet.set_ack_nr(self.ack_nr);
@@ -702,7 +703,7 @@ impl UtpSocket {
     /// weighted moving average filter with smoothing factor 0.333 over the
     /// current delays in the current window.
     fn filtered_current_delay(&self) -> Delay {
-        let input = self.current_delays.iter().map(|delay| &delay.difference);
+        let input = self.current_delays.iter().map(|delay| &delay.difference.0);
         (ewma(input, 0.333) as i64).into()
     }
 
@@ -859,7 +860,7 @@ impl UtpSocket {
                     let sack = self.build_selective_ack();
 
                     if !sack.is_empty() {
-                        reply.set_sack(sack);
+                        reply.set_sack(&sack);
                     }
                 }
 
@@ -907,7 +908,7 @@ impl UtpSocket {
             let sack = self.build_selective_ack();
 
             if !sack.is_empty() {
-                reply.set_sack(sack);
+                reply.set_sack(&sack);
             }
         }
 
@@ -1186,7 +1187,8 @@ mod test {
     use std::net::ToSocketAddrs;
     use std::io::ErrorKind;
     use socket::{UtpSocket, UtpListener, SocketState, BUF_SIZE, take_address};
-    use packet::*;
+    use utp_packet::*;
+    use std::convert::TryFrom;
     use time::now_microseconds;
     use rand;
 
@@ -2211,15 +2213,15 @@ mod test {
     #[test]
     fn test_take_address() {
         // Expected successes
-        assert!(take_address(("0.0.0.0:0")).is_ok());
-        assert!(take_address(("[::]:0")).is_ok());
+        assert!(take_address("0.0.0.0:0").is_ok());
+        assert!(take_address("[::]:0").is_ok());
         assert!(take_address(("0.0.0.0", 0)).is_ok());
         assert!(take_address(("::", 0)).is_ok());
         assert!(take_address(("1.2.3.4", 5)).is_ok());
 
         // Expected failures
         assert!(take_address("999.0.0.0:0").is_err());
-        assert!(take_address(("1.2.3.4:70000")).is_err());
+        assert!(take_address("1.2.3.4:70000").is_err());
         assert!(take_address("").is_err());
         assert!(take_address("this is not an address").is_err());
         assert!(take_address("no.dns.resolution.com").is_err());

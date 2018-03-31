@@ -1,6 +1,3 @@
-// How many bits in a `u8`
-const U8BITS: usize = 8;
-
 /// Lazy iterator over bits of a vector of bytes, starting with the LSB
 /// (least-significat bit) of the first element of the vector.
 pub struct BitIterator<'a> {
@@ -10,13 +7,15 @@ pub struct BitIterator<'a> {
 }
 
 impl<'a> BitIterator<'a> {
+    const BIT_LENGTH: usize = 8;
+
     /// Creates an iterator from a vector of bytes. Each byte becomes eight bits, with the least
     /// significant bits coming first.
     pub fn from_bytes(obj: &'a [u8]) -> BitIterator {
         BitIterator {
             object: obj,
             next_index: 0,
-            end_index: obj.len() * U8BITS,
+            end_index: obj.len() * Self::BIT_LENGTH,
         }
     }
 
@@ -31,7 +30,8 @@ impl<'a> Iterator for BitIterator<'a> {
 
     fn next(&mut self) -> Option<bool> {
         if self.next_index != self.end_index {
-            let (byte_index, bit_index) = (self.next_index / U8BITS, self.next_index % U8BITS);
+            let byte_index = self.next_index / Self::BIT_LENGTH;
+            let bit_index  = self.next_index % Self::BIT_LENGTH;
             let bit = self.object[byte_index] >> bit_index & 0x1;
             self.next_index += 1;
             Some(bit == 0x1)

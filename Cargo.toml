@@ -15,6 +15,7 @@ env_logger = "0.3"
 log = "0.3"
 num-traits = "0.1"
 rand = "0.3"
+utp-packet = { version = "*", path = "utp-packet" }
 
 [dependencies.clippy]
 optional = true

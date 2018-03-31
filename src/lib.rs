@@ -59,15 +59,14 @@ extern crate rand;
 extern crate num_traits;
 #[macro_use] extern crate log;
 #[cfg(test)] extern crate quickcheck;
+extern crate utp_packet;
 
 // Public API
 pub use socket::UtpSocket;
 pub use socket::UtpListener;
 pub use stream::UtpStream;
 
-mod bit_iterator;
 mod error;
-mod packet;
 mod socket;
 mod stream;
 mod time;

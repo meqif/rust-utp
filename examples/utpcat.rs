@@ -1,5 +1,4 @@
 //! Implementation of a simple uTP client and server.
-#[macro_use]
 extern crate log;
 extern crate env_logger;
 extern crate utp;

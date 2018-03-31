@@ -1,0 +1,10 @@
+[package]
+name = "utp-packet"
+version = "0.1.0"
+authors = ["Ricardo Martins <ricardo@scarybox.net>"]
+
+[dependencies]
+num-traits = "0.2"
+
+[dev-dependencies]
+quickcheck = "0.6"
