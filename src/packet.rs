@@ -2,6 +2,7 @@
 
 use bit_iterator::BitIterator;
 use error::ParseError;
+use std::convert::TryFrom;
 use std::fmt;
 use time::{Timestamp, Delay};
 
@@ -31,14 +32,6 @@ macro_rules! make_setter {
     }
 }
 
-/// Attempt to construct `Self` through conversion.
-///
-/// Waiting for rust-lang/rust#33417 to become stable.
-pub trait TryFrom<T>: Sized {
-    type Err;
-    fn try_from(T) -> Result<Self, Self::Err>;
-}
-
 #[derive(PartialEq, Eq, Debug)]
 pub enum PacketType {
     Data,  // packet carries a data payload
@@ -49,8 +42,8 @@ pub enum PacketType {
 }
 
 impl TryFrom<u8> for PacketType {
-    type Err = ParseError;
-    fn try_from(original: u8) -> Result<Self, Self::Err> {
+    type Error = ParseError;
+    fn try_from(original: u8) -> Result<Self, Self::Error> {
         match original {
             0 => Ok(PacketType::Data),
             1 => Ok(PacketType::Fin),
@@ -165,11 +158,11 @@ impl AsRef<[u8]> for PacketHeader {
 }
 
 impl<'a> TryFrom<&'a [u8]> for PacketHeader {
-    type Err = ParseError;
+    type Error = ParseError;
     /// Reads a byte buffer and returns the corresponding packet header.
     /// It assumes the fields are in network (big-endian) byte order,
     /// preserving it.
-    fn try_from(buf: &[u8]) -> Result<Self, Self::Err> {
+    fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
         // Check length
         if buf.len() < HEADER_SIZE {
             return Err(ParseError::InvalidPacketLength);
@@ -373,14 +366,14 @@ impl Packet {
 }
 
 impl<'a> TryFrom<&'a [u8]> for Packet {
-    type Err = ParseError;
+    type Error = ParseError;
 
     /// Decodes a byte slice and construct the equivalent Packet.
     ///
     /// Note that this method makes no attempt to guess the payload size, saving
     /// all except the initial 20 bytes corresponding to the header as payload.
     /// It's the caller's responsibility to use an appropriately sized buffer.
-    fn try_from(buf: &[u8]) -> Result<Self, Self::Err> {
+    fn try_from(buf: &[u8]) -> Result<Self, Self::Error> {
         PacketHeader::try_from(buf)
             .and(check_extensions(buf))
             .and(Ok(Packet(buf.to_owned())))
