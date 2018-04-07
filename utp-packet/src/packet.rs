@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
-use bit_iterator::BitIterator;
 use error::ParseError;
+use extension::{Extension, ExtensionType};
 use std::convert::TryFrom;
 use std::fmt;
 use time::{Timestamp, Delay};
@@ -60,53 +60,6 @@ impl From<PacketType> for u8 {
             PacketType::Reset => 3,
             PacketType::Syn => 4,
         }
-    }
-}
-
-#[derive(PartialEq, Eq, Debug, Clone, Copy)]
-pub enum ExtensionType {
-    None,
-    SelectiveAck,
-    Unknown(u8),
-}
-
-impl From<u8> for ExtensionType {
-    fn from(original: u8) -> Self {
-        match original {
-            0 => ExtensionType::None,
-            1 => ExtensionType::SelectiveAck,
-            n => ExtensionType::Unknown(n),
-        }
-    }
-}
-
-impl From<ExtensionType> for u8 {
-    fn from(original: ExtensionType) -> u8 {
-        match original {
-            ExtensionType::None => 0,
-            ExtensionType::SelectiveAck => 1,
-            ExtensionType::Unknown(n) => n,
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct Extension<'a> {
-    ty: ExtensionType,
-    pub data: &'a [u8],
-}
-
-impl<'a> Extension<'a> {
-    pub fn len(&self) -> usize {
-        self.data.len()
-    }
-
-    pub fn get_type(&self) -> ExtensionType {
-        self.ty
-    }
-
-    pub fn iter(&self) -> BitIterator {
-        BitIterator::from_bytes(self.data)
     }
 }
 
@@ -428,10 +381,10 @@ impl<'a> Iterator for ExtensionIterator<'a> {
             let extension_end = extension_start + len;
 
             // Assume extension is valid because the bytes come from a (valid) Packet
-            let extension = Extension {
-                ty: self.next_extension,
-                data: &self.raw_bytes[extension_start..extension_end],
-            };
+            let extension = Extension::new(
+                self.next_extension,
+                &self.raw_bytes[extension_start..extension_end],
+            );
 
             self.next_extension = self.raw_bytes[self.index].into();
             self.index += len + 2;
@@ -534,7 +487,7 @@ mod tests {
         assert!(packet.payload().is_empty());
         let extensions: Vec<Extension> = packet.extensions().collect();
         assert_eq!(extensions.len(), 1);
-        assert_eq!(extensions[0].ty, ExtensionType::SelectiveAck);
+        assert_eq!(extensions[0].get_type(), ExtensionType::SelectiveAck);
         assert_eq!(extensions[0].data, &[0, 0, 0, 0]);
         assert_eq!(extensions[0].len(), extensions[0].data.len());
         assert_eq!(extensions[0].len(), 4);
@@ -580,7 +533,7 @@ mod tests {
                 // The invalid extension is discarded
                 let extensions: Vec<Extension> = packet.extensions().collect();
                 assert_eq!(extensions.len(), 2);
-                assert_eq!(extensions[0].ty, ExtensionType::SelectiveAck);
+                assert_eq!(extensions[0].get_type(), ExtensionType::SelectiveAck);
                 assert_eq!(extensions[0].data, &[0, 0, 0, 0]);
                 assert_eq!(extensions[0].len(), extensions[0].data.len());
                 assert_eq!(extensions[0].len(), 4);
@@ -612,7 +565,7 @@ mod tests {
         {
             let extensions: Vec<Extension> = packet.extensions().collect();
             assert_eq!(extensions.len(), 1);
-            assert_eq!(extensions[0].ty, ExtensionType::SelectiveAck);
+            assert_eq!(extensions[0].get_type(), ExtensionType::SelectiveAck);
             assert_eq!(extensions[0].data, &[1, 2, 3, 4]);
             assert_eq!(extensions[0].len(), extensions[0].data.len());
             assert_eq!(extensions[0].len(), 4);
@@ -623,11 +576,11 @@ mod tests {
 
         let extensions: Vec<Extension> = packet.extensions().collect();
         assert_eq!(extensions.len(), 2);
-        assert_eq!(extensions[0].ty, ExtensionType::SelectiveAck);
+        assert_eq!(extensions[0].get_type(), ExtensionType::SelectiveAck);
         assert_eq!(extensions[0].data, &[1, 2, 3, 4]);
         assert_eq!(extensions[0].len(), extensions[0].data.len());
         assert_eq!(extensions[0].len(), 4);
-        assert_eq!(extensions[1].ty, ExtensionType::SelectiveAck);
+        assert_eq!(extensions[1].get_type(), ExtensionType::SelectiveAck);
         assert_eq!(extensions[1].data, &[5, 6, 7, 8, 9, 10, 11, 12]);
         assert_eq!(extensions[1].len(), extensions[1].data.len());
         assert_eq!(extensions[1].len(), 8);
@@ -754,7 +707,7 @@ mod tests {
         let packet = Packet::try_from(&buf[..]).unwrap();
         let extensions: Vec<Extension> = packet.extensions().collect();
         assert_eq!(extensions.len(), 1);
-        assert_eq!(extensions[0].ty, ExtensionType::SelectiveAck);
+        assert_eq!(extensions[0].get_type(), ExtensionType::SelectiveAck);
         assert_eq!(extensions[0].data, &[0, 0, 0, 0]);
         assert_eq!(extensions[0].len(), extensions[0].data.len());
         assert_eq!(extensions[0].len(), 4);
@@ -767,11 +720,11 @@ mod tests {
         let packet = Packet::try_from(&buf[..]).unwrap();
         let extensions: Vec<Extension> = packet.extensions().collect();
         assert_eq!(extensions.len(), 2);
-        assert_eq!(extensions[0].ty, ExtensionType::SelectiveAck);
+        assert_eq!(extensions[0].get_type(), ExtensionType::SelectiveAck);
         assert_eq!(extensions[0].data, &[1, 2, 3, 4]);
         assert_eq!(extensions[0].len(), extensions[0].data.len());
         assert_eq!(extensions[0].len(), 4);
-        assert_eq!(extensions[1].ty, ExtensionType::Unknown(0xff));
+        assert_eq!(extensions[1].get_type(), ExtensionType::Unknown(0xff));
         assert_eq!(extensions[1].data, &[5, 6, 7, 8]);
         assert_eq!(extensions[1].len(), extensions[1].data.len());
         assert_eq!(extensions[1].len(), 4);
