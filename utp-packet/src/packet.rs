@@ -216,6 +216,10 @@ impl Packet {
     }
 
     pub fn payload(&self) -> &[u8] {
+        &self.0[self.find_payload_start()..]
+    }
+
+    fn find_payload_start(&self) -> usize {
         let mut index = Packet::HEADER_SIZE;
         let mut extension_type = ExtensionType::from(self.0[1]);
 
@@ -230,7 +234,7 @@ impl Packet {
             index += len + 2;
         }
 
-        &self.0[index..]
+        index
     }
 
     pub fn timestamp(&self) -> Timestamp {
