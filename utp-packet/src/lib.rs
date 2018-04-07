@@ -1,6 +1,7 @@
 mod bit_iterator;
 mod error;
 mod extension;
+mod extension_iterator;
 mod packet;
 mod time;
 

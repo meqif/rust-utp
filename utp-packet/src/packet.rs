@@ -1,7 +1,8 @@
 #![allow(dead_code)]
 
 use error::ParseError;
-use extension::{Extension, ExtensionType};
+use extension::ExtensionType;
+use extension_iterator::ExtensionIterator;
 use std::convert::TryFrom;
 use std::fmt;
 use time::{Timestamp, Delay};
@@ -353,49 +354,6 @@ impl fmt::Debug for Packet {
     }
 }
 
-pub struct ExtensionIterator<'a> {
-    raw_bytes: &'a [u8],
-    next_extension: ExtensionType,
-    index: usize,
-}
-
-impl<'a> ExtensionIterator<'a> {
-    fn new(packet: &'a Packet) -> Self {
-        ExtensionIterator {
-            raw_bytes: packet.as_ref(),
-            next_extension: ExtensionType::from(packet.as_ref()[1]),
-            index: Packet::HEADER_SIZE,
-        }
-    }
-}
-
-impl<'a> Iterator for ExtensionIterator<'a> {
-    type Item = Extension<'a>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.next_extension == ExtensionType::None {
-            None
-        } else if self.index < self.raw_bytes.len() {
-            let len = self.raw_bytes[self.index + 1] as usize;
-            let extension_start = self.index + 2;
-            let extension_end = extension_start + len;
-
-            // Assume extension is valid because the bytes come from a (valid) Packet
-            let extension = Extension::new(
-                self.next_extension,
-                &self.raw_bytes[extension_start..extension_end],
-            );
-
-            self.next_extension = self.raw_bytes[self.index].into();
-            self.index += len + 2;
-
-            Some(extension)
-        } else {
-            None
-        }
-    }
-}
-
 /// Validate correctness of packet extensions, if any, in byte slice
 fn check_extensions(data: &[u8]) -> Result<(), ParseError> {
     if data.len() < Packet::HEADER_SIZE {
@@ -439,6 +397,7 @@ fn check_extensions(data: &[u8]) -> Result<(), ParseError> {
 
 #[cfg(test)]
 mod tests {
+    use extension::Extension;
     use packet::*;
     use packet::{PacketHeader, check_extensions};
     use packet::PacketType::{State, Data};
