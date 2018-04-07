@@ -15,8 +15,7 @@ macro_rules! u8_to_unsigned_be {
 macro_rules! make_getter {
     ($name:ident, $t:ty, $m:ident) => {
         pub fn $name(&self) -> $t {
-            let header = unsafe { &*(self.0.as_ptr() as *const PacketHeader) };
-            $m::from_be(header.$name)
+            $m::from_be(self.header().$name)
         }
     }
 }
@@ -24,8 +23,7 @@ macro_rules! make_getter {
 macro_rules! make_setter {
     ($fn_name:ident, $field:ident, $t: ty) => {
         pub fn $fn_name(&mut self, new: $t) {
-            let header = unsafe { &mut*(self.0.as_mut_ptr() as *mut PacketHeader) };
-            header.$field = new.to_be();
+            self.header_mut().$field = new.to_be();
         }
     }
 }
@@ -233,26 +231,30 @@ impl Packet {
         Packet(inner)
     }
 
+    fn header(&self) -> &PacketHeader {
+        unsafe { &*(self.0.as_ptr() as *const PacketHeader) }
+    }
+
+    fn header_mut(&mut self) -> &mut PacketHeader {
+        unsafe { &mut *(self.0.as_mut_ptr() as *mut PacketHeader) }
+    }
+
     #[inline]
     pub fn set_type(&mut self, t: PacketType) {
-        let header = unsafe { &mut *(self.0.as_mut_ptr() as *mut PacketHeader) };
-        header.set_type(t);
+        self.header_mut().set_type(t);
     }
 
     #[inline]
     pub fn get_type(&self) -> PacketType {
-        let header = unsafe { &*(self.0.as_ptr() as *const PacketHeader) };
-        header.get_type()
+        self.header().get_type()
     }
 
     pub fn get_version(&self) -> u8 {
-        let header = unsafe { &*(self.0.as_ptr() as *const PacketHeader) };
-        header.get_version()
+        self.header().get_version()
     }
 
     pub fn get_extension_type(&self) -> ExtensionType {
-        let header = unsafe { &*(self.0.as_ptr() as *const PacketHeader) };
-        header.get_extension_type()
+        self.header().get_extension_type()
     }
 
     pub fn extensions(&self) -> ExtensionIterator {
@@ -278,23 +280,19 @@ impl Packet {
     }
 
     pub fn timestamp(&self) -> Timestamp {
-        let header = unsafe { &*(self.0.as_ptr() as *const PacketHeader) };
-        u32::from_be(header.timestamp).into()
+        u32::from_be(self.header().timestamp).into()
     }
 
     pub fn set_timestamp(&mut self, timestamp: Timestamp) {
-        let header = unsafe { &mut *(self.0.as_mut_ptr() as *mut PacketHeader) };
-        header.timestamp = u32::from(timestamp).to_be();
+        self.header_mut().timestamp = u32::from(timestamp).to_be();
     }
 
     pub fn timestamp_difference(&self) -> Delay {
-        let header = unsafe { &*(self.0.as_ptr() as *const PacketHeader) };
-        u32::from_be(header.timestamp_difference).into()
+        u32::from_be(self.header().timestamp_difference).into()
     }
 
     pub fn set_timestamp_difference(&mut self, delay: Delay) {
-        let header = unsafe { &mut *(self.0.as_mut_ptr() as *mut PacketHeader) };
-        header.timestamp_difference = u32::from(delay).to_be();
+        self.header_mut().timestamp_difference = u32::from(delay).to_be();
     }
 
     make_getter!(seq_nr, u16, u16);
