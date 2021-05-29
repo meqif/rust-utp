@@ -1,13 +1,14 @@
-use error::SocketError;
-use packet::*;
+use crate::error::SocketError;
+use crate::packet::*;
+use crate::time::*;
+use crate::util::*;
+use log::debug;
 use rand;
 use std::cmp::{max, min};
 use std::collections::VecDeque;
 use std::io::{ErrorKind, Result};
 use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
 use std::time::{Duration, Instant};
-use time::*;
-use util::*;
 
 // For simplicity's sake, let us assume no packet will ever exceed the
 // Ethernet maximum transfer unit of 1500 bytes.
@@ -230,12 +231,12 @@ impl UtpSocket {
     ///
     /// If more than one valid address is specified, only the first will be used.
     pub fn connect<A: ToSocketAddrs>(other: A) -> Result<UtpSocket> {
-        let addr = try!(take_address(other));
+        let addr = take_address(other)?;
         let my_addr = match addr {
             SocketAddr::V4(_) => "0.0.0.0:0",
             SocketAddr::V6(_) => "[::]:0",
         };
-        let mut socket = try!(UtpSocket::bind(my_addr));
+        let mut socket = UtpSocket::bind(my_addr)?;
         socket.connected_to = addr;
 
         let mut packet = Packet::new();
@@ -252,7 +253,9 @@ impl UtpSocket {
 
             // Send packet
             debug!("Connecting to {}", socket.connected_to);
-            try!(socket.socket.send_to(packet.as_ref(), socket.connected_to));
+            socket
+                .socket
+                .send_to(packet.as_ref(), socket.connected_to)?;
             socket.state = SocketState::SynSent;
             debug!("sent {:?}", packet);
 
@@ -279,9 +282,9 @@ impl UtpSocket {
         }
 
         let addr = socket.connected_to;
-        let packet = try!(Packet::try_from(&buf[..len]));
+        let packet = Packet::try_from(&buf[..len])?;
         debug!("received {:?}", packet);
-        try!(socket.handle_packet(&packet, addr));
+        socket.handle_packet(&packet, addr)?;
 
         debug!("connected to: {}", socket.connected_to);
 
@@ -302,7 +305,7 @@ impl UtpSocket {
         }
 
         // Flush unsent and unacknowledged packets
-        try!(self.flush());
+        self.flush()?;
 
         let mut packet = Packet::new();
         packet.set_connection_id(self.sender_connection_id);
@@ -312,14 +315,14 @@ impl UtpSocket {
         packet.set_type(PacketType::Fin);
 
         // Send FIN
-        try!(self.socket.send_to(packet.as_ref(), self.connected_to));
+        self.socket.send_to(packet.as_ref(), self.connected_to)?;
         debug!("sent {:?}", packet);
         self.state = SocketState::FinSent;
 
         // Receive JAKE
         let mut buf = [0; BUF_SIZE];
         while self.state != SocketState::Closed {
-            try!(self.recv(&mut buf));
+            self.recv(&mut buf)?;
         }
 
         Ok(())
@@ -391,7 +394,7 @@ impl UtpSocket {
                     if (e.kind() == ErrorKind::WouldBlock || e.kind() == ErrorKind::TimedOut) =>
                 {
                     debug!("recv_from timed out");
-                    try!(self.handle_receive_timeout());
+                    self.handle_receive_timeout()?;
                 }
                 Err(e) => return Err(e),
             };
@@ -414,9 +417,9 @@ impl UtpSocket {
         debug!("received {:?}", packet);
 
         // Process packet, including sending a reply if necessary
-        if let Some(mut pkt) = try!(self.handle_packet(&packet, src)) {
+        if let Some(mut pkt) = self.handle_packet(&packet, src)? {
             pkt.set_wnd_size(WINDOW_SIZE);
-            try!(self.socket.send_to(pkt.as_ref(), src));
+            self.socket.send_to(pkt.as_ref(), src)?;
             debug!("sent {:?}", pkt);
         }
 
@@ -467,7 +470,7 @@ impl UtpSocket {
                 packet.set_type(PacketType::Fin);
 
                 // Send FIN
-                try!(self.socket.send_to(packet.as_ref(), self.connected_to));
+                self.socket.send_to(packet.as_ref(), self.connected_to)?;
                 debug!("resent FIN: {:?}", packet);
             } else if self.state != SocketState::New {
                 // The socket is waiting for incoming packets but the remote peer is silent:
@@ -478,9 +481,9 @@ impl UtpSocket {
         } else {
             // The socket is sending data packets but there is no reply from the remote
             // peer: resend the first unacknowledged packet with the current timestamp.
-            let mut packet = &mut self.send_window[0];
+            let packet = &mut self.send_window[0];
             packet.set_timestamp(now_microseconds());
-            try!(self.socket.send_to(packet.as_ref(), self.connected_to));
+            self.socket.send_to(packet.as_ref(), self.connected_to)?;
             debug!("resent {:?}", packet);
         }
 
@@ -593,7 +596,7 @@ impl UtpSocket {
         }
 
         // Send every packet in the queue
-        try!(self.send());
+        self.send()?;
 
         Ok(total_length)
     }
@@ -603,7 +606,7 @@ impl UtpSocket {
         let mut buf = [0u8; BUF_SIZE];
         while !self.send_window.is_empty() {
             debug!("packets in send window: {}", self.send_window.len());
-            try!(self.recv(&mut buf));
+            self.recv(&mut buf)?;
         }
 
         Ok(())
@@ -612,7 +615,7 @@ impl UtpSocket {
     /// Sends every packet in the unsent packet queue.
     fn send(&mut self) -> Result<()> {
         while let Some(mut packet) = self.unsent_queue.pop_front() {
-            try!(self.send_packet(&mut packet));
+            self.send_packet(&mut packet)?;
             self.curr_window += packet.len() as u32;
             self.send_window.push(packet);
         }
@@ -636,7 +639,7 @@ impl UtpSocket {
             debug!("self.duplicate_ack_count: {}", self.duplicate_ack_count);
             debug!("now_microseconds() - now = {}", now_microseconds() - now);
             let mut buf = [0; BUF_SIZE];
-            try!(self.recv(&mut buf));
+            self.recv(&mut buf)?;
         }
         debug!(
             "out: now_microseconds() - now = {}",
@@ -656,7 +659,7 @@ impl UtpSocket {
 
         packet.set_timestamp(now_microseconds());
         packet.set_timestamp_difference(self.their_delay);
-        try!(self.socket.send_to(packet.as_ref(), self.connected_to));
+        self.socket.send_to(packet.as_ref(), self.connected_to)?;
         debug!("sent {:?}", packet);
 
         Ok(())
@@ -1193,7 +1196,7 @@ impl UtpListener {
         let mut buf = [0; BUF_SIZE];
 
         self.socket.recv_from(&mut buf).and_then(|(nread, src)| {
-            let packet = try!(Packet::try_from(&buf[..nread]));
+            let packet = Packet::try_from(&buf[..nread])?;
 
             // Ignore non-SYN packets
             if packet.get_type() != PacketType::Syn {
@@ -1207,7 +1210,7 @@ impl UtpListener {
                 SocketAddr::V6(_) => UdpSocket::bind("[::]:0"),
             });
 
-            let mut socket = try!(inner_socket.map(|s| UtpSocket::from_raw_parts(s, src)));
+            let mut socket = inner_socket.map(|s| UtpSocket::from_raw_parts(s, src))?;
 
             // Establish connection with remote peer
             if let Ok(Some(reply)) = socket.handle_packet(&packet, src) {
@@ -1224,7 +1227,7 @@ impl UtpListener {
     /// Returns an iterator over the connections being received by this listener.
     ///
     /// The returned iterator will never return `None`.
-    pub fn incoming(&self) -> Incoming {
+    pub fn incoming(&self) -> Incoming<'_> {
         Incoming { listener: self }
     }
 
@@ -1248,13 +1251,13 @@ impl<'a> Iterator for Incoming<'a> {
 
 #[cfg(test)]
 mod test {
-    use packet::*;
+    use crate::packet::*;
+    use crate::socket::{take_address, SocketState, UtpListener, UtpSocket, BUF_SIZE};
+    use crate::time::now_microseconds;
     use rand;
-    use socket::{take_address, SocketState, UtpListener, UtpSocket, BUF_SIZE};
     use std::io::ErrorKind;
     use std::net::ToSocketAddrs;
     use std::thread;
-    use time::now_microseconds;
 
     macro_rules! iotry {
         ($e:expr) => {
@@ -1266,8 +1269,8 @@ mod test {
     }
 
     fn next_test_port() -> u16 {
-        use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
-        static NEXT_OFFSET: AtomicUsize = ATOMIC_USIZE_INIT;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        static NEXT_OFFSET: AtomicUsize = AtomicUsize::new(0);
         const BASE_PORT: u16 = 9600;
         BASE_PORT + NEXT_OFFSET.fetch_add(1, Ordering::Relaxed) as u16
     }
@@ -2330,15 +2333,15 @@ mod test {
     #[test]
     fn test_take_address() {
         // Expected successes
-        assert!(take_address(("0.0.0.0:0")).is_ok());
-        assert!(take_address(("[::]:0")).is_ok());
+        assert!(take_address("0.0.0.0:0").is_ok());
+        assert!(take_address("[::]:0").is_ok());
         assert!(take_address(("0.0.0.0", 0)).is_ok());
         assert!(take_address(("::", 0)).is_ok());
         assert!(take_address(("1.2.3.4", 5)).is_ok());
 
         // Expected failures
         assert!(take_address("999.0.0.0:0").is_err());
-        assert!(take_address(("1.2.3.4:70000")).is_err());
+        assert!(take_address("1.2.3.4:70000").is_err());
         assert!(take_address("").is_err());
         assert!(take_address("this is not an address").is_err());
         assert!(take_address("no.dns.resolution.com").is_err());

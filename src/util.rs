@@ -41,7 +41,7 @@ pub fn generate_sequential_identifiers() -> (u16, u16) {
 
 #[cfg(test)]
 mod test {
-    use util::*;
+    use crate::util::*;
 
     #[test]
     fn test_ewma_empty_vector() {

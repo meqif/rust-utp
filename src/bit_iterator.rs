@@ -12,7 +12,7 @@ pub struct BitIterator<'a> {
 impl<'a> BitIterator<'a> {
     /// Creates an iterator from a vector of bytes. Each byte becomes eight bits, with the least
     /// significant bits coming first.
-    pub fn from_bytes(obj: &'a [u8]) -> BitIterator {
+    pub fn from_bytes(obj: &'a [u8]) -> BitIterator<'_> {
         BitIterator {
             object: obj,
             next_index: 0,

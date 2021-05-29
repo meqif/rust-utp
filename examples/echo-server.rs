@@ -1,5 +1,4 @@
-extern crate env_logger;
-extern crate utp;
+use env_logger;
 
 use std::thread;
 use utp::{UtpListener, UtpSocket};

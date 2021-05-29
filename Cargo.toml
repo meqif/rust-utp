@@ -9,6 +9,7 @@ name = "utp"
 readme = "README.md"
 repository = "https://github.com/meqif/rust-utp"
 version = "0.7.1-pre"
+edition = "2018"
 
 [dependencies]
 log = "0.4.14"

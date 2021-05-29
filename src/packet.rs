@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 
-use bit_iterator::BitIterator;
-use error::ParseError;
+use crate::bit_iterator::BitIterator;
+use crate::error::ParseError;
+use crate::time::{Delay, Timestamp};
 use std::fmt;
-use time::{Delay, Timestamp};
 
 pub const HEADER_SIZE: usize = 20;
 
@@ -36,7 +36,7 @@ macro_rules! make_setter {
 /// Waiting for rust-lang/rust#33417 to become stable.
 pub trait TryFrom<T>: Sized {
     type Err;
-    fn try_from(T) -> Result<Self, Self::Err>;
+    fn try_from(_: T) -> Result<Self, Self::Err>;
 }
 
 #[derive(PartialEq, Eq, Debug)]
@@ -116,7 +116,7 @@ impl<'a> Extension<'a> {
         self.ty
     }
 
-    pub fn iter(&self) -> BitIterator {
+    pub fn iter(&self) -> BitIterator<'_> {
         BitIterator::from_bytes(self.data)
     }
 }
@@ -242,7 +242,7 @@ impl Packet {
 
     #[inline]
     pub fn set_type(&mut self, t: PacketType) {
-        let mut header = unsafe { &mut *(self.0.as_mut_ptr() as *mut PacketHeader) };
+        let header = unsafe { &mut *(self.0.as_mut_ptr() as *mut PacketHeader) };
         header.set_type(t);
     }
 
@@ -262,7 +262,7 @@ impl Packet {
         header.get_extension_type()
     }
 
-    pub fn extensions(&self) -> ExtensionIterator {
+    pub fn extensions(&self) -> ExtensionIterator<'_> {
         ExtensionIterator::new(self)
     }
 
@@ -394,7 +394,7 @@ impl Clone for Packet {
 }
 
 impl fmt::Debug for Packet {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Packet")
             .field("type", &self.get_type())
             .field("version", &self.get_version())
@@ -495,11 +495,11 @@ fn check_extensions(data: &[u8]) -> Result<(), ParseError> {
 
 #[cfg(test)]
 mod tests {
-    use packet::PacketType::{Data, State};
-    use packet::*;
-    use packet::{check_extensions, PacketHeader};
+    use crate::packet::PacketType::{Data, State};
+    use crate::packet::*;
+    use crate::packet::{check_extensions, PacketHeader};
+    use crate::time::*;
     use quickcheck::{QuickCheck, TestResult};
-    use time::*;
 
     #[test]
     fn test_packet_decode() {
@@ -543,7 +543,7 @@ mod tests {
         assert_eq!(packet.ack_nr(), 15093);
         assert_eq!(packet.len(), buf.len());
         assert!(packet.payload().is_empty());
-        let extensions: Vec<Extension> = packet.extensions().collect();
+        let extensions: Vec<Extension<'_>> = packet.extensions().collect();
         assert_eq!(extensions.len(), 1);
         assert_eq!(extensions[0].ty, ExtensionType::SelectiveAck);
         assert_eq!(extensions[0].data, &[0, 0, 0, 0]);
@@ -594,7 +594,7 @@ mod tests {
                 assert_eq!(packet.ack_nr(), 15093);
                 assert!(packet.payload().is_empty());
                 // The invalid extension is discarded
-                let extensions: Vec<Extension> = packet.extensions().collect();
+                let extensions: Vec<Extension<'_>> = packet.extensions().collect();
                 assert_eq!(extensions.len(), 2);
                 assert_eq!(extensions[0].ty, ExtensionType::SelectiveAck);
                 assert_eq!(extensions[0].data, &[0, 0, 0, 0]);
@@ -626,7 +626,7 @@ mod tests {
         packet.set_sack(vec![1, 2, 3, 4]);
 
         {
-            let extensions: Vec<Extension> = packet.extensions().collect();
+            let extensions: Vec<Extension<'_>> = packet.extensions().collect();
             assert_eq!(extensions.len(), 1);
             assert_eq!(extensions[0].ty, ExtensionType::SelectiveAck);
             assert_eq!(extensions[0].data, &[1, 2, 3, 4]);
@@ -637,7 +637,7 @@ mod tests {
         // Add a second sack
         packet.set_sack(vec![5, 6, 7, 8, 9, 10, 11, 12]);
 
-        let extensions: Vec<Extension> = packet.extensions().collect();
+        let extensions: Vec<Extension<'_>> = packet.extensions().collect();
         assert_eq!(extensions.len(), 2);
         assert_eq!(extensions[0].ty, ExtensionType::SelectiveAck);
         assert_eq!(extensions[0].data, &[1, 2, 3, 4]);
@@ -778,7 +778,7 @@ mod tests {
             0x05, 0xdc, 0xab, 0x53, 0x3a, 0xf5, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00,
         ];
         let packet = Packet::try_from(&buf).unwrap();
-        let extensions: Vec<Extension> = packet.extensions().collect();
+        let extensions: Vec<Extension<'_>> = packet.extensions().collect();
         assert_eq!(extensions.len(), 1);
         assert_eq!(extensions[0].ty, ExtensionType::SelectiveAck);
         assert_eq!(extensions[0].data, &[0, 0, 0, 0]);
@@ -793,7 +793,7 @@ mod tests {
         ];
 
         let packet = Packet::try_from(&buf).unwrap();
-        let extensions: Vec<Extension> = packet.extensions().collect();
+        let extensions: Vec<Extension<'_>> = packet.extensions().collect();
         assert_eq!(extensions.len(), 2);
         assert_eq!(extensions[0].ty, ExtensionType::SelectiveAck);
         assert_eq!(extensions[0].data, &[1, 2, 3, 4]);

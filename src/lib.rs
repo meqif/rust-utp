@@ -61,17 +61,10 @@
 )]
 #![cfg_attr(feature = "unstable", feature(test))]
 
-extern crate num_traits;
-extern crate rand;
-#[macro_use]
-extern crate log;
-#[cfg(test)]
-extern crate quickcheck;
-
 // Public API
-pub use socket::UtpListener;
-pub use socket::UtpSocket;
-pub use stream::UtpStream;
+pub use crate::socket::UtpListener;
+pub use crate::socket::UtpSocket;
+pub use crate::stream::UtpStream;
 
 mod bit_iterator;
 mod error;

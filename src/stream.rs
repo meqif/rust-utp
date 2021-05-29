@@ -1,4 +1,4 @@
-use socket::UtpSocket;
+use crate::socket::UtpSocket;
 use std::io::{Read, Result, Write};
 use std::net::{SocketAddr, ToSocketAddrs};
 

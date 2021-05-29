@@ -78,7 +78,7 @@ impl Sub for Delay {
 }
 
 impl fmt::Display for Delay {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Delay({})", self.0)
     }
 }

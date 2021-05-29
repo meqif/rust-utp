@@ -1,5 +1,3 @@
-extern crate utp;
-
 use std::io::{Read, Write};
 use std::thread;
 use utp::UtpStream;
@@ -14,8 +12,8 @@ macro_rules! iotry {
 }
 
 fn next_test_port() -> u16 {
-    use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
-    static NEXT_OFFSET: AtomicUsize = ATOMIC_USIZE_INIT;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static NEXT_OFFSET: AtomicUsize = AtomicUsize::new(0);
     const BASE_PORT: u16 = 9600;
     BASE_PORT + NEXT_OFFSET.fetch_add(1, Ordering::Relaxed) as u16
 }
