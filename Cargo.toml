@@ -11,6 +11,9 @@ repository = "https://github.com/meqif/rust-utp"
 version = "0.7.1-pre"
 edition = "2018"
 
+[badges]
+maintenance = { status = "experimental" }
+
 [dependencies]
 log = "0.4.14"
 num-traits = "0.2.14"

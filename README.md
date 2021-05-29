@@ -5,6 +5,7 @@
 [![Windows Build Status](https://ci.appveyor.com/api/projects/status/q38b38fendqat8o6?svg=true)](https://ci.appveyor.com/project/meqif/rust-utp)
 [![codecov](https://codecov.io/gh/meqif/rust-utp/branch/master/graph/badge.svg)](https://codecov.io/gh/meqif/rust-utp)
 [![Dependency Status](https://dependencyci.com/github/meqif/rust-utp/badge)](https://dependencyci.com/github/meqif/rust-utp)
+![Maintenance: experimental](https://img.shields.io/badge/maintenance-experimental-red.svg)
 
 A [Micro Transport Protocol](http://www.bittorrent.org/beps/bep_0029.html)
 library implemented in Rust.
