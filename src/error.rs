@@ -17,20 +17,20 @@ impl Error for SocketError {
     fn description(&self) -> &str {
         use self::SocketError::*;
         match *self {
-            ConnectionClosed   => "The socket is closed",
-            ConnectionReset    => "Connection reset by remote peer",
+            ConnectionClosed => "The socket is closed",
+            ConnectionReset => "Connection reset by remote peer",
             ConnectionTimedOut => "Connection timed out",
-            InvalidAddress     => "Invalid address",
-            InvalidReply       => "The remote peer sent an invalid reply",
-            NotConnected       => "The socket is not connected",
+            InvalidAddress => "Invalid address",
+            InvalidReply => "The remote peer sent an invalid reply",
+            NotConnected => "The socket is not connected",
             Other(ref s) => s,
         }
     }
 }
 
 impl fmt::Display for SocketError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(self.description())
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", &self)
     }
 }
 
@@ -38,15 +38,14 @@ impl From<SocketError> for io::Error {
     fn from(error: SocketError) -> io::Error {
         use self::SocketError::*;
         let kind = match error {
-            ConnectionClosed |
-            NotConnected       => ErrorKind::NotConnected,
-            ConnectionReset    => ErrorKind::ConnectionReset,
+            ConnectionClosed | NotConnected => ErrorKind::NotConnected,
+            ConnectionReset => ErrorKind::ConnectionReset,
             ConnectionTimedOut => ErrorKind::TimedOut,
-            InvalidAddress     => ErrorKind::InvalidInput,
-            InvalidReply       => ErrorKind::ConnectionRefused,
-            Other(_)           => ErrorKind::Other,
+            InvalidAddress => ErrorKind::InvalidInput,
+            InvalidReply => ErrorKind::ConnectionRefused,
+            Other(_) => ErrorKind::Other,
         };
-        io::Error::new(kind, error.description())
+        io::Error::new(kind, error.to_string())
     }
 }
 
@@ -59,8 +58,8 @@ pub enum ParseError {
 }
 
 impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.description())
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", &self)
     }
 }
 
@@ -78,6 +77,6 @@ impl Error for ParseError {
 
 impl From<ParseError> for io::Error {
     fn from(error: ParseError) -> io::Error {
-        io::Error::new(ErrorKind::Other, error.description())
+        io::Error::new(ErrorKind::Other, error.to_string())
     }
 }

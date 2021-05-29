@@ -1,8 +1,5 @@
 //! Implementation of a simple uTP client and server.
-#[macro_use]
-extern crate log;
-extern crate env_logger;
-extern crate utp;
+use env_logger;
 
 use std::process;
 
@@ -12,15 +9,18 @@ fn usage() -> ! {
 }
 
 fn main() {
+    use std::io::{stderr, stdin, stdout, Read, Write};
     use utp::UtpStream;
-    use std::io::{stdin, stdout, stderr, Read, Write};
 
     // This example may run in either server or client mode.
     // Using an enum tends to make the code cleaner and easier to read.
-    enum Mode {Server, Client}
+    enum Mode {
+        Server,
+        Client,
+    }
 
     // Start logging
-    env_logger::init().expect("Error starting logger");
+    env_logger::init();
 
     // Fetch arguments
     let mut args = std::env::args();
@@ -59,8 +59,10 @@ fn main() {
             loop {
                 match stream.read(&mut payload) {
                     Ok(0) => break,
-                    Ok(read) => writer.write(&payload[..read]).expect("Error writing to stdout"),
-                    Err(e) => panic!("{}", e)
+                    Ok(read) => writer
+                        .write(&payload[..read])
+                        .expect("Error writing to stdout"),
+                    Err(e) => panic!("{}", e),
                 };
             }
         }
@@ -79,7 +81,9 @@ fn main() {
             loop {
                 match reader.read(&mut payload) {
                     Ok(0) => break,
-                    Ok(read) => stream.write(&payload[..read]).expect("Error writing to stream"),
+                    Ok(read) => stream
+                        .write(&payload[..read])
+                        .expect("Error writing to stream"),
                     Err(e) => {
                         stream.close().expect("Error closing stream");
                         panic!("{:?}", e);

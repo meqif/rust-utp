@@ -1,6 +1,6 @@
-use std::io::{Read, Write, Result};
-use std::net::{ToSocketAddrs, SocketAddr};
-use socket::UtpSocket;
+use crate::socket::UtpSocket;
+use std::io::{Read, Result, Write};
+use std::net::{SocketAddr, ToSocketAddrs};
 
 /// A structure that represents a uTP (Micro Transport Protocol) stream between a local socket and a
 /// remote socket.
@@ -85,7 +85,7 @@ impl Write for UtpStream {
 
 impl From<UtpSocket> for UtpStream {
     fn from(socket: UtpSocket) -> Self {
-        UtpStream { socket: socket }
+        UtpStream { socket }
     }
 }
 
