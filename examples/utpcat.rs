@@ -20,7 +20,7 @@ fn main() {
     enum Mode {Server, Client}
 
     // Start logging
-    env_logger::init().expect("Error starting logger");
+    env_logger::init();
 
     // Fetch arguments
     let mut args = std::env::args();

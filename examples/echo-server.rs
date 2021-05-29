@@ -19,7 +19,7 @@ fn handle_client(mut s: UtpSocket) {
 
 fn main() {
     // Start logger
-    env_logger::init().expect("Error starting logger");
+    env_logger::init();
 
     // Create a listener
     let addr = "127.0.0.1:8080";
