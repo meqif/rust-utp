@@ -47,22 +47,30 @@
 //! ```
 
 #![deny(missing_docs)]
-
 // Optional features
 #![cfg_attr(feature = "clippy", feature(plugin))]
 #![cfg_attr(feature = "clippy", plugin(clippy))]
-#![cfg_attr(feature = "clippy", allow(len_without_is_empty, doc_markdown, needless_return,
-                                      transmute_ptr_to_ref))]
+#![cfg_attr(
+    feature = "clippy",
+    allow(
+        len_without_is_empty,
+        doc_markdown,
+        needless_return,
+        transmute_ptr_to_ref
+    )
+)]
 #![cfg_attr(feature = "unstable", feature(test))]
 
-extern crate rand;
 extern crate num_traits;
-#[macro_use] extern crate log;
-#[cfg(test)] extern crate quickcheck;
+extern crate rand;
+#[macro_use]
+extern crate log;
+#[cfg(test)]
+extern crate quickcheck;
 
 // Public API
-pub use socket::UtpSocket;
 pub use socket::UtpListener;
+pub use socket::UtpSocket;
 pub use stream::UtpStream;
 
 mod bit_iterator;

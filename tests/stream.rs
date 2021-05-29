@@ -1,15 +1,20 @@
 extern crate utp;
 
+use std::io::{Read, Write};
 use std::thread;
 use utp::UtpStream;
-use std::io::{Read, Write};
 
 macro_rules! iotry {
-    ($e:expr) => (match $e { Ok(e) => e, Err(e) => panic!("{}", e) })
+    ($e:expr) => {
+        match $e {
+            Ok(e) => e,
+            Err(e) => panic!("{}", e),
+        }
+    };
 }
 
 fn next_test_port() -> u16 {
-    use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT, Ordering};
+    use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
     static NEXT_OFFSET: AtomicUsize = ATOMIC_USIZE_INIT;
     const BASE_PORT: u16 = 9600;
     BASE_PORT + NEXT_OFFSET.fetch_add(1, Ordering::Relaxed) as u16
@@ -34,7 +39,7 @@ fn test_stream_open_and_close() {
         drop(client);
     });
 
-    let mut received = vec!();
+    let mut received = vec![];
     iotry!(server.read_to_end(&mut received));
     iotry!(server.close());
     assert!(child.join().is_ok());
@@ -51,7 +56,7 @@ fn test_stream_open_and_close_ipv6() {
         drop(client);
     });
 
-    let mut received = vec!();
+    let mut received = vec![];
     iotry!(server.read_to_end(&mut received));
     iotry!(server.close());
     assert!(child.join().is_ok());

@@ -3,17 +3,22 @@
 extern crate test;
 extern crate utp;
 
-use test::Bencher;
-use utp::UtpSocket;
 use std::sync::Arc;
 use std::thread;
+use test::Bencher;
+use utp::UtpSocket;
 
 macro_rules! iotry {
-    ($e:expr) => (match $e { Ok(e) => e, Err(e) => panic!("{}", e) })
+    ($e:expr) => {
+        match $e {
+            Ok(e) => e,
+            Err(e) => panic!("{}", e),
+        }
+    };
 }
 
 fn next_test_port() -> u16 {
-    use std::sync::atomic::{AtomicUsize, ATOMIC_USIZE_INIT, Ordering};
+    use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
     static NEXT_OFFSET: AtomicUsize = ATOMIC_USIZE_INIT;
     const BASE_PORT: u16 = 9600;
     BASE_PORT + NEXT_OFFSET.fetch_add(1, Ordering::Relaxed) as u16
@@ -40,7 +45,7 @@ fn bench_connection_setup_and_teardown(b: &mut Bencher) {
             match server.recv_from(&mut buf) {
                 Ok((0, _src)) => break,
                 Ok(_) => (),
-                Err(e) => panic!("{}", e)
+                Err(e) => panic!("{}", e),
             }
         }
         iotry!(server.close());
@@ -69,7 +74,7 @@ fn bench_transfer_one_packet(b: &mut Bencher) {
             match server.recv_from(&mut buf) {
                 Ok((0, _src)) => break,
                 Ok(_) => (),
-                Err(e) => panic!("{}", e)
+                Err(e) => panic!("{}", e),
             }
         }
         iotry!(server.close());
@@ -99,7 +104,7 @@ fn bench_transfer_one_megabyte(b: &mut Bencher) {
             match server.recv_from(&mut buf) {
                 Ok((0, _src)) => break,
                 Ok(_) => (),
-                Err(e) => panic!("{}", e)
+                Err(e) => panic!("{}", e),
             }
         }
         iotry!(server.close());
