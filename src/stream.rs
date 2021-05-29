@@ -85,7 +85,7 @@ impl Write for UtpStream {
 
 impl From<UtpSocket> for UtpStream {
     fn from(socket: UtpSocket) -> Self {
-        UtpStream { socket: socket }
+        UtpStream { socket }
     }
 }
 

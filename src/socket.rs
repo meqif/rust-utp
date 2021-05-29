@@ -3,7 +3,6 @@ use crate::packet::*;
 use crate::time::*;
 use crate::util::*;
 use log::debug;
-use rand;
 use std::cmp::{max, min};
 use std::collections::VecDeque;
 use std::io::{ErrorKind, Result};
@@ -51,7 +50,7 @@ struct DelayDifferenceSample {
 /// Returns the first valid address in a `ToSocketAddrs` iterator.
 fn take_address<A: ToSocketAddrs>(addr: A) -> Result<SocketAddr> {
     addr.to_socket_addrs()
-        .and_then(|mut it| it.next().ok_or(SocketError::InvalidAddress.into()))
+        .and_then(|mut it| it.next().ok_or_else(|| SocketError::InvalidAddress.into()))
 }
 
 /// A structure that represents a uTP (Micro Transport Protocol) connection between a local socket
@@ -288,7 +287,7 @@ impl UtpSocket {
 
         debug!("connected to: {}", socket.connected_to);
 
-        return Ok(socket);
+        Ok(socket)
     }
 
     /// Gracefully closes connection to peer.
@@ -338,24 +337,24 @@ impl UtpSocket {
 
         if read > 0 {
             return Ok((read, self.connected_to));
-        } else {
-            // If the socket received a reset packet and all data has been flushed, then it can't
-            // receive anything else
-            if self.state == SocketState::ResetReceived {
-                return Err(SocketError::ConnectionReset.into());
+        }
+
+        // If the socket received a reset packet and all data has been flushed, then it can't
+        // receive anything else
+        if self.state == SocketState::ResetReceived {
+            return Err(SocketError::ConnectionReset.into());
+        }
+
+        loop {
+            // A closed socket with no pending data can only "read" 0 new bytes.
+            if self.state == SocketState::Closed {
+                return Ok((0, self.connected_to));
             }
 
-            loop {
-                // A closed socket with no pending data can only "read" 0 new bytes.
-                if self.state == SocketState::Closed {
-                    return Ok((0, self.connected_to));
-                }
-
-                match self.recv(buf) {
-                    Ok((0, _src)) => continue,
-                    Ok(x) => return Ok(x),
-                    Err(e) => return Err(e),
-                }
+            match self.recv(buf) {
+                Ok((0, _src)) => continue,
+                Ok(x) => return Ok(x),
+                Err(e) => return Err(e),
             }
         }
     }
@@ -400,7 +399,7 @@ impl UtpSocket {
             };
 
             let elapsed = start.elapsed();
-            let elapsed_ms = elapsed.as_secs() * 1000 + (elapsed.subsec_nanos() / 1000_000) as u64;
+            let elapsed_ms = elapsed.as_secs() * 1000 + elapsed.subsec_millis() as u64;
             debug!("{} ms elapsed", elapsed_ms);
             retries += 1;
         }
@@ -530,7 +529,7 @@ impl UtpSocket {
                 use std::ptr::copy;
                 copy(src.as_ptr(), dst.as_mut_ptr(), max_len);
             }
-            return max_len;
+            max_len
         }
 
         // Return pending data from a partially read packet
@@ -551,7 +550,7 @@ impl UtpSocket {
             && (self.ack_nr == self.incoming_buffer[0].seq_nr()
                 || self.ack_nr + 1 == self.incoming_buffer[0].seq_nr())
         {
-            let flushed = unsafe_copy(&self.incoming_buffer[0].payload()[..], buf);
+            let flushed = unsafe_copy(&self.incoming_buffer[0].payload(), buf);
 
             if flushed == self.incoming_buffer[0].payload().len() {
                 self.advance_incoming_buffer();
@@ -562,7 +561,7 @@ impl UtpSocket {
             return flushed;
         }
 
-        return 0;
+        0
     }
 
     /// Sends data on the socket to the remote peer. On success, returns the number of bytes
@@ -758,7 +757,7 @@ impl UtpSocket {
             sack[byte] |= 1 << bit;
         }
 
-        return sack;
+        sack
     }
 
     /// Sends a fast resend request to the remote peer.
@@ -966,7 +965,7 @@ impl UtpSocket {
         debug!("min_base_delay: {}", min_base_delay);
         debug!("queuing_delay: {}", queuing_delay);
 
-        return queuing_delay;
+        queuing_delay
     }
 
     /// Calculates the new congestion window size, increasing it or decreasing it.
@@ -1182,7 +1181,7 @@ impl UtpListener {
     ///
     /// If more than one valid address is specified, only the first will be used.
     pub fn bind<A: ToSocketAddrs>(addr: A) -> Result<UtpListener> {
-        UdpSocket::bind(addr).and_then(|s| Ok(UtpListener { socket: s }))
+        UdpSocket::bind(addr).map(|s| UtpListener { socket: s })
     }
 
     /// Accepts a new incoming connection from this listener.
